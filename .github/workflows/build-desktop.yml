@@ -1,0 +1,65 @@
+name: Build SIGNAL Desktop (Windows)
+
+on:
+  push:
+    branches:
+      - claude/new-session-m3wo1q
+    paths:
+      - "signal-desktop/**"
+      - ".github/workflows/build-desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: signal-desktop
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: signal-desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer + portable exe
+        # --publish never: electron-builder should only package here; the
+        # release is created explicitly in the next step.
+        run: npx electron-builder --win --publish never
+
+      - name: List build output
+        run: ls -la dist/
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="desktop-v1.0.0-build.${{ github.run_number }}"
+          gh release create "$TAG" dist/*.exe \
+            --title "SIGNAL Desktop 1.0.0 (build ${{ github.run_number }})" \
+            --notes "Unsigned Windows build of the SIGNAL desktop wrapper.
+
+          - \`SIGNAL Setup 1.0.0.exe\` — NSIS installer (adds an uninstaller entry, desktop + start menu shortcuts).
+          - \`SIGNAL 1.0.0.exe\` — portable, no installation required.
+
+          Built from commit ${{ github.sha }}.
+
+          **Note:** these builds are unsigned, so Windows SmartScreen will show an \"unrecognized publisher\" warning on first run. Click *More info* → *Run anyway*. Code signing is tracked as future work."
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-desktop-windows
+          path: signal-desktop/dist/*.exe
+          if-no-files-found: error
