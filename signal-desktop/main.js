@@ -4,13 +4,35 @@ const Store = require("electron-store");
 
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
+const PARTITION = "persist:signal";
 const IS_DEV = process.env.NODE_ENV === "development";
 const ICON_PATH = path.join(__dirname, "build/icon.ico");
+
+// Permissions auto-granted to the app's own origin only. 'media' is what
+// getUserMedia needs for camera+mic; 'fullscreen' is what the site's video
+// fullscreen button needs. Everything else — and every other origin — is
+// denied. (Picture-in-Picture needs no permission entry; it works natively.)
+const ALLOWED_PERMISSIONS = new Set(["media", "fullscreen"]);
 
 const store = new Store();
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+
+/**
+ * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
+ * "https://nora.eclipselivecam.online" is also a prefix of a hostile URL like
+ * "https://nora.eclipselivecam.online.example.com", which must be treated as
+ * external. Non-http schemes (mailto:, etc.) parse to a null origin and so are
+ * correctly classified as external too.
+ */
+function isAppUrl(url) {
+  try {
+    return new URL(url).origin === APP_ORIGIN;
+  } catch {
+    return false;
+  }
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -24,17 +46,32 @@ if (!gotLock) {
     }
   });
 
+  // Required on Windows for native notifications to display reliably; must
+  // match the electron-builder appId.
+  app.setAppUserModelId("online.eclipselivecam.signal");
+
+  app.on("before-quit", () => {
+    isQuitting = true;
+  });
+
   app.whenReady().then(() => {
-    // Grant camera/mic only to the app's own origin; deny everything else
-    // (including 'media' requests from any other origin, and all other
-    // permission types) without ever surfacing Electron's default prompt.
-    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-      const url = webContents.getURL();
-      if (permission === "media" && url.startsWith(APP_URL)) {
-        callback(true);
-      } else {
-        callback(false);
-      }
+    // The window renders in the "persist:signal" partition, so the permission
+    // handlers MUST be installed on that session — handlers on
+    // session.defaultSession would never be consulted for this window.
+    const appSession = session.fromPartition(PARTITION);
+
+    // Async path: an actual getUserMedia() / fullscreen request.
+    appSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      const requestingUrl = (details && details.requestingUrl) || (webContents ? webContents.getURL() : "");
+      callback(ALLOWED_PERMISSIONS.has(permission) && isAppUrl(requestingUrl));
+    });
+
+    // Sync path: Chromium consults this for navigator.permissions.query() and
+    // for exposing device labels to enumerateDevices(). Without it the site
+    // can see permission as "denied" even though the request handler grants.
+    appSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+      const origin = requestingOrigin || (webContents ? webContents.getURL() : "");
+      return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(origin);
     });
 
     createWindow();
@@ -43,15 +80,11 @@ if (!gotLock) {
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
-      } else {
+      } else if (mainWindow) {
         mainWindow.show();
         mainWindow.focus();
       }
     });
-  });
-
-  app.on("before-quit", () => {
-    isQuitting = true;
   });
 }
 
@@ -68,7 +101,7 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      partition: "persist:signal", // persistent session: cookies/localStorage survive restarts
+      partition: PARTITION, // persistent session: cookies/localStorage survive restarts
       devTools: IS_DEV,
       contextIsolation: true,
       nodeIntegration: false,
@@ -97,7 +130,7 @@ function createWindow() {
   // Any navigation/window-open that would leave the app's origin opens in
   // the user's default system browser instead of inside the app window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(APP_ORIGIN)) {
+    if (!isAppUrl(url)) {
       shell.openExternal(url);
       return { action: "deny" };
     }
@@ -105,7 +138,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith(APP_ORIGIN)) {
+    if (!isAppUrl(url)) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -116,10 +149,12 @@ function createWindow() {
       event.preventDefault();
       mainWindow.hide();
       if (!store.get("trayNoticeShown")) {
-        new Notification({
-          title: "SIGNAL",
-          body: "SIGNAL is still running in the tray.",
-        }).show();
+        if (Notification.isSupported()) {
+          new Notification({
+            title: "SIGNAL",
+            body: "SIGNAL is still running in the tray.",
+          }).show();
+        }
         store.set("trayNoticeShown", true);
       }
     }
@@ -140,6 +175,7 @@ function createTray() {
       createWindow();
       return;
     }
+    if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
   };
@@ -171,19 +207,20 @@ function createTray() {
       ])
     );
   };
-  updateMenu();
 
-  // Restore the persisted "launch on startup" preference (default OFF).
+  // Reconcile the persisted "launch on startup" preference (default OFF) with
+  // the OS before the menu is first built, so the checkbox matches reality.
   const persistedLaunchAtStartup = store.get("launchAtStartup", false);
   if (persistedLaunchAtStartup !== app.getLoginItemSettings().openAtLogin) {
     app.setLoginItemSettings({ openAtLogin: persistedLaunchAtStartup });
-    updateMenu();
   }
 
+  updateMenu();
   tray.on("click", showWindow);
 }
 
-// Stay alive in the tray instead of quitting when all windows are closed.
-app.on("window-all-closed", (event) => {
-  event.preventDefault();
-});
+// Stay alive in the tray when the window is hidden/closed. Simply having a
+// listener that does not call app.quit() is what keeps the app running —
+// window-all-closed is not a preventable event, so there is nothing to
+// preventDefault here.
+app.on("window-all-closed", () => {});
