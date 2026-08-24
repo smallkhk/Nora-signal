@@ -2,6 +2,8 @@
   "name": "signal-desktop",
   "version": "1.0.0",
   "description": "SIGNAL desktop app",
+  "author": "SIGNAL",
+  "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
