@@ -60,6 +60,29 @@ def on_command(data):
         try: _controller(data)
         except Exception: pass
 
+@socketio.on("request_processes")
+def on_request_processes():
+    socketio.emit("processes_data", proc.get_processes())
+
+@socketio.on("kill_process")
+def on_kill_process(data):
+    pid = data.get("pid")
+    if pid:
+        ok = proc.kill_process(int(pid))
+        socketio.emit("processes_data", proc.get_processes())
+
+@socketio.on("camera_on")
+def on_camera_on():
+    if _camera:
+        ok = _camera.start()
+        socketio.emit("camera_state", {"active": ok})
+
+@socketio.on("camera_off")
+def on_camera_off():
+    if _camera:
+        _camera.stop()
+        socketio.emit("camera_state", {"active": False})
+
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",          {"data": b64})
