@@ -396,6 +396,8 @@
   <div id="tunnel-bar"></div>
   <div class="spacer"></div>
   <span id="active-label">No agent selected</span>
+  <button class="btn btn-ghost" onclick="syncGist()" title="Sync agents from GitHub Gist">⟳ Sync</button>
+  <button class="btn btn-ghost" onclick="openGistSettings()" title="Gist settings">⚙</button>
   <button class="btn btn-accent" onclick="openModal()">+ Add Agent</button>
 </div>
 
@@ -463,6 +465,29 @@
       <div id="proc-refresh">
         <button class="btn btn-ghost" onclick="refreshProcesses()" style="width:100%;font-size:11px">↻ Refresh</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gist Settings Modal -->
+<div id="gist-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;" onclick="if(event.target===this)closeGistSettings()">
+  <div id="modal" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;width:380px;display:flex;flex-direction:column;gap:12px;">
+    <h2 style="font-size:15px;color:var(--accent)">Gist Sync Settings</h2>
+    <p style="font-size:11px;color:var(--muted);line-height:1.6;">
+      Create a GitHub token at <b>github.com/settings/tokens</b> with only the <b>gist</b> permission ticked.
+      The same token + gist ID you set up on each monitored PC.
+    </p>
+    <div>
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">GitHub Token</label>
+      <input id="gs-token" type="password" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:13px;">
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Gist ID</label>
+      <input id="gs-gist" placeholder="Paste gist ID from install (leave blank to auto-find)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:13px;">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeGistSettings()">Cancel</button>
+      <button class="btn btn-accent" onclick="saveGistSettings()">Save & Sync</button>
     </div>
   </div>
 </div>
@@ -873,6 +898,76 @@ function notify(msg) {
     new Notification(msg);
   } else if (Notification.permission !== 'denied') {
     Notification.requestPermission().then(p => { if (p === 'granted') new Notification(msg); });
+  }
+}
+
+// ── Gist Sync ─────────────────────────────────────────────────────────────────
+function openGistSettings() {
+  try { document.getElementById('gs-token').value = localStorage.getItem('nora_gh_token') || ''; } catch(e) {}
+  try { document.getElementById('gs-gist').value  = localStorage.getItem('nora_gist_id')  || ''; } catch(e) {}
+  document.getElementById('gist-overlay').style.display = 'flex';
+}
+function closeGistSettings() {
+  document.getElementById('gist-overlay').style.display = 'none';
+}
+function saveGistSettings() {
+  const token  = document.getElementById('gs-token').value.trim();
+  const gistId = document.getElementById('gs-gist').value.trim();
+  try { localStorage.setItem('nora_gh_token', token); } catch(e) {}
+  try { localStorage.setItem('nora_gist_id',  gistId); } catch(e) {}
+  closeGistSettings();
+  if (token) syncGist();
+}
+
+async function syncGist() {
+  let token  = ''; try { token  = localStorage.getItem('nora_gh_token') || ''; } catch(e) {}
+  let gistId = ''; try { gistId = localStorage.getItem('nora_gist_id')  || ''; } catch(e) {}
+
+  if (!token) { openGistSettings(); return; }
+
+  try {
+    let url = gistId
+      ? `https://api.github.com/gists/${gistId}`
+      : 'https://api.github.com/gists';
+
+    const headers = { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' };
+
+    if (!gistId) {
+      // Find the nora_agents gist automatically
+      const res  = await fetch(url, { headers });
+      const list = await res.json();
+      const found = list.find(g => g.files && g.files['nora_agents.json']);
+      if (!found) { alert('No Nora gist found. Run the tool on at least one PC first.'); return; }
+      gistId = found.id;
+      try { localStorage.setItem('nora_gist_id', gistId); } catch(e) {}
+    }
+
+    const res  = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
+    const data = await res.json();
+    const content = JSON.parse(data.files['nora_agents.json'].content);
+
+    let added = 0;
+    Object.entries(content).forEach(([name, info]) => {
+      if (!info.url) return;
+      // Check if already connected
+      const exists = Object.values(agents).find(a => a.url === info.url || a.name === name);
+      if (!exists) {
+        const id = 'a_' + Date.now() + Math.random();
+        connectAgent(id, name, info.url);
+        added++;
+      } else if (exists.url !== info.url) {
+        // URL changed (PC restarted) — update it
+        removeAgent(exists.id);
+        const id = 'a_' + Date.now() + Math.random();
+        connectAgent(id, name, info.url);
+        added++;
+      }
+    });
+
+    saveAgentsToStorage();
+    if (added === 0) alert('All agents already connected or no new agents found.');
+  } catch(e) {
+    alert('Sync failed: ' + e.message);
   }
 }
 
