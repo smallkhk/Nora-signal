@@ -8,6 +8,22 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d0d0d; color: #e0e0e0; font-family: 'Consolas', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
+  #ngrok-bar {
+    background: #0f1f0f;
+    border-bottom: 1px solid #1a3a1a;
+    padding: 5px 16px;
+    font-size: 12px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #ngrok-bar.visible { display: flex; }
+  #ngrok-bar span { color: #4ade80; }
+  #ngrok-url { color: #7c6aff; font-weight: bold; cursor: pointer; text-decoration: underline; }
+  #ngrok-copy { background: none; border: 1px solid #1a6640; color: #4ade80; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; font-family: inherit; }
+  #ngrok-copy:hover { background: #1a6640; }
+
   #topbar {
     background: #1a1a1a;
     border-bottom: 1px solid #2a2a2a;
@@ -22,99 +38,55 @@
   #status.connected { color: #4ade80; }
   #status.disconnected { color: #f87171; }
   #fps-info { font-size: 11px; color: #555; }
-  #rec-label { font-size: 11px; color: #f87171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: none; }
-  #rec-label.visible { display: block; }
-
-  #ngrok-bar {
-    background: #0f1f0f;
-    border-bottom: 1px solid #1a3a1a;
-    padding: 5px 16px;
-    font-size: 12px;
-    display: none;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-  #ngrok-bar.visible { display: flex; }
-  #ngrok-bar span { color: #4ade80; }
-  #ngrok-url { color: #7c6aff; font-weight: bold; letter-spacing: 0.5px; cursor: pointer; text-decoration: underline; }
-  #ngrok-copy { background: none; border: 1px solid #1a6640; color: #4ade80; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; font-family: inherit; }
-  #ngrok-copy:hover { background: #1a6640; }
+  #rec-timer { font-size: 11px; color: #f87171; display: none; font-weight: bold; }
+  #rec-timer.visible { display: block; }
 
   .topbar-btn {
-    padding: 4px 14px;
-    border-radius: 6px;
-    border: none;
-    font-size: 12px;
-    font-family: inherit;
-    cursor: pointer;
-    letter-spacing: 1px;
-    transition: background 0.2s, color 0.2s;
+    padding: 4px 14px; border-radius: 6px; border: none;
+    font-size: 12px; font-family: inherit; cursor: pointer;
+    letter-spacing: 1px; transition: background 0.2s, color 0.2s;
   }
   #rec-btn { margin-left: auto; background: #2a2a2a; color: #aaa; }
-  #rec-btn.idle:hover { background: #c0392b; color: #fff; }
+  #rec-btn:hover:not(.recording) { background: #c0392b; color: #fff; }
   #rec-btn.recording { background: #c0392b; color: #fff; animation: pulse 1.2s infinite; }
-
   #cam-btn { background: #2a2a2a; color: #aaa; }
   #cam-btn.active { background: #1a6640; color: #4ade80; }
+  #cam-btn:hover:not(.active) { background: #1a6640; color: #4ade80; }
   #cam-btn.active:hover { background: #c0392b; color: #fff; }
-  #cam-btn:not(.active):hover { background: #1a6640; color: #4ade80; }
 
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
   #main { display: flex; flex: 1; overflow: hidden; }
-
-  /* ── View panels ── */
   #view-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
   #screen-panel {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #080808;
-    position: relative;
-    overflow: hidden;
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: #080808; position: relative; overflow: hidden;
   }
-  #screen { max-width: 100%; max-height: 100%; object-fit: contain; cursor: none; display: block; user-select: none; }
+  #screen {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    cursor: none; display: block; user-select: none;
+  }
   #cursor {
-    position: absolute;
-    width: 16px; height: 16px;
-    border: 2px solid #7c6aff;
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    display: none;
+    position: absolute; width: 16px; height: 16px;
+    border: 2px solid #7c6aff; border-radius: 50%;
+    pointer-events: none; transform: translate(-50%, -50%); display: none;
   }
 
   #camera-panel {
-    height: 200px;
-    background: #050505;
-    border-top: 1px solid #222;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    flex-shrink: 0;
+    height: 200px; background: #050505; border-top: 1px solid #222;
+    display: none; align-items: center; justify-content: center; flex-shrink: 0;
   }
   #camera-panel.visible { display: flex; }
   #camera-feed { max-height: 100%; max-width: 100%; object-fit: contain; display: block; }
   #cam-placeholder { color: #333; font-size: 12px; }
 
-  /* ── Sidebar ── */
   #sidebar { width: 300px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; flex-shrink: 0; }
   .panel-header {
-    background: #1a1a1a;
-    padding: 8px 12px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #7c6aff;
-    border-bottom: 1px solid #2a2a2a;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
+    background: #1a1a1a; padding: 8px 12px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; color: #7c6aff;
+    border-bottom: 1px solid #2a2a2a; display: flex;
+    justify-content: space-between; align-items: center; flex-shrink: 0;
   }
   #keylog-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   #keylog { flex: 1; overflow-y: auto; padding: 10px; font-size: 12px; line-height: 1.7; word-break: break-all; color: #ccc; }
@@ -130,6 +102,8 @@
   #control-panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   #control-panel input[type=checkbox] { accent-color: #7c6aff; }
   .hotkey-hint { font-size: 10px; color: #444; margin-top: 6px; }
+
+  #no-fsa-msg { display:none; font-size:11px; color:#f87171; }
 </style>
 </head>
 <body>
@@ -145,15 +119,17 @@
   <h1>Nora Monitor</h1>
   <span id="status" class="disconnected">Disconnected</span>
   <span id="fps-info">-- fps</span>
-  <span id="rec-label"></span>
+  <span id="rec-timer"></span>
+  <span id="no-fsa-msg">Use Chrome/Edge to record</span>
   <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
-  <button id="rec-btn" class="topbar-btn idle" onclick="toggleRecord()">⏺ REC</button>
+  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ REC</button>
 </div>
 
 <div id="main">
   <div id="view-area">
     <div id="screen-panel">
-      <img id="screen" alt="screen" draggable="false">
+      <!-- Canvas used instead of img so we can capture a stream for recording -->
+      <canvas id="screen"></canvas>
       <div id="cursor"></div>
     </div>
     <div id="camera-panel">
@@ -182,7 +158,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-const img        = document.getElementById("screen");
+const canvas     = document.getElementById("screen");
+const ctx        = canvas.getContext("2d");
 const keylogEl   = document.getElementById("keylog");
 const statusEl   = document.getElementById("status");
 const fpsEl      = document.getElementById("fps-info");
@@ -190,19 +167,20 @@ const cursorEl   = document.getElementById("cursor");
 const ctrlToggle = document.getElementById("ctrl-toggle");
 const screenPanel= document.getElementById("screen-panel");
 const recBtn     = document.getElementById("rec-btn");
-const recLabel   = document.getElementById("rec-label");
+const recTimer   = document.getElementById("rec-timer");
 const camBtn     = document.getElementById("cam-btn");
 const camPanel   = document.getElementById("camera-panel");
 const camFeed    = document.getElementById("camera-feed");
 const camPlaceholder = document.getElementById("cam-placeholder");
+const ngrokBar   = document.getElementById("ngrok-bar");
+const ngrokUrlEl = document.getElementById("ngrok-url");
+const noFsaMsg   = document.getElementById("no-fsa-msg");
 
 const socket = io();
 let frameCount = 0, lastFpsTime = Date.now();
-let isRecording = false, cameraActive = false;
+let cameraActive = false;
 
-const ngrokBar = document.getElementById("ngrok-bar");
-const ngrokUrlEl = document.getElementById("ngrok-url");
-
+// ── Ngrok ────────────────────────────────────────────────────────────────────
 function copyNgrok() {
   const url = ngrokUrlEl.textContent;
   if (url && url !== "waiting...") {
@@ -211,26 +189,22 @@ function copyNgrok() {
     setTimeout(() => document.getElementById("ngrok-copy").textContent = "Copy", 2000);
   }
 }
+socket.on("ngrok_url", (data) => { ngrokBar.className = "visible"; ngrokUrlEl.textContent = data.url; });
 
-// ── Connection ───────────────────────────────────────────────────────────────
-socket.on("connect", () => {
-  statusEl.textContent = "Connected";
-  statusEl.className = "connected";
-  fetchRecordStatus();
-});
+// ── Connection ────────────────────────────────────────────────────────────────
+socket.on("connect",    () => { statusEl.textContent = "Connected";    statusEl.className = "connected"; });
+socket.on("disconnect", () => { statusEl.textContent = "Disconnected"; statusEl.className = "disconnected"; });
 
-socket.on("ngrok_url", (data) => {
-  ngrokBar.className = "visible";
-  ngrokUrlEl.textContent = data.url;
-});
-socket.on("disconnect", () => {
-  statusEl.textContent = "Disconnected";
-  statusEl.className = "disconnected";
-});
+// ── Screen stream → canvas ────────────────────────────────────────────────────
+const frameImg = new Image();
+frameImg.onload = () => {
+  canvas.width  = frameImg.naturalWidth;
+  canvas.height = frameImg.naturalHeight;
+  ctx.drawImage(frameImg, 0, 0);
+};
 
-// ── Screen stream ────────────────────────────────────────────────────────────
 socket.on("frame", (data) => {
-  img.src = "data:image/jpeg;base64," + data.data;
+  frameImg.src = "data:image/jpeg;base64," + data.data;
   frameCount++;
   const now = Date.now();
   if (now - lastFpsTime >= 1000) {
@@ -240,96 +214,104 @@ socket.on("frame", (data) => {
   }
 });
 
-// ── Camera stream ────────────────────────────────────────────────────────────
-socket.on("camera_frame", (data) => {
-  if (!cameraActive) return;
-  camFeed.src = "data:image/jpeg;base64," + data.data;
-});
+// ── Browser-side recording (File System Access API) ───────────────────────────
+let mediaRecorder = null;
+let fileWriter    = null;
+let recSeconds    = 0;
+let recInterval   = null;
+const hasFSA = typeof window.showSaveFilePicker === "function";
 
+if (!hasFSA) noFsaMsg.style.display = "block";
+
+async function toggleRecord() {
+  if (!hasFSA) return;
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const handle = await window.showSaveFilePicker({
+      suggestedName: `nora_${ts}.webm`,
+      types: [{ description: "WebM Video", accept: { "video/webm": [".webm"] } }],
+    });
+    fileWriter = await handle.createWritable();
+
+    const stream = canvas.captureStream(12);
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : "video/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = async (e) => {
+      if (e.data && e.data.size > 0) await fileWriter.write(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      await fileWriter.close();
+      fileWriter = null;
+      mediaRecorder = null;
+      recBtn.textContent = "⏺ REC";
+      recBtn.className = "topbar-btn";
+      recTimer.className = "";
+      clearInterval(recInterval);
+      recSeconds = 0;
+    };
+
+    mediaRecorder.start(1000); // flush chunk to disk every second
+    recBtn.textContent = "⏹ STOP";
+    recBtn.className = "topbar-btn recording";
+    recSeconds = 0;
+    recTimer.className = "visible";
+    recInterval = setInterval(() => {
+      recSeconds++;
+      const h = String(Math.floor(recSeconds / 3600)).padStart(2,"0");
+      const m = String(Math.floor((recSeconds % 3600) / 60)).padStart(2,"0");
+      const s = String(recSeconds % 60).padStart(2,"0");
+      recTimer.textContent = `● ${h}:${m}:${s}`;
+    }, 1000);
+  } catch (e) {
+    // User cancelled file picker — do nothing
+  }
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+socket.on("camera_frame", (data) => { if (cameraActive) camFeed.src = "data:image/jpeg;base64," + data.data; });
 socket.on("camera_state", (data) => updateCamUI(data.active));
 
 async function toggleCamera() {
-  const endpoint = cameraActive ? "/camera/stop" : "/camera/start";
-  const r = await fetch(endpoint, { method: "POST" });
+  const r = await fetch(cameraActive ? "/camera/stop" : "/camera/start", { method: "POST" });
   const d = await r.json();
-  if (!d.ok && !cameraActive) {
-    camPlaceholder.textContent = "No camera found";
-  }
+  if (!d.ok && !cameraActive) camPlaceholder.textContent = "No camera found";
 }
 
 function updateCamUI(active) {
   cameraActive = active;
-  if (active) {
-    camBtn.textContent = "📷 Camera ON";
-    camBtn.className = "topbar-btn active";
-    camPanel.className = "visible";
-    camFeed.style.display = "block";
-    camPlaceholder.style.display = "none";
-  } else {
-    camBtn.textContent = "📷 Camera";
-    camBtn.className = "topbar-btn";
-    camPanel.className = "";
-    camFeed.style.display = "none";
-    camFeed.src = "";
-    camPlaceholder.style.display = "block";
-    camPlaceholder.textContent = "Camera off";
-  }
+  camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
+  camBtn.className = active ? "topbar-btn active" : "topbar-btn";
+  camPanel.className = active ? "visible" : "";
+  camFeed.style.display = active ? "block" : "none";
+  if (!active) { camFeed.src = ""; camPlaceholder.style.display = "block"; camPlaceholder.textContent = "Camera off"; }
+  else camPlaceholder.style.display = "none";
 }
 
-// ── Keylog ───────────────────────────────────────────────────────────────────
+// ── Keylog ────────────────────────────────────────────────────────────────────
 socket.on("key", (data) => {
   const char = data.char;
   const span = document.createElement("span");
-  if (char === "[ENTER]") {
-    span.className = "key-special key-enter";
-    span.textContent = char + "\n";
-  } else if (char.startsWith("[") && char.endsWith("]")) {
-    span.className = "key-special";
-    span.textContent = char;
-  } else {
-    span.textContent = char;
-  }
+  if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
+  else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
+  else span.textContent = char;
   keylogEl.appendChild(span);
   keylogEl.scrollTop = keylogEl.scrollHeight;
 });
-
 function clearLog() { keylogEl.innerHTML = ""; }
 
-// ── Recording ────────────────────────────────────────────────────────────────
-socket.on("record_state", (data) => updateRecUI(data.recording, data.file));
-
-async function fetchRecordStatus() {
-  const r = await fetch("/record/status");
-  const d = await r.json();
-  updateRecUI(d.recording, d.file);
-}
-
-function updateRecUI(recording, file) {
-  isRecording = recording;
-  if (recording) {
-    recBtn.textContent = "⏹ STOP";
-    recBtn.className = "topbar-btn recording";
-    const name = file ? file.split(/[\\/]/).pop() : "";
-    recLabel.textContent = "● " + name;
-    recLabel.className = "visible";
-  } else {
-    recBtn.textContent = "⏺ REC";
-    recBtn.className = "topbar-btn idle";
-    recLabel.className = "";
-  }
-}
-
-async function toggleRecord() {
-  const endpoint = isRecording ? "/record/stop" : "/record/start";
-  await fetch(endpoint, { method: "POST" });
-}
-
-// ── Remote control ───────────────────────────────────────────────────────────
+// ── Remote control ────────────────────────────────────────────────────────────
 function controlActive() { return ctrlToggle.checked; }
-function imgRect() { return img.getBoundingClientRect(); }
 
 screenPanel.addEventListener("mousemove", (e) => {
-  const r = imgRect();
+  const r = canvas.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   cursorEl.style.left = (x + r.left) + "px";
   cursorEl.style.top  = (y + r.top)  + "px";
