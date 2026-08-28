@@ -10,9 +10,14 @@
 
   #ngrok-bar { background:#0f1f0f; border-bottom:1px solid #1a3a1a; padding:5px 16px; font-size:12px; display:none; align-items:center; gap:10px; flex-shrink:0; }
   #ngrok-bar.visible { display:flex; }
-  #ngrok-url { color:#7c6aff; font-weight:bold; cursor:pointer; text-decoration:underline; }
+  #ngrok-url { color:#4ade80; font-weight:bold; cursor:pointer; text-decoration:underline; }
   #ngrok-copy { background:none; border:1px solid #1a6640; color:#4ade80; padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; }
   #ngrok-copy:hover { background:#1a6640; }
+  #bucket-bar { background:#0a0a1f; border-bottom:1px solid #1a1a3a; padding:5px 16px; font-size:12px; display:none; align-items:center; gap:10px; flex-shrink:0; }
+  #bucket-bar.visible { display:flex; }
+  #bucket-id-val { color:#7c6aff; font-weight:bold; letter-spacing:1px; }
+  #bucket-copy { background:none; border:1px solid #3a3a7c; color:#7c6aff; padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; }
+  #bucket-copy:hover { background:#3a3a7c; }
 
   #topbar { background:#1a1a1a; border-bottom:1px solid #2a2a2a; padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap; }
   #topbar h1 { font-size:14px; color:#7c6aff; letter-spacing:2px; text-transform:uppercase; }
@@ -118,6 +123,13 @@
   <span id="ngrok-url" onclick="copyNgrok()">waiting...</span>
   <button id="ngrok-copy" onclick="copyNgrok()">Copy</button>
   <span style="font-size:10px;color:#2a5a2a;">← open on your phone</span>
+</div>
+
+<div id="bucket-bar">
+  <span style="color:#7c6aff">🔑 Hub Bucket ID:</span>
+  <span id="bucket-id-val"></span>
+  <button id="bucket-copy" onclick="copyBucket()">Copy</button>
+  <span style="font-size:10px;color:#2a2a5a;">← paste this in Nora Hub → ⚙ Sync Settings</span>
 </div>
 
 <div id="topbar">
@@ -244,6 +256,20 @@ function copyNgrok() {
   }
 }
 socket.on("ngrok_url", d => { ngrokBar.className = "visible"; ngrokUrlEl.textContent = d.url; });
+
+// ── Bucket ID ─────────────────────────────────────────────────────────────────
+socket.on("bucket_id", d => {
+  document.getElementById("bucket-bar").className = "visible";
+  document.getElementById("bucket-id-val").textContent = d.id;
+});
+function copyBucket() {
+  const val = document.getElementById("bucket-id-val").textContent;
+  if (val) {
+    navigator.clipboard.writeText(val);
+    document.getElementById("bucket-copy").textContent = "Copied!";
+    setTimeout(() => document.getElementById("bucket-copy").textContent = "Copy", 2000);
+  }
+}
 
 // ── Connection ────────────────────────────────────────────────────────────────
 socket.on("connect",    () => { statusEl.textContent = "Connected";    statusEl.className = "connected"; });

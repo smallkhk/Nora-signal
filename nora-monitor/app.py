@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import socket
 import subprocess
 import threading
 import urllib.request
@@ -40,7 +41,6 @@ def _save_config(cfg):
 
 
 def _ensure_bucket():
-    """Create a new kvdb bucket and return its ID."""
     req = urllib.request.Request(KVDB_BASE, data=b"", method="POST")
     with urllib.request.urlopen(req, timeout=10) as r:
         return r.read().decode().strip()
@@ -75,16 +75,26 @@ def _start_tunnel(port):
                     import time; time.sleep(2)
                     server.broadcast_ngrok_url(tunnel_url)
 
+                    # Auto PC name from hostname
                     cfg = _load_config()
-                    pc_name   = cfg.get("pc_name", "My PC")
+                    pc_name = cfg.get("pc_name") or socket.gethostname()
+                    cfg["pc_name"] = pc_name
+
+                    # Auto-create bucket if needed
                     bucket_id = cfg.get("bucket_id", "")
                     if not bucket_id:
                         try:
                             bucket_id = _ensure_bucket()
                             cfg["bucket_id"] = bucket_id
-                            _save_config(cfg)
                         except Exception:
+                            _save_config(cfg)
                             break
+
+                    _save_config(cfg)
+
+                    # Broadcast bucket ID to viewer so user can copy it
+                    server.broadcast_bucket_id(bucket_id)
+
                     try:
                         _post_url(bucket_id, pc_name, tunnel_url)
                     except Exception:
