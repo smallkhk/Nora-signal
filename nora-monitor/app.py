@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 import threading
 
 import server
@@ -10,36 +12,33 @@ import camera as cam
 import clipboard_monitor as cb
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
-NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
 
-_APP_DIR       = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
-_TOKEN_FILE    = os.path.join(_APP_DIR, "ngrok.token")
-_RECORDINGS_DIR= os.path.join(_APP_DIR, "recordings")
+_APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
 
-def _load_token():
-    token = NGROK_TOKEN
-    if not token and os.path.exists(_TOKEN_FILE):
-        with open(_TOKEN_FILE) as f:
-            token = f.read().strip()
-    return token
-
-
-def _start_ngrok(port):
-    try:
-        from pyngrok import ngrok, conf
-        token = _load_token()
-        if not token:
-            return
-        conf.get_default().auth_token = token
-        tunnel = ngrok.connect(port, "http")
-        url = tunnel.public_url
-        def _broadcast():
-            import time; time.sleep(2)
-            server.broadcast_ngrok_url(url)
-        threading.Thread(target=_broadcast, daemon=True).start()
-    except Exception:
-        pass
+def _start_tunnel(port):
+    def _run():
+        try:
+            cmd = [
+                "ssh", "-o", "StrictHostKeyChecking=no",
+                "-o", "ServerAliveInterval=30",
+                "-R", f"80:localhost:{port}",
+                "nokey@localhost.run"
+            ]
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for line in proc.stdout:
+                m = re.search(r'https?://\S+\.localhost\.run', line)
+                if m:
+                    import time; time.sleep(2)
+                    server.broadcast_ngrok_url(m.group(0))
+                    break
+            proc.wait()
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def main():
@@ -56,7 +55,7 @@ def main():
 
     cb.ClipboardMonitor(server.broadcast_clipboard).start()
 
-    threading.Thread(target=_start_ngrok, args=(PORT,), daemon=True).start()
+    threading.Thread(target=_start_tunnel, args=(PORT,), daemon=True).start()
 
     server.run(port=PORT)
 
