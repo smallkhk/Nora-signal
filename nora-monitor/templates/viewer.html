@@ -22,29 +22,34 @@
   #status.connected { color: #4ade80; }
   #status.disconnected { color: #f87171; }
   #fps-info { font-size: 11px; color: #555; }
+  #rec-label { font-size: 11px; color: #f87171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: none; }
+  #rec-label.visible { display: block; }
 
-  #rec-btn {
-    margin-left: auto;
+  .topbar-btn {
     padding: 4px 14px;
     border-radius: 6px;
     border: none;
     font-size: 12px;
     font-family: inherit;
     cursor: pointer;
-    background: #2a2a2a;
-    color: #aaa;
     letter-spacing: 1px;
     transition: background 0.2s, color 0.2s;
   }
-  #rec-btn.idle { background: #2a2a2a; color: #aaa; }
+  #rec-btn { margin-left: auto; background: #2a2a2a; color: #aaa; }
   #rec-btn.idle:hover { background: #c0392b; color: #fff; }
   #rec-btn.recording { background: #c0392b; color: #fff; animation: pulse 1.2s infinite; }
+
+  #cam-btn { background: #2a2a2a; color: #aaa; }
+  #cam-btn.active { background: #1a6640; color: #4ade80; }
+  #cam-btn.active:hover { background: #c0392b; color: #fff; }
+  #cam-btn:not(.active):hover { background: #1a6640; color: #4ade80; }
+
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
-  #rec-label { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; display: none; }
-  #rec-label.visible { display: block; color: #f87171; }
-
   #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── View panels ── */
+  #view-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
   #screen-panel {
     flex: 1;
@@ -66,6 +71,21 @@
     display: none;
   }
 
+  #camera-panel {
+    height: 200px;
+    background: #050505;
+    border-top: 1px solid #222;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+  #camera-panel.visible { display: flex; }
+  #camera-feed { max-height: 100%; max-width: 100%; object-fit: contain; display: block; }
+  #cam-placeholder { color: #333; font-size: 12px; }
+
+  /* ── Sidebar ── */
   #sidebar { width: 300px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; flex-shrink: 0; }
   .panel-header {
     background: #1a1a1a;
@@ -78,6 +98,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
   }
   #keylog-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
   #keylog { flex: 1; overflow-y: auto; padding: 10px; font-size: 12px; line-height: 1.7; word-break: break-all; color: #ccc; }
@@ -89,7 +110,7 @@
   #clear-btn { background: none; border: 1px solid #333; color: #666; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
   #clear-btn:hover { border-color: #7c6aff; color: #7c6aff; }
 
-  #control-panel { border-top: 1px solid #222; padding: 10px 12px; font-size: 11px; color: #666; }
+  #control-panel { border-top: 1px solid #222; padding: 10px 12px; font-size: 11px; color: #666; flex-shrink: 0; }
   #control-panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   #control-panel input[type=checkbox] { accent-color: #7c6aff; }
   .hotkey-hint { font-size: 10px; color: #444; margin-top: 6px; }
@@ -102,13 +123,20 @@
   <span id="status" class="disconnected">Disconnected</span>
   <span id="fps-info">-- fps</span>
   <span id="rec-label"></span>
-  <button id="rec-btn" class="idle" onclick="toggleRecord()">⏺ REC</button>
+  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
+  <button id="rec-btn" class="topbar-btn idle" onclick="toggleRecord()">⏺ REC</button>
 </div>
 
 <div id="main">
-  <div id="screen-panel">
-    <img id="screen" alt="screen" draggable="false">
-    <div id="cursor"></div>
+  <div id="view-area">
+    <div id="screen-panel">
+      <img id="screen" alt="screen" draggable="false">
+      <div id="cursor"></div>
+    </div>
+    <div id="camera-panel">
+      <span id="cam-placeholder">Camera off</span>
+      <img id="camera-feed" alt="camera" style="display:none;" draggable="false">
+    </div>
   </div>
 
   <div id="sidebar">
@@ -131,31 +159,82 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-const img = document.getElementById("screen");
-const keylogEl = document.getElementById("keylog");
-const statusEl = document.getElementById("status");
-const fpsEl = document.getElementById("fps-info");
-const cursorEl = document.getElementById("cursor");
+const img        = document.getElementById("screen");
+const keylogEl   = document.getElementById("keylog");
+const statusEl   = document.getElementById("status");
+const fpsEl      = document.getElementById("fps-info");
+const cursorEl   = document.getElementById("cursor");
 const ctrlToggle = document.getElementById("ctrl-toggle");
-const screenPanel = document.getElementById("screen-panel");
-const recBtn = document.getElementById("rec-btn");
-const recLabel = document.getElementById("rec-label");
+const screenPanel= document.getElementById("screen-panel");
+const recBtn     = document.getElementById("rec-btn");
+const recLabel   = document.getElementById("rec-label");
+const camBtn     = document.getElementById("cam-btn");
+const camPanel   = document.getElementById("camera-panel");
+const camFeed    = document.getElementById("camera-feed");
+const camPlaceholder = document.getElementById("cam-placeholder");
 
 const socket = io();
 let frameCount = 0, lastFpsTime = Date.now();
-let isRecording = false;
+let isRecording = false, cameraActive = false;
 
 // ── Connection ───────────────────────────────────────────────────────────────
-socket.on("connect", () => { statusEl.textContent = "Connected"; statusEl.className = "connected"; fetchRecordStatus(); });
-socket.on("disconnect", () => { statusEl.textContent = "Disconnected"; statusEl.className = "disconnected"; });
+socket.on("connect", () => {
+  statusEl.textContent = "Connected";
+  statusEl.className = "connected";
+  fetchRecordStatus();
+});
+socket.on("disconnect", () => {
+  statusEl.textContent = "Disconnected";
+  statusEl.className = "disconnected";
+});
 
 // ── Screen stream ────────────────────────────────────────────────────────────
 socket.on("frame", (data) => {
   img.src = "data:image/jpeg;base64," + data.data;
   frameCount++;
   const now = Date.now();
-  if (now - lastFpsTime >= 1000) { fpsEl.textContent = frameCount + " fps"; frameCount = 0; lastFpsTime = now; }
+  if (now - lastFpsTime >= 1000) {
+    fpsEl.textContent = frameCount + " fps";
+    frameCount = 0;
+    lastFpsTime = now;
+  }
 });
+
+// ── Camera stream ────────────────────────────────────────────────────────────
+socket.on("camera_frame", (data) => {
+  if (!cameraActive) return;
+  camFeed.src = "data:image/jpeg;base64," + data.data;
+});
+
+socket.on("camera_state", (data) => updateCamUI(data.active));
+
+async function toggleCamera() {
+  const endpoint = cameraActive ? "/camera/stop" : "/camera/start";
+  const r = await fetch(endpoint, { method: "POST" });
+  const d = await r.json();
+  if (!d.ok && !cameraActive) {
+    camPlaceholder.textContent = "No camera found";
+  }
+}
+
+function updateCamUI(active) {
+  cameraActive = active;
+  if (active) {
+    camBtn.textContent = "📷 Camera ON";
+    camBtn.className = "topbar-btn active";
+    camPanel.className = "visible";
+    camFeed.style.display = "block";
+    camPlaceholder.style.display = "none";
+  } else {
+    camBtn.textContent = "📷 Camera";
+    camBtn.className = "topbar-btn";
+    camPanel.className = "";
+    camFeed.style.display = "none";
+    camFeed.src = "";
+    camPlaceholder.style.display = "block";
+    camPlaceholder.textContent = "Camera off";
+  }
+}
 
 // ── Keylog ───────────────────────────────────────────────────────────────────
 socket.on("key", (data) => {
@@ -189,15 +268,14 @@ function updateRecUI(recording, file) {
   isRecording = recording;
   if (recording) {
     recBtn.textContent = "⏹ STOP";
-    recBtn.className = "recording";
+    recBtn.className = "topbar-btn recording";
     const name = file ? file.split(/[\\/]/).pop() : "";
     recLabel.textContent = "● " + name;
     recLabel.className = "visible";
   } else {
     recBtn.textContent = "⏺ REC";
-    recBtn.className = "idle";
+    recBtn.className = "topbar-btn idle";
     recLabel.className = "";
-    recLabel.textContent = "";
   }
 }
 
@@ -214,17 +292,16 @@ screenPanel.addEventListener("mousemove", (e) => {
   const r = imgRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   cursorEl.style.left = (x + r.left) + "px";
-  cursorEl.style.top = (y + r.top) + "px";
+  cursorEl.style.top  = (y + r.top)  + "px";
   cursorEl.style.display = "block";
   if (!controlActive()) return;
   socket.emit("command", { action: "mousemove", x: Math.max(0,x), y: Math.max(0,y), sw: r.width, sh: r.height });
 });
-
 screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
-screenPanel.addEventListener("mousedown", (e) => { if (!controlActive()) return; socket.emit("command", { action: "mousedown", button: e.button }); });
-screenPanel.addEventListener("mouseup",   (e) => { if (!controlActive()) return; socket.emit("command", { action: "mouseup",   button: e.button }); });
-screenPanel.addEventListener("contextmenu", (e) => e.preventDefault());
-screenPanel.addEventListener("wheel", (e) => { if (!controlActive()) return; socket.emit("command", { action: "scroll", delta: e.deltaY < 0 ? 3 : -3 }); });
+screenPanel.addEventListener("mousedown",  (e) => { if (!controlActive()) return; socket.emit("command", { action: "mousedown", button: e.button }); });
+screenPanel.addEventListener("mouseup",    (e) => { if (!controlActive()) return; socket.emit("command", { action: "mouseup",   button: e.button }); });
+screenPanel.addEventListener("contextmenu",(e) => e.preventDefault());
+screenPanel.addEventListener("wheel",      (e) => { if (!controlActive()) return; socket.emit("command", { action: "scroll", delta: e.deltaY < 0 ? 3 : -3 }); });
 
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.shiftKey && e.key === "D") { ctrlToggle.checked = !ctrlToggle.checked; return; }
