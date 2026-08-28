@@ -91,5 +91,9 @@ def broadcast_camera(b64):
     socketio.emit("camera_frame", {"data": b64})
 
 
+def broadcast_ngrok_url(url):
+    socketio.emit("ngrok_url", {"url": url})
+
+
 def run(host="0.0.0.0", port=9090):
     socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
