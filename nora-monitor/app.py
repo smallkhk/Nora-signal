@@ -11,8 +11,9 @@ import camera as cam
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
 
-# Also check saved token file
-_TOKEN_FILE = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor", "ngrok.token")
+_APP_DIR = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_TOKEN_FILE = os.path.join(_APP_DIR, "ngrok.token")
+_RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
 
 def _load_token():
@@ -43,7 +44,7 @@ def _start_ngrok(port):
 
 
 def main():
-    recorder = rec.Recorder(output_dir="recordings", fps=10)
+    recorder = rec.Recorder(output_dir=_RECORDINGS_DIR, fps=10)
     camera = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
 
     server.init(controller.handle_command, recorder, camera)
