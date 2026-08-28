@@ -4,7 +4,6 @@ import threading
 import time
 
 import mss
-import mss.tools
 from PIL import Image
 
 
@@ -16,6 +15,10 @@ class ScreenCapture:
         self._scale = scale
         self._running = False
         self._thread = None
+        self._recorder = None
+
+    def attach_recorder(self, recorder):
+        self._recorder = recorder
 
     def start(self):
         self._running = True
@@ -27,16 +30,25 @@ class ScreenCapture:
 
     def _loop(self):
         with mss.mss() as sct:
-            monitor = sct.monitors[0]  # full virtual screen
+            monitor = sct.monitors[0]
             while self._running:
                 t0 = time.monotonic()
                 try:
                     raw = sct.grab(monitor)
-                    img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+                    full = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+
+                    # Pass full-res frame to recorder if active
+                    if self._recorder and self._recorder.is_recording:
+                        self._recorder.write_frame(full)
+
+                    # Downscale for streaming
                     if self._scale != 1.0:
-                        w = int(img.width * self._scale)
-                        h = int(img.height * self._scale)
-                        img = img.resize((w, h), Image.LANCZOS)
+                        w = int(full.width * self._scale)
+                        h = int(full.height * self._scale)
+                        img = full.resize((w, h), Image.LANCZOS)
+                    else:
+                        img = full
+
                     buf = io.BytesIO()
                     img.save(buf, format="JPEG", quality=self._quality)
                     b64 = base64.b64encode(buf.getvalue()).decode()

