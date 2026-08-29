@@ -49,7 +49,7 @@ def _start_tunnel(port):
     def _run():
         try:
             cloudflared = os.path.join(_APP_DIR, "cloudflared.exe")
-            cmd = [cloudflared, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"]
+            cmd = [cloudflared, "--no-autoupdate", "tunnel", "--url", f"http://localhost:{port}"]
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 0
