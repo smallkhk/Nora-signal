@@ -48,14 +48,8 @@ def _publish_url(pc_name, tunnel_url):
 def _start_tunnel(port):
     def _run():
         try:
-            cmd = [
-                "ssh", "-n",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "ServerAliveInterval=30",
-                "-o", "ServerAliveCountMax=10",
-                "-R", f"80:localhost:{port}",
-                "nokey@localhost.run"
-            ]
+            cloudflared = os.path.join(_APP_DIR, "cloudflared.exe")
+            cmd = [cloudflared, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"]
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = 0
@@ -65,9 +59,9 @@ def _start_tunnel(port):
             )
             published = False
             for line in proc.stdout:
-                _log(f"SSH: {line.rstrip()}")
+                _log(f"CF: {line.rstrip()}")
                 if not published:
-                    m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
+                    m = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com', line)
                     if m:
                         tunnel_url = m.group(0)
                         published = True
