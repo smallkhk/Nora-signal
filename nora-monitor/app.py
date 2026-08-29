@@ -48,7 +48,7 @@ def _start_tunnel(port):
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
             for line in proc.stdout:
-                m = re.search(r'https?://\S+\.localhost\.run', line)
+                m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
                 if m:
                     tunnel_url = m.group(0)
                     import time; time.sleep(2)
