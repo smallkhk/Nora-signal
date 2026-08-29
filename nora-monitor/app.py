@@ -20,6 +20,9 @@ PORT = int(os.environ.get("NORA_PORT", 9090))
 
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
+_CLOUDFLARED    = os.path.join(_APP_DIR, "cloudflared.exe")
+
+_ANSI = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
 def _log(msg):
@@ -45,16 +48,34 @@ def _publish_url(pc_name, tunnel_url):
         _log(f"MQTT error: {e}")
 
 
+def _download_cloudflared():
+    import urllib.request
+    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    try:
+        _log("Downloading cloudflared...")
+        urllib.request.urlretrieve(url, _CLOUDFLARED)
+        _log("cloudflared downloaded OK")
+        return True
+    except Exception as e:
+        _log(f"cloudflared download failed: {e}")
+        return False
+
+
 def _run_tunnel(cmd, pattern, label):
     si = subprocess.STARTUPINFO()
     si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     si.wShowWindow = 0
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, startupinfo=si)
+    env = dict(os.environ, TERM="dumb")
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, startupinfo=si, env=env
+    )
     published = False
     for line in proc.stdout:
-        _log(f"{label}: {line.rstrip()}")
+        clean = _ANSI.sub('', line)
+        _log(f"{label}: {clean.rstrip()}")
         if not published:
-            m = re.search(pattern, line)
+            m = re.search(pattern, clean)
             if m:
                 tunnel_url = m.group(0)
                 published = True
@@ -65,25 +86,41 @@ def _run_tunnel(cmd, pattern, label):
     proc.wait()
     return published
 
+
 def _start_tunnel(port):
     def _run():
-        cloudflared = os.path.join(_APP_DIR, "cloudflared.exe")
-        if os.path.exists(cloudflared):
+        # Try cloudflared — download it first if missing
+        if not os.path.exists(_CLOUDFLARED):
+            _download_cloudflared()
+        if os.path.exists(_CLOUDFLARED):
             try:
                 _log("Trying cloudflared...")
-                cmd = [cloudflared, "--no-autoupdate", "tunnel", "--url", f"http://localhost:{port}"]
-                _run_tunnel(cmd, r'https://[a-z0-9-]+\.trycloudflare\.com', "CF")
-                return
+                cmd = [_CLOUDFLARED, "--no-autoupdate", "tunnel", "--url", f"http://localhost:{port}"]
+                if _run_tunnel(cmd, r'https://[a-z0-9-]+\.trycloudflare\.com', "CF"):
+                    return
             except Exception as e:
                 _log(f"Cloudflared failed: {e}")
-        # Fallback to SSH
+
+        # Fallback 1: localhost.run via SSH
         try:
-            _log("Trying SSH tunnel...")
+            _log("Trying SSH localhost.run...")
             cmd = ["ssh", "-n", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=30",
                    "-R", f"80:localhost:{port}", "nokey@localhost.run"]
-            _run_tunnel(cmd, r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', "SSH")
+            if _run_tunnel(cmd, r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', "SSH"):
+                return
         except Exception as e:
-            _log(f"SSH tunnel failed: {e}")
+            _log(f"SSH localhost.run failed: {e}")
+
+        # Fallback 2: pinggy.io via SSH on port 443
+        try:
+            _log("Trying pinggy.io...")
+            cmd = ["ssh", "-p", "443", "-n", "-o", "StrictHostKeyChecking=no",
+                   "-o", "ServerAliveInterval=30",
+                   "-R", f"0:localhost:{port}", "a.pinggy.io"]
+            _run_tunnel(cmd, r'https://[a-z0-9-]+\.(a\.free\.pinggy\.link|in\.pinggy\.io)', "PG")
+        except Exception as e:
+            _log(f"Pinggy failed: {e}")
+
     threading.Thread(target=_run, daemon=True).start()
 
 
@@ -108,7 +145,7 @@ def main():
         _log("Init clipboard")
         cb.ClipboardMonitor(server.broadcast_clipboard).start()
         _log("Starting tunnel")
-        threading.Thread(target=_start_tunnel, args=(PORT,), daemon=True).start()
+        _start_tunnel(PORT)
         _log("Starting server")
         server.run(port=PORT)
     except Exception:
