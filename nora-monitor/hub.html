@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nora Hub</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -396,8 +397,7 @@
   <div id="tunnel-bar"></div>
   <div class="spacer"></div>
   <span id="active-label">No agent selected</span>
-  <button class="btn btn-ghost" onclick="syncGist()" title="Sync agents from GitHub Gist">⟳ Sync</button>
-  <button class="btn btn-ghost" onclick="openGistSettings()" title="Gist settings">⚙</button>
+  <span id="mqtt-status" style="font-size:11px;color:var(--muted)">⬤ connecting...</span>
   <button class="btn btn-accent" onclick="openModal()">+ Add Agent</button>
 </div>
 
@@ -469,24 +469,6 @@
   </div>
 </div>
 
-<!-- Bucket Settings Modal -->
-<div id="gist-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;" onclick="if(event.target===this)closeGistSettings()">
-  <div id="modal" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;width:380px;display:flex;flex-direction:column;gap:12px;">
-    <h2 style="font-size:15px;color:var(--accent)">Sync Settings</h2>
-    <p style="font-size:11px;color:var(--muted);line-height:1.6;">
-      Enter the <b>Bucket ID</b> from your monitored PC.<br>
-      Find it in <code style="color:var(--accent)">%APPDATA%\NoraMonitor\config.json</code> after first run.
-    </p>
-    <div>
-      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Bucket ID</label>
-      <input id="gs-gist" placeholder="e.g. 9J1Q3aB..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:13px;">
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
-      <button class="btn btn-ghost" onclick="closeGistSettings()">Cancel</button>
-      <button class="btn btn-accent" onclick="saveGistSettings()">Save & Sync</button>
-    </div>
-  </div>
-</div>
 
 <!-- Add Agent Modal -->
 <div id="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -897,59 +879,46 @@ function notify(msg) {
   }
 }
 
-// ── Bucket Sync ───────────────────────────────────────────────────────────────
-const KVDB = 'https://kvdb.io';
+// ── MQTT Auto-Discovery ───────────────────────────────────────────────────────
+const MQTT_TOPIC = 'nora/7638d08dcd8340ef953c';
+const mqttStatus = document.getElementById('mqtt-status');
 
-function openGistSettings() {
-  try { document.getElementById('gs-gist').value = localStorage.getItem('nora_bucket_id') || ''; } catch(e) {}
-  document.getElementById('gist-overlay').style.display = 'flex';
-  setTimeout(() => document.getElementById('gs-gist').focus(), 100);
-}
-function closeGistSettings() {
-  document.getElementById('gist-overlay').style.display = 'none';
-}
-function saveGistSettings() {
-  const bucketId = document.getElementById('gs-gist').value.trim();
-  try { localStorage.setItem('nora_bucket_id', bucketId); } catch(e) {}
-  closeGistSettings();
-  if (bucketId) syncGist();
-}
+const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', {
+  clientId: 'nora_hub_' + Math.random().toString(36).slice(2, 9),
+  keepalive: 30,
+  reconnectPeriod: 3000
+});
 
-async function syncGist() {
-  let bucketId = ''; try { bucketId = localStorage.getItem('nora_bucket_id') || ''; } catch(e) {}
-  if (!bucketId) { openGistSettings(); return; }
+mqttClient.on('connect', () => {
+  mqttStatus.textContent = '⬤ live';
+  mqttStatus.style.color = 'var(--green)';
+  mqttClient.subscribe(MQTT_TOPIC + '/#');
+});
 
-  try {
-    // List all keys in bucket
-    const res  = await fetch(`${KVDB}/${bucketId}/?list=1`);
-    if (!res.ok) { alert('Bucket not found. Check your Bucket ID.'); return; }
-    const text = await res.text();
-    const keys = text.trim().split('\n').filter(Boolean);
+mqttClient.on('reconnect', () => {
+  mqttStatus.textContent = '⬤ reconnecting...';
+  mqttStatus.style.color = 'var(--yellow)';
+});
 
-    let added = 0;
-    for (const key of keys) {
-      const urlRes  = await fetch(`${KVDB}/${bucketId}/${key}`);
-      const agentUrl = (await urlRes.text()).trim();
-      const name    = decodeURIComponent(key);
-      if (!agentUrl.startsWith('http')) continue;
+mqttClient.on('error', () => {
+  mqttStatus.textContent = '⬤ error';
+  mqttStatus.style.color = 'var(--red)';
+});
 
-      const exists = Object.values(agents).find(a => a.name === name);
-      if (!exists) {
-        connectAgent('a_' + Date.now() + Math.random(), name, agentUrl);
-        added++;
-      } else if (exists.url !== agentUrl) {
-        removeAgent(exists.id);
-        connectAgent('a_' + Date.now() + Math.random(), name, agentUrl);
-        added++;
-      }
-    }
+mqttClient.on('message', (topic, message) => {
+  const pcName   = decodeURIComponent(topic.split('/').pop()).replace(/_/g, ' ');
+  const agentUrl = message.toString().trim();
+  if (!agentUrl.startsWith('http')) return;
 
-    saveAgentsToStorage();
-    if (added === 0) alert('All agents already up to date.');
-  } catch(e) {
-    alert('Sync failed: ' + e.message);
+  const exists = Object.values(agents).find(a => a.name === pcName);
+  if (!exists) {
+    connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
+  } else if (exists.url !== agentUrl) {
+    removeAgent(exists.id);
+    connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
   }
-}
+  saveAgentsToStorage();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 Notification.requestPermission();
