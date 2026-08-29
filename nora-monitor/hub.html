@@ -565,7 +565,7 @@ function connectAgent(id, name, url) {
   renderSidebar();
 
   const sock = io(url, {
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     reconnectionDelay: 2000,
     reconnectionAttempts: Infinity
   });
