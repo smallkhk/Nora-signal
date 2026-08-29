@@ -40,12 +40,16 @@ def _start_tunnel(port):
             cmd = [
                 "ssh", "-o", "StrictHostKeyChecking=no",
                 "-o", "ServerAliveInterval=30",
+                "-o", "BatchMode=yes",
                 "-R", f"80:localhost:{port}",
                 "nokey@localhost.run"
             ]
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                startupinfo=si
             )
             for line in proc.stdout:
                 m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
