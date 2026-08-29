@@ -44,7 +44,8 @@ def _start_tunnel(port):
                 "nokey@localhost.run"
             ]
             proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             for line in proc.stdout:
                 m = re.search(r'https?://\S+\.localhost\.run', line)
