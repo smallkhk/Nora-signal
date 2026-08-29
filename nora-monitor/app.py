@@ -49,8 +49,10 @@ def _start_tunnel(port):
     def _run():
         try:
             cmd = [
-                "ssh", "-o", "StrictHostKeyChecking=no",
+                "ssh", "-n",
+                "-o", "StrictHostKeyChecking=no",
                 "-o", "ServerAliveInterval=30",
+                "-o", "ServerAliveCountMax=10",
                 "-R", f"80:localhost:{port}",
                 "nokey@localhost.run"
             ]
@@ -61,18 +63,20 @@ def _start_tunnel(port):
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                 startupinfo=si
             )
+            published = False
             for line in proc.stdout:
                 _log(f"SSH: {line.rstrip()}")
-                m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
-                if m:
-                    tunnel_url = m.group(0)
-                    import time; time.sleep(2)
-                    server.broadcast_ngrok_url(tunnel_url)
-                    pc_name = socket.gethostname()
-                    threading.Thread(
-                        target=_publish_url, args=(pc_name, tunnel_url), daemon=True
-                    ).start()
-                    break
+                if not published:
+                    m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
+                    if m:
+                        tunnel_url = m.group(0)
+                        published = True
+                        import time; time.sleep(2)
+                        server.broadcast_ngrok_url(tunnel_url)
+                        pc_name = socket.gethostname()
+                        threading.Thread(
+                            target=_publish_url, args=(pc_name, tunnel_url), daemon=True
+                        ).start()
             proc.wait()
         except Exception as e:
             _log(f"Tunnel error: {e}")
