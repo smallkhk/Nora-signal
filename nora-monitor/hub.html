@@ -910,6 +910,9 @@ mqttClient.on('message', (topic, message) => {
   const agentUrl = message.toString().trim();
   if (!agentUrl.startsWith('http')) return;
 
+  // Show URL in top bar for debugging
+  showTunnelBar(pcName + ': ' + agentUrl);
+
   const exists = Object.values(agents).find(a => a.name === pcName);
   if (!exists) {
     connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
