@@ -45,35 +45,45 @@ def _publish_url(pc_name, tunnel_url):
         _log(f"MQTT error: {e}")
 
 
+def _run_tunnel(cmd, pattern, label):
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 0
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, startupinfo=si)
+    published = False
+    for line in proc.stdout:
+        _log(f"{label}: {line.rstrip()}")
+        if not published:
+            m = re.search(pattern, line)
+            if m:
+                tunnel_url = m.group(0)
+                published = True
+                import time; time.sleep(2)
+                server.broadcast_ngrok_url(tunnel_url)
+                pc_name = socket.gethostname()
+                threading.Thread(target=_publish_url, args=(pc_name, tunnel_url), daemon=True).start()
+    proc.wait()
+    return published
+
 def _start_tunnel(port):
     def _run():
+        cloudflared = os.path.join(_APP_DIR, "cloudflared.exe")
+        if os.path.exists(cloudflared):
+            try:
+                _log("Trying cloudflared...")
+                cmd = [cloudflared, "--no-autoupdate", "tunnel", "--url", f"http://localhost:{port}"]
+                _run_tunnel(cmd, r'https://[a-z0-9-]+\.trycloudflare\.com', "CF")
+                return
+            except Exception as e:
+                _log(f"Cloudflared failed: {e}")
+        # Fallback to SSH
         try:
-            cloudflared = os.path.join(_APP_DIR, "cloudflared.exe")
-            cmd = [cloudflared, "--no-autoupdate", "tunnel", "--url", f"http://localhost:{port}"]
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 0
-            proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                startupinfo=si
-            )
-            published = False
-            for line in proc.stdout:
-                _log(f"CF: {line.rstrip()}")
-                if not published:
-                    m = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com', line)
-                    if m:
-                        tunnel_url = m.group(0)
-                        published = True
-                        import time; time.sleep(2)
-                        server.broadcast_ngrok_url(tunnel_url)
-                        pc_name = socket.gethostname()
-                        threading.Thread(
-                            target=_publish_url, args=(pc_name, tunnel_url), daemon=True
-                        ).start()
-            proc.wait()
+            _log("Trying SSH tunnel...")
+            cmd = ["ssh", "-n", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=30",
+                   "-R", f"80:localhost:{port}", "nokey@localhost.run"]
+            _run_tunnel(cmd, r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', "SSH")
         except Exception as e:
-            _log(f"Tunnel error: {e}")
+            _log(f"SSH tunnel failed: {e}")
     threading.Thread(target=_run, daemon=True).start()
 
 

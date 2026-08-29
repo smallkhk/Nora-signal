@@ -27,7 +27,7 @@ pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
 :: Download cloudflared (always refresh)
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "try { Invoke-WebRequest 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile '%DIR%\cloudflared.exe' -UseBasicParsing } catch { Write-Host $_.Exception.Message }"
+  "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe','%DIR%\cloudflared.exe')"
 
 :: Kill any existing instance holding port 9090
 for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| find ":9090" ^| find "LISTENING"') do (
