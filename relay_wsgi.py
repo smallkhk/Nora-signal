@@ -1,21 +1,28 @@
 """
 LSAPI binary protocol server for LiteSpeed/CloudLinux.
 
-Request structure:
-  [0-7]  Packet header: 'LS' + type(1B) + flags(1B) + total_len(4B LE)
-  [8-11] envListSize (4B LE)   - basic CGI env vars
-  [12-15] speEnvListSize (4B LE) - HTTP_* env vars
-  [16-19] httpHdrLen (4B LE)   - raw HTTP request line + headers
-  [20-23] reqBodyLen (4B LE)   - request body length
-  [24 .. 24+envListSize)        - CGI env vars as name\0value\0 pairs
-  [.. +speEnvListSize)          - HTTP_* env vars same format
-  [.. +httpHdrLen)              - raw HTTP request line + headers
-  [.. +reqBodyLen)              - request body
+Request packet (from LiteSpeed):
+  [0-1]  'LS' magic
+  [2]    type = 0x01 (request)
+  [3]    flags
+  [4-7]  total packet length (LE, includes this 8-byte header)
+  [8-11] env_sz   -- bytes in CGI env block
+  [12-15] spe_sz  -- bytes in special-env block (HTTP_* vars)
+  [16-19] http_sz -- bytes of raw HTTP request (line + headers + body)
+  [20-23] req_body_sz  -- appears to overlap / be 0 for GET
+  [24 .. 24+env_sz)  -- CGI env vars in FastCGI name-value format
+  [.. +spe_sz)       -- HTTP_* vars same format
+  [.. +http_sz)      -- raw HTTP request bytes
 
-Response structure (sent back on the same connection):
-  pkt(type=2, CGI-format headers string)
-  pkt(type=3, body bytes)   [if any body]
-  pkt(type=4, b'')          [end of response]
+FastCGI name-value format (used for env sections):
+  namelen: 1 byte if < 128, else 4 bytes big-endian with high bit set
+  vallen:  same
+  name bytes (no null)
+  value bytes (no null)
+
+Response (sent back on the connection):
+  Plain CGI text: "Status: 200 OK\r\nHeaders...\r\n\r\nbody"
+  (no binary framing — LiteSpeed reads until connection close)
 """
 
 import sys
@@ -27,19 +34,13 @@ import threading
 import traceback
 import time
 
-# ── paths ──────────────────────────────────────────────────────────────────
 sys.path.insert(0, '/home/ecliaoia/virtualenv/mon/3.11/lib/python3.11/site-packages')
 sys.path.insert(0, '/home/ecliaoia/mon')
 
 LOG = '/home/ecliaoia/mon/lsapi.log'
 LSAPI_MAGIC = b'LS'
-REQ_TYPE       = 0x01
-RESP_HDR_TYPE  = 0x02
-RESP_BODY_TYPE = 0x03
-RESP_END_TYPE  = 0x04
+REQ_TYPE = 0x01
 
-
-# ── helpers ────────────────────────────────────────────────────────────────
 
 def log(msg):
     try:
@@ -50,101 +51,133 @@ def log(msg):
 
 
 def read_exact(sock, n):
-    """Read exactly n bytes from sock, blocking."""
     buf = bytearray()
     while len(buf) < n:
         chunk = sock.recv(min(65536, n - len(buf)))
         if not chunk:
-            raise EOFError(f"connection closed after {len(buf)}/{n} bytes")
+            raise EOFError(f"closed after {len(buf)}/{n} bytes")
         buf.extend(chunk)
     return bytes(buf)
 
 
-def make_pkt(ptype, data=b''):
-    """Build an 8-byte LSAPI packet header + data."""
-    total = 8 + len(data)
-    return LSAPI_MAGIC + bytes([ptype, 0]) + struct.pack('<I', total) + data
-
-
-def parse_kv_list(raw):
-    """Parse null-terminated key\\0value\\0 pairs from raw bytes."""
+def parse_fastcgi_params(data):
+    """Parse FastCGI name-value pairs (used by LSAPI for env blocks)."""
     env = {}
     i = 0
-    while i < len(raw):
-        j = raw.find(b'\x00', i)
-        if j < 0:
+    while i < len(data):
+        if i >= len(data):
             break
-        name = raw[i:j].decode('latin-1', errors='replace')
-        i = j + 1
-        j = raw.find(b'\x00', i)
-        if j < 0:
+        # name length
+        b = data[i]
+        if b & 0x80:
+            if i + 4 > len(data):
+                break
+            name_len = struct.unpack_from('>I', data, i)[0] & 0x7FFFFFFF
+            i += 4
+        else:
+            name_len = b
+            i += 1
+        # value length
+        if i >= len(data):
             break
-        val = raw[i:j].decode('latin-1', errors='replace')
-        i = j + 1
+        b = data[i]
+        if b & 0x80:
+            if i + 4 > len(data):
+                break
+            val_len = struct.unpack_from('>I', data, i)[0] & 0x7FFFFFFF
+            i += 4
+        else:
+            val_len = b
+            i += 1
+        if i + name_len + val_len > len(data):
+            break
+        name = data[i:i + name_len].decode('latin-1', errors='replace')
+        i += name_len
+        val = data[i:i + val_len].decode('latin-1', errors='replace')
+        i += val_len
         if name:
             env[name] = val
     return env
 
 
-# ── request handler ────────────────────────────────────────────────────────
-
 def handle_connection(conn):
-    """Handle one LSAPI connection (may carry multiple requests if keep-alive)."""
     try:
         while True:
-            # ── read packet header (8 bytes) ───────────────────────────────
+            # ── read packet header (8 bytes) ──────────────────────────────
             try:
                 hdr = read_exact(conn, 8)
             except EOFError:
-                break   # client closed connection cleanly
-
-            if hdr[:2] != LSAPI_MAGIC:
-                log(f"bad magic {hdr[:4].hex()!r}; closing")
                 break
 
-            ptype  = hdr[2]
-            flags  = hdr[3]
-            total  = struct.unpack('<I', hdr[4:8])[0]
+            if hdr[:2] != LSAPI_MAGIC:
+                log(f"bad magic {hdr[:4].hex()}")
+                break
+
+            ptype = hdr[2]
+            total = struct.unpack('<I', hdr[4:8])[0]
             body_n = total - 8
 
-            log(f"recv pkt type={ptype} flags={flags} total={total}")
+            log(f"pkt type={ptype} total={total} body_n={body_n}")
 
-            if body_n < 0 or body_n > 4 * 1024 * 1024:
-                log(f"bad body_n={body_n}; closing")
+            if body_n < 0 or body_n > 8 * 1024 * 1024:
+                log(f"bad body_n={body_n}")
                 break
 
             body = read_exact(conn, body_n)
 
             if ptype != REQ_TYPE:
-                log(f"unexpected pkt type={ptype}; skipping")
+                log(f"unexpected pkt type={ptype}")
                 continue
 
-            # ── parse body header (4 × int32) ──────────────────────────────
+            # ── parse 4-field body header ─────────────────────────────────
             if len(body) < 16:
-                log(f"body too short ({len(body)} bytes) for header")
+                log(f"body too short ({len(body)})")
                 break
 
-            env_sz, spe_sz, http_sz, req_body_sz = struct.unpack_from('<IIII', body, 0)
-            log(f"env_sz={env_sz} spe_sz={spe_sz} http_sz={http_sz} req_body_sz={req_body_sz}")
+            env_sz, spe_sz, http_sz, f3 = struct.unpack_from('<IIII', body, 0)
+            log(f"env_sz={env_sz} spe_sz={spe_sz} http_sz={http_sz} f3={f3}")
+
+            # Log raw bytes to determine actual format
+            log(f"body[0:16] hex: {body[0:16].hex()}")
+            log(f"body[16:56] hex: {body[16:56].hex()}")
 
             off = 16
-            needed = 16 + env_sz + spe_sz + http_sz + req_body_sz
-            if needed > len(body):
-                log(f"body underflow: need {needed}, have {len(body)}")
-                break
 
-            # ── parse env sections ─────────────────────────────────────────
-            cgi_env = parse_kv_list(body[off:off + env_sz]);    off += env_sz
-            spe_env = parse_kv_list(body[off:off + spe_sz]);    off += spe_sz
-            http_raw = body[off:off + http_sz];                 off += http_sz
-            req_body = body[off:off + req_body_sz]
+            # ── parse env sections ────────────────────────────────────────
+            env_data = body[off:off + env_sz]
+            log(f"env_data[:40] hex: {env_data[:40].hex()}")
+            off += env_sz
 
-            log(f"cgi_env keys={list(cgi_env.keys())[:6]}")
-            log(f"spe_env keys={list(spe_env.keys())[:6]}")
-            log(f"http_raw[:100]={http_raw[:100]!r}")
+            spe_data = body[off:off + spe_sz]
+            off += spe_sz
 
-            # ── parse request line from raw HTTP section ───────────────────
-            first_line = (http_raw.split(b'\r\n')[0]).decode('latin-1', errors='replace')
+            http_raw = body[off:off + http_sz]
+            log(f"http_raw[:80] hex: {http_raw[:80].hex()!r}")
+            off += http_sz
+
+            # f3 bytes follow (might be empty for GET, or contain stdin)
+            rest = body[off:]
+            log(f"rest[:80] hex: {rest[:80].hex()!r}")
+
+            # Parse with FastCGI name-value format
+            cgi_env = parse_fastcgi_params(env_data)
+            spe_env = parse_fastcgi_params(spe_data)
+
+            log(f"cgi_env: {dict(list(cgi_env.items())[:8])}")
+            log(f"spe_env keys: {list(spe_env.keys())[:8]}")
+            log(f"http_raw[:80]: {http_raw[:80]!r}")
+
+            # ── parse request line ────────────────────────────────────────
+            # http_raw contains the raw HTTP request; if empty, derive from env
+            if http_raw:
+                first_line = http_raw.split(b'\r\n')[0].decode('latin-1', errors='replace')
+            else:
+                # fall back to CGI env vars
+                method_env = cgi_env.get('REQUEST_METHOD', 'GET')
+                uri_env = cgi_env.get('REQUEST_URI', '/')
+                proto_env = cgi_env.get('SERVER_PROTOCOL', 'HTTP/1.1')
+                first_line = f"{method_env} {uri_env} {proto_env}"
+
             parts = first_line.split(' ')
             method = parts[0] if parts else 'GET'
             path   = parts[1] if len(parts) > 1 else '/'
@@ -155,7 +188,7 @@ def handle_connection(conn):
             else:
                 path_info, qs = path, ''
 
-            # ── build WSGI environ ─────────────────────────────────────────
+            # ── build WSGI environ ────────────────────────────────────────
             environ = {}
             environ.update(cgi_env)
             environ.update(spe_env)
@@ -168,21 +201,20 @@ def handle_connection(conn):
             environ['wsgi.url_scheme'] = (
                 'https' if environ.get('HTTPS', '').lower() == 'on' else 'http'
             )
-            environ['wsgi.input']      = io.BytesIO(req_body)
+            environ['wsgi.input']      = io.BytesIO(rest)
             environ['wsgi.errors']     = sys.stderr
             environ['wsgi.multithread']  = True
             environ['wsgi.multiprocess'] = False
             environ['wsgi.run_once']     = False
 
-            # Normalize Content-Type / Content-Length
-            for hkey, wkey in (('HTTP_CONTENT_TYPE', 'CONTENT_TYPE'),
-                                ('HTTP_CONTENT_LENGTH', 'CONTENT_LENGTH')):
-                if hkey in environ:
-                    environ.setdefault(wkey, environ.pop(hkey))
-            environ.setdefault('CONTENT_LENGTH', str(req_body_sz))
+            for hk, wk in (('HTTP_CONTENT_TYPE', 'CONTENT_TYPE'),
+                            ('HTTP_CONTENT_LENGTH', 'CONTENT_LENGTH')):
+                if hk in environ:
+                    environ.setdefault(wk, environ.pop(hk))
+            environ.setdefault('CONTENT_LENGTH', str(len(rest)))
             environ.setdefault('CONTENT_TYPE', '')
 
-            # ── call WSGI app ──────────────────────────────────────────────
+            # ── call WSGI app ─────────────────────────────────────────────
             from relay import app
 
             status_box  = []
@@ -221,18 +253,15 @@ def handle_connection(conn):
 
             log(f"response: {resp_status!r}, body={len(resp_body)} bytes")
 
-            # ── send LSAPI response ────────────────────────────────────────
-            # Header packet: CGI-format "Status: …\r\nKey: Val\r\n\r\n"
+            # ── send plain CGI response (no binary framing) ───────────────
             hdr_str = f"Status: {resp_status}\r\n"
             for k, v in resp_headers:
                 hdr_str += f"{k}: {v}\r\n"
             hdr_str += "\r\n"
-            hdr_bytes = hdr_str.encode('latin-1', errors='replace')
 
-            conn.sendall(make_pkt(RESP_HDR_TYPE, hdr_bytes))
-            if resp_body:
-                conn.sendall(make_pkt(RESP_BODY_TYPE, resp_body))
-            conn.sendall(make_pkt(RESP_END_TYPE, b''))
+            conn.sendall(hdr_str.encode('latin-1', errors='replace') + resp_body)
+            # Close after each response (no keep-alive — restart loop won't re-read)
+            break
 
     except Exception:
         log(f"handle_connection error:\n{traceback.format_exc()}")
@@ -243,16 +272,14 @@ def handle_connection(conn):
             pass
 
 
-# ── main ───────────────────────────────────────────────────────────────────
-
+# ── main ──────────────────────────────────────────────────────────────────────
 log("=== relay_wsgi starting ===")
-log(f"pid={os.getpid()} env_keys={[k for k in os.environ if k.startswith('LSAPI')]}")
+log(f"pid={os.getpid()}")
 
 try:
-    # fd 0 is the LSAPI Unix-domain listening socket
     server = S.socket(fileno=0)
     server.setblocking(True)
-    log("attached to fd 0 as listening socket")
+    log("attached fd 0 as listening socket")
 
     while True:
         try:
@@ -261,11 +288,10 @@ try:
             t = threading.Thread(target=handle_connection, args=(conn,), daemon=True)
             t.start()
         except KeyboardInterrupt:
-            log("KeyboardInterrupt — exiting")
             break
         except Exception:
             log(f"accept error:\n{traceback.format_exc()}")
             time.sleep(0.05)
 
 except Exception:
-    log(f"fatal startup error:\n{traceback.format_exc()}")
+    log(f"fatal:\n{traceback.format_exc()}")
