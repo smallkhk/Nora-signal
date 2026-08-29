@@ -25,6 +25,12 @@ if %errorlevel% neq 0 (
 :: Install dependencies quietly
 pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
+:: Kill any existing instance holding port 9090
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| find ":9090" ^| find "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+timeout /t 1 /nobreak >nul
+
 :: Launch silently - no window, no taskbar
 start "" /D "%DIR%" pythonw "%DIR%\app.py"
 

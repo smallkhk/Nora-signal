@@ -913,7 +913,7 @@ mqttClient.on('message', (topic, message) => {
   const exists = Object.values(agents).find(a => a.name === pcName);
   if (!exists) {
     connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
-  } else if (exists.url !== agentUrl) {
+  } else if (exists.url !== agentUrl || exists.status === 'offline') {
     removeAgent(exists.id);
     connectAgent('a_' + Date.now() + Math.random(), pcName, agentUrl);
   }
