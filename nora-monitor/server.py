@@ -5,7 +5,7 @@ import processes as proc
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = os.urandom(24)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 _controller = None
 _recorder   = None
@@ -94,4 +94,4 @@ def broadcast_bucket_id(bid):    socketio.emit("bucket_id",      {"id": bid})
 
 
 def run(host="0.0.0.0", port=9090):
-    socketio.run(app, host=host, port=port)
+    socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
