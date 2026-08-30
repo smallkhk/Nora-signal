@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import processes as proc
+import file_manager as fm
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = os.urandom(24)
@@ -74,6 +75,30 @@ def on_command(data):
     if _controller:
         try: _controller(data)
         except Exception: pass
+
+
+# ── File Manager ──────────────────────────────────────────────────────────────
+@socketio.on("list_dir")
+def on_list_dir(data):
+    path = data.get("path") or fm.home_dir()
+    result = fm.list_dir(path)
+    socketio.emit("dir_result", result)
+
+@socketio.on("read_file")
+def on_read_file(data):
+    result = fm.read_file(data.get("path", ""))
+    socketio.emit("file_data", result)
+
+@socketio.on("write_file")
+def on_write_file(data):
+    result = fm.write_file(data.get("path", ""), data.get("data", ""))
+    socketio.emit("write_result", result)
+
+@socketio.on("delete_path")
+def on_delete_path(data):
+    result = fm.delete_path(data.get("path", ""))
+    result["path"] = data.get("path", "")
+    socketio.emit("delete_result", result)
 
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
