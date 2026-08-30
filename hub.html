@@ -129,6 +129,46 @@
   .fm-del-btn:hover { background:#c0392b; color:#fff; }
   #fm-status { font-size:10px; color:#555; padding:5px 10px; text-align:center; flex-shrink:0; }
 
+  /* ── Remote Keyboard window ─────────────────────────────────────────────── */
+  #kbd-window {
+    display:none; position:fixed; z-index:999;
+    background:#111; border:1px solid #333; border-radius:10px;
+    box-shadow:0 8px 32px #000a; width:320px;
+    font-family:Consolas,monospace; user-select:none;
+    left:50%; top:50%; transform:translate(-50%,-50%);
+  }
+  #kbd-titlebar {
+    display:flex; align-items:center; padding:9px 12px;
+    background:#1a1a1a; border-radius:10px 10px 0 0;
+    cursor:grab; gap:8px; border-bottom:1px solid #222;
+  }
+  #kbd-titlebar:active { cursor:grabbing; }
+  #kbd-title { flex:1; font-size:12px; color:#aaa; letter-spacing:1px; }
+  #kbd-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; padding:0; line-height:1; }
+  #kbd-close:hover { color:#f87171; }
+  #kbd-indicator {
+    display:flex; align-items:center; gap:6px; padding:8px 12px;
+    font-size:11px; color:#555; border-bottom:1px solid #1a1a1a;
+  }
+  #kbd-dot { width:7px; height:7px; border-radius:50%; background:#333; flex-shrink:0; transition:background .1s; }
+  #kbd-dot.active { background:#4ade80; box-shadow:0 0 6px #4ade8099; }
+  #kbd-last { flex:1; color:#7c6aff; font-size:11px; min-height:14px; }
+  #kbd-box {
+    width:100%; box-sizing:border-box; padding:10px 12px;
+    background:#0d0d0d; border:none; border-radius:0 0 10px 10px;
+    color:#e0e0e0; font-family:Consolas,monospace; font-size:13px;
+    resize:none; outline:none; height:90px;
+    caret-color:#7c6aff;
+  }
+  #kbd-box::placeholder { color:#333; }
+  #kbd-hint { padding:6px 12px 10px; font-size:10px; color:#333; text-align:center; }
+  #kbd-toggle-btn {
+    background:#1e1a2e; border:1px solid #3a3060; color:#a78bfa;
+    padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px;
+    font-family:Consolas,monospace; margin-top:5px;
+  }
+  #kbd-toggle-btn:hover { background:#2d2650; }
+
   /* ── Mobile ──────────────────────────────────────────────────────────────── */
   #sidebar-handle { display:none; }
 
@@ -290,8 +330,24 @@
     <div id="control-panel">
       <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
       <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
+      <button id="kbd-toggle-btn" onclick="toggleKbd()" title="Open remote keyboard window">⌨ Remote Keyboard</button>
     </div>
   </div>
+</div>
+
+<!-- Remote Keyboard floating window -->
+<div id="kbd-window">
+  <div id="kbd-titlebar" onmousedown="kbdDragStart(event)">
+    <span>⌨</span>
+    <span id="kbd-title">REMOTE KEYBOARD</span>
+    <button id="kbd-close" onclick="toggleKbd()">✕</button>
+  </div>
+  <div id="kbd-indicator">
+    <div id="kbd-dot"></div>
+    <span id="kbd-last">Type below — keys go to remote PC</span>
+  </div>
+  <textarea id="kbd-box" placeholder="Click here and start typing…" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+  <div id="kbd-hint">Keys are sent live · textarea clears automatically</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
@@ -620,6 +676,56 @@ document.addEventListener("keyup", e => {
   if (!controlActive() || document.activeElement !== document.body) return;
   e.preventDefault(); cmd({ action:"keyup", key:e.key });
 });
+
+// ── Remote Keyboard window ───────────────────────────────────────────────────
+const kbdWindow  = document.getElementById("kbd-window");
+const kbdBox     = document.getElementById("kbd-box");
+const kbdDot     = document.getElementById("kbd-dot");
+const kbdLast    = document.getElementById("kbd-last");
+let kbdOpen = false;
+
+function toggleKbd() {
+  kbdOpen = !kbdOpen;
+  kbdWindow.style.display = kbdOpen ? "block" : "none";
+  if (kbdOpen) { kbdBox.value = ""; kbdBox.focus(); }
+}
+
+kbdBox.addEventListener("keydown", e => {
+  if (!controlActive()) { kbdLast.textContent = "⚠ Enable Remote Control first"; return; }
+  e.preventDefault();
+  e.stopPropagation();
+  cmd({ action: "keydown", key: e.key });
+  // flash indicator
+  kbdDot.classList.add("active");
+  const display = e.key.length === 1 ? e.key : `[${e.key}]`;
+  kbdLast.textContent = "Sent: " + display;
+  clearTimeout(kbdBox._dotTimer);
+  kbdBox._dotTimer = setTimeout(() => kbdDot.classList.remove("active"), 200);
+  // keep textarea empty so it doesn't fill up
+  setTimeout(() => { kbdBox.value = ""; }, 0);
+});
+
+kbdBox.addEventListener("keyup", e => {
+  if (!controlActive()) return;
+  e.preventDefault(); e.stopPropagation();
+  cmd({ action: "keyup", key: e.key });
+});
+
+// Drag to move the keyboard window
+let _kx=0,_ky=0,_kl=0,_kt=0;
+function kbdDragStart(e) {
+  const r = kbdWindow.getBoundingClientRect();
+  _kx = e.clientX; _ky = e.clientY; _kl = r.left; _kt = r.top;
+  kbdWindow.style.transform = "none";
+  kbdWindow.style.left = _kl + "px"; kbdWindow.style.top = _kt + "px";
+  document.addEventListener("mousemove", kbdDragMove);
+  document.addEventListener("mouseup", kbdDragEnd, {once:true});
+}
+function kbdDragMove(e) {
+  kbdWindow.style.left = (_kl + e.clientX - _kx) + "px";
+  kbdWindow.style.top  = (_kt + e.clientY - _ky) + "px";
+}
+function kbdDragEnd() { document.removeEventListener("mousemove", kbdDragMove); }
 
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
 function toggleSidebar() {
