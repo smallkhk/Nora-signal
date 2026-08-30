@@ -63,8 +63,8 @@ else
 fi
 
 # ── 5. Smoke-test Gunicorn locally ────────────────────────────────────────────
-SHAKE=$(curl -sf --max-time 5 "http://$BIND/socket.io/?EIO=4&transport=polling" || true)
-if [[ "$SHAKE" == 0\{* ]]; then
+SHAKE=$(curl -s --max-time 5 "http://$BIND/socket.io/?EIO=4&transport=polling" 2>/dev/null || true)
+if echo "$SHAKE" | grep -q '"sid"'; then
   echo "✓ local polling OK: ${SHAKE:0:80}"
 else
   echo "✗ local polling failed: $SHAKE"
