@@ -1,970 +1,257 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nora Hub — Relay Test</title>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-
-<style>
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-:root {
-  --bg: #0d0d0d;
-  --surface: #161616;
-  --surface2: #1e1e1e;
-  --border: #2a2a2a;
-  --accent: #00e5ff;
-  --green: #22c55e;
-  --red: #ef4444;
-  --yellow: #f59e0b;
-  --text: #e5e5e5;
-  --muted: #666;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Segoe UI", system-ui, sans-serif;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* TOP BAR */
-
-#topbar {
-  height: 48px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.logo {
-  color: var(--accent);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.logo span {
-  color: var(--muted);
-  font-weight: 400;
-}
-
-.spacer {
-  flex: 1;
-}
-
-#relay-status {
-  font-size: 12px;
-  color: var(--yellow);
-}
-
-/* MAIN */
-
-#main {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-/* SIDEBAR */
-
-#sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-}
-
-#sidebar-header {
-  height: 40px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-#agent-count {
-  color: var(--accent);
-}
-
-#agents-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-#no-agents {
-  padding: 30px 10px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.agent-card {
-  margin-bottom: 7px;
-  padding: 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.agent-card:hover {
-  border-color: var(--accent);
-}
-
-.agent-card.active {
-  border-color: var(--accent);
-}
-
-.agent-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-dot.online {
-  background: var(--green);
-  box-shadow: 0 0 6px var(--green);
-}
-
-.status-dot.offline {
-  background: var(--red);
-}
-
-.agent-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-/* CENTER */
-
-#center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-#content {
-  flex: 1;
-  overflow: auto;
-  padding: 25px;
-}
-
-.panel {
-  max-width: 850px;
-  margin: 0 auto;
-}
-
-.title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.subtitle {
-  color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 22px;
-}
-
-.status-box {
-  padding: 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 15px;
-}
-
-.status-title {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 10px;
-}
-
-.status-value {
-  font-size: 14px;
-}
-
-.green {
-  color: var(--green);
-}
-
-.red {
-  color: var(--red);
-}
-
-.yellow {
-  color: var(--yellow);
-}
-
-.cyan {
-  color: var(--accent);
-}
-
-#event-log {
-  height: 300px;
-  overflow-y: auto;
-  padding: 12px;
-  background: #090909;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-
-.log-time {
-  color: var(--muted);
-}
-
-.log-info {
-  color: var(--text);
-}
-
-.log-success {
-  color: var(--green);
-}
-
-.log-error {
-  color: var(--red);
-}
-
-/* RIGHT */
-
-#panel {
-  width: 280px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  padding: 15px;
-  overflow-y: auto;
-}
-
-.info-title {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 10px;
-}
-
-.info-box {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  line-height: 1.8;
-}
-
-#selected-agent {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-button {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--surface2);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-button:hover {
-  border-color: var(--accent);
-}
-
-::-webkit-scrollbar {
-  width: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 3px;
-}
-</style>
-
-</head>
-
-<body>
-
-<div id="topbar">
-  <div class="logo">
-    NORA <span>HUB</span>
-  </div>
-
-  <div class="spacer"></div>
-
-<span id="relay-status">● connecting...</span>
-
-</div>
-
-<div id="main">
-
-  <!-- AGENTS -->
-
-  <aside id="sidebar">
-
-```
-<div id="sidebar-header">
-  <span>Agents</span>
-  <span id="agent-count">0</span>
-</div>
-
-<div id="agents-list">
-
-  <div id="no-agents">
-    Waiting for agents...
-    <br><br>
-    No registered agents are currently connected.
-  </div>
-
-</div>
-```
-
-  </aside>
-
-  <!-- CENTER -->
-
-  <main id="center">
-
-```
-<div id="content">
-
-  <div class="panel">
-
-    <div class="title">
-      Relay Status
-    </div>
-
-    <div class="subtitle">
-      Socket.IO connectivity and agent registration test.
-    </div>
-
-    <div class="status-box">
-
-      <div class="status-title">
-        Connection
-      </div>
-
-      <div id="connection-value" class="status-value yellow">
-        Connecting...
-      </div>
-
-    </div>
-
-    <div class="status-box">
-
-      <div class="status-title">
-        Socket ID
-      </div>
-
-      <div id="socket-id" class="status-value">
-        —
-      </div>
-
-    </div>
-
-    <div class="status-box">
-
-      <div class="status-title">
-        Transport
-      </div>
-
-      <div id="transport-value" class="status-value">
-        —
-      </div>
-
-    </div>
-
-    <div class="status-box">
-
-      <div class="status-title">
-        Event Log
-      </div>
-
-      <div id="event-log"></div>
-
-    </div>
-
-  </div>
-
-</div>
-```
-
-  </main>
-
-  <!-- INFORMATION -->
-
-  <aside id="panel">
-
-```
-<div class="info-title">
-  Selected Agent
-</div>
-
-<div class="info-box">
-  <div id="selected-agent">
-    No agent selected
-  </div>
-</div>
-
-<div class="info-title">
-  Relay
-</div>
-
-<div class="info-box">
-  <div>
-    Endpoint:
-  </div>
-
-  <div class="cyan">
-    mon.eclipselivecam.online
-  </div>
-
-  <br>
-
-  <div>
-    Transport:
-    <span class="green">Polling</span>
-  </div>
-
-  <div>
-    Socket.IO:
-    <span class="green">EIO 4</span>
-  </div>
-</div>
-
-<button onclick="clearLog()">
-  Clear Event Log
-</button>
-```
-
-  </aside>
-
-</div>
-
-<script>
-
-/* ============================================================
-   CONFIG
-============================================================ */
-
-const RELAY_URL = "https://mon.eclipselivecam.online";
-
-/*
- * IMPORTANT:
- *
- * Your LiteSpeed setup currently returns:
- *
- *   polling      -> 200
- *   websocket    -> 500
- *
- * Therefore this test deliberately uses polling only.
- */
-
-const relay = io(RELAY_URL, {
-  transports: ["polling"],
-  reconnection: true,
-  reconnectionAttempts: Infinity,
-  reconnectionDelay: 2000,
-  timeout: 20000
-});
-
-
-/* ============================================================
-   STATE
-============================================================ */
-
-const agents = {};
-
-let selectedAgent = null;
-
-
-/* ============================================================
-   ELEMENTS
-============================================================ */
-
-const relayStatus =
-  document.getElementById("relay-status");
-
-const connectionValue =
-  document.getElementById("connection-value");
-
-const socketId =
-  document.getElementById("socket-id");
-
-const transportValue =
-  document.getElementById("transport-value");
-
-const agentsList =
-  document.getElementById("agents-list");
-
-const agentCount =
-  document.getElementById("agent-count");
-
-const selectedAgentEl =
-  document.getElementById("selected-agent");
-
-const eventLog =
-  document.getElementById("event-log");
-
-
-/* ============================================================
-   LOGGING
-============================================================ */
-
-function log(message, type = "info") {
-
-  const time =
-    new Date().toLocaleTimeString();
-
-  const line =
-    document.createElement("div");
-
-  line.innerHTML =
-    `<span class="log-time">[${time}]</span> ` +
-    `<span class="log-${type}"></span>`;
-
-  line.querySelector(".log-" + type)
-    .textContent = message;
-
-  eventLog.appendChild(line);
-
-  eventLog.scrollTop =
-    eventLog.scrollHeight;
-}
-
-
-function clearLog() {
-  eventLog.innerHTML = "";
-}
-
-
-/* ============================================================
-   CONNECT
-============================================================ */
-
-relay.on("connect", () => {
-
-  relayStatus.textContent =
-    "● relay connected";
-
-  relayStatus.style.color =
-    "var(--green)";
-
-  connectionValue.textContent =
-    "Connected";
-
-  connectionValue.className =
-    "status-value green";
-
-  socketId.textContent =
-    relay.id || "—";
-
-  transportValue.textContent =
-    relay.io.engine.transport.name;
-
-  transportValue.className =
-    "status-value green";
-
-  log(
-    "Socket.IO connection established.",
-    "success"
-  );
-
-  log(
-    "Socket ID: " + relay.id,
-    "info"
-  );
-
-  log(
-    "Transport: " +
-    relay.io.engine.transport.name,
-    "info"
-  );
-
-  /*
-   * Tell the relay that this browser is a hub.
-   */
-  relay.emit("hub_join");
-
-});
-
-
-/* ============================================================
-   TRANSPORT
-============================================================ */
-
-relay.io.engine.on("upgrade", transport => {
-
-  log(
-    "Transport upgrade detected: " +
-    transport.name,
-    "info"
-  );
-
-});
-
-
-/* ============================================================
-   DISCONNECT
-============================================================ */
-
-relay.on("disconnect", reason => {
-
-  relayStatus.textContent =
-    "● relay disconnected";
-
-  relayStatus.style.color =
-    "var(--red)";
-
-  connectionValue.textContent =
-    "Disconnected: " + reason;
-
-  connectionValue.className =
-    "status-value red";
-
-  transportValue.textContent =
-    "—";
-
-  log(
-    "Disconnected: " + reason,
-    "error"
-  );
-
-});
-
-
-/* ============================================================
-   CONNECTION ERROR
-============================================================ */
-
-relay.on("connect_error", error => {
-
-  relayStatus.textContent =
-    "● relay error";
-
-  relayStatus.style.color =
-    "var(--red)";
-
-  connectionValue.textContent =
-    "Connection error: " +
-    (error.message || "unknown error");
-
-  connectionValue.className =
-    "status-value red";
-
-  log(
-    "Connection error: " +
-    (error.message || error),
-    "error"
-  );
-
-});
-
-
-/* ============================================================
-   AGENTS ONLINE
-============================================================ */
-
-relay.on("agents_online", list => {
-
-  log(
-    "Received agents_online: " +
-    JSON.stringify(list),
-    "info"
-  );
-
-  if (!Array.isArray(list)) {
-    return;
-  }
-
-  list.forEach(name => {
-    ensureAgent(name, true);
-  });
-
-});
-
-
-/* ============================================================
-   AGENT UP
-============================================================ */
-
-relay.on("agent_up", data => {
-
-  if (!data || !data.name) {
-    return;
-  }
-
-  const name = data.name;
-
-  ensureAgent(name, true);
-
-  log(
-    "Agent connected: " + name,
-    "success"
-  );
-
-});
-
-
-/* ============================================================
-   AGENT DOWN
-============================================================ */
-
-relay.on("agent_down", data => {
-
-  if (!data || !data.name) {
-    return;
-  }
-
-  const name = data.name;
-
-  if (agents[name]) {
-    agents[name].status = "offline";
-  }
-
-  renderAgents();
-
-  log(
-    "Agent disconnected: " + name,
-    "error"
-  );
-
-});
-
-
-/* ============================================================
-   AGENT MANAGEMENT
-============================================================ */
-
-function ensureAgent(name, online = true) {
-
-  if (!name) {
-    return;
-  }
-
-  if (!agents[name]) {
-
-    agents[name] = {
-      name: name,
-      status: online ? "online" : "offline"
-    };
-
-  } else if (online) {
-
-    agents[name].status = "online";
-
-  }
-
-  renderAgents();
-}
-
-
-/* ============================================================
-   RENDER AGENTS
-============================================================ */
-
-function renderAgents() {
-
-  agentsList
-    .querySelectorAll(".agent-card")
-    .forEach(card => card.remove());
-
-  const names =
-    Object.keys(agents);
-
-  agentCount.textContent =
-    names.length;
-
-  const noAgents =
-    document.getElementById("no-agents");
-
-  noAgents.style.display =
-    names.length ? "none" : "block";
-
-  names.forEach(name => {
-
-    const agent =
-      agents[name];
-
-    const card =
-      document.createElement("div");
-
-    card.className =
-      "agent-card";
-
-    if (selectedAgent === name) {
-      card.classList.add("active");
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hub</title>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
     }
-
-    card.onclick = () => {
-      selectAgent(name);
-    };
-
-
-    const row =
-      document.createElement("div");
-
-    row.className =
-      "agent-row";
-
-
-    const dot =
-      document.createElement("div");
-
-    dot.className =
-      "status-dot " +
-      (agent.status === "online"
-        ? "online"
-        : "offline");
-
-
-    const label =
-      document.createElement("div");
-
-    label.className =
-      "agent-name";
-
-    label.textContent =
-      agent.name;
-
-
-    row.appendChild(dot);
-    row.appendChild(label);
-
-    card.appendChild(row);
-
-    agentsList.appendChild(card);
-
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1020;
+      color: #eef2ff;
+    }
+    .container {
+      width: min(900px, 100%);
+      margin: auto;
+      padding: 30px 18px;
+    }
+    .card {
+      background: #121a2d;
+      border: 1px solid #263452;
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+    }
+    .muted {
+      color: #9aa8c7;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 15px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+    .dot.connected {
+      background: #22c55e;
+    }
+    #agents {
+      margin-top: 15px;
+      display: grid;
+      gap: 10px;
+    }
+    .agent {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 15px;
+      border-radius: 12px;
+      background: #0d1527;
+      border: 1px solid #263452;
+    }
+    .agent-name {
+      font-weight: 600;
+    }
+    .online {
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #15351f;
+      color: #86efac;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .empty {
+      padding: 18px 0;
+      color: #8d9ab5;
+    }
+    .error {
+      color: #fca5a5;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h1>Hub</h1>
+    <div class="muted">
+      Socket.IO connection monitor
+    </div>
+    <div class="status">
+      <span id="statusDot" class="dot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </div>
+  <div class="card">
+    <strong>Connected Agents</strong>
+    <div id="agents">
+      <div class="empty">
+        No agents connected.
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const statusDot = document.getElementById("statusDot");
+  const statusText = document.getElementById("statusText");
+  const agentsContainer = document.getElementById("agents");
+  const agents = new Map();
+  function setStatus(connected, message) {
+    statusText.textContent = message;
+    if (connected) {
+      statusDot.classList.add("connected");
+    } else {
+      statusDot.classList.remove("connected");
+    }
+  }
+  function renderAgents() {
+    agentsContainer.innerHTML = "";
+    if (agents.size === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No agents connected.";
+      agentsContainer.appendChild(empty);
+      return;
+    }
+    for (const name of agents.keys()) {
+      const row = document.createElement("div");
+      row.className = "agent";
+      const nameElement = document.createElement("span");
+      nameElement.className = "agent-name";
+      nameElement.textContent = name;
+      const statusElement = document.createElement("span");
+      statusElement.className = "online";
+      statusElement.textContent = "ONLINE";
+      row.appendChild(nameElement);
+      row.appendChild(statusElement);
+      agentsContainer.appendChild(row);
+    }
+  }
+  /*
+   * IMPORTANT:
+   *
+   * Do NOT connect directly to 127.0.0.1:5050.
+   *
+   * The browser connects to:
+   *
+   * https://mon.eclipselivecam.online/socket.io/
+   *
+   * LiteSpeed then handles the request.
+   */
+  const socket = io({
+    path: "/socket.io/",
+    transports: [
+      "websocket",
+      "polling"
+    ],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 10000
   });
-
-}
-
-
-/* ============================================================
-   SELECT AGENT
-============================================================ */
-
-function selectAgent(name) {
-
-  selectedAgent = name;
-
-  selectedAgentEl.textContent =
-    name;
-
-  renderAgents();
-
-  log(
-    "Selected agent: " + name,
-    "info"
-  );
-
-}
-
-
-/* ============================================================
-   BASIC RELAY EVENT MONITORING
-============================================================ */
-
-[
-  "frame",
-  "key",
-  "camera_frame",
-  "clipboard",
-  "processes_data",
-  "camera_state"
-].forEach(eventName => {
-
-  relay.on(eventName, data => {
-
-    const name =
-      data && data._agent
-        ? data._agent
-        : "unknown";
-
-    /*
-     * Only report receipt here.
-     * No sensitive data is displayed or stored.
-     */
-
-    log(
-      "Received relay event: " +
-      eventName +
-      " from " +
-      name,
-      "info"
+  socket.on("connect", () => {
+    console.log(
+      "Socket.IO connected:",
+      socket.id
     );
-
+    setStatus(
+      true,
+      "Connected"
+    );
+    /*
+     * Register this browser as the hub.
+     *
+     * Your relay.py already listens for:
+     *
+     * @socketio.on("register")
+     */
+    socket.emit(
+      "register",
+      {
+        name: "hub"
+      }
+    );
   });
-
-});
-
-
-/* ============================================================
-   INITIAL MESSAGE
-============================================================ */
-
-log(
-  "Connecting to " + RELAY_URL,
-  "info"
-);
-
-log(
-  "WebSocket disabled for this test; using polling.",
-  "info"
-);
-
+  socket.on("connect_error", (error) => {
+    console.error(
+      "Socket.IO connection error:",
+      error
+    );
+    setStatus(
+      false,
+      "Connection error"
+    );
+  });
+  socket.on("disconnect", (reason) => {
+    console.log(
+      "Socket.IO disconnected:",
+      reason
+    );
+    setStatus(
+      false,
+      "Disconnected"
+    );
+  });
+  /*
+   * Agent connected.
+   */
+  socket.on("agent_up", (data) => {
+    console.log(
+      "Agent connected:",
+      data
+    );
+    if (
+      data &&
+      data.name
+    ) {
+      agents.set(
+        data.name,
+        true
+      );
+      renderAgents();
+    }
+  });
+  /*
+   * Agent disconnected.
+   */
+  socket.on("agent_down", (data) => {
+    console.log(
+      "Agent disconnected:",
+      data
+    );
+    if (
+      data &&
+      data.name
+    ) {
+      agents.delete(
+        data.name
+      );
+      renderAgents();
+    }
+  });
+  socket.on("ok", () => {
+    console.log(
+      "Hub registration successful"
+    );
+  });
+  renderAgents();
+})();
 </script>
-
 </body>
 </html>
