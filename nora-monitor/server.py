@@ -3,6 +3,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import processes as proc
 import file_manager as fm
+import windows_control as wc
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = os.urandom(24)
@@ -99,6 +100,38 @@ def on_delete_path(data):
     result = fm.delete_path(data.get("path", ""))
     result["path"] = data.get("path", "")
     socketio.emit("delete_result", result)
+
+
+# ── Window / desktop control ──────────────────────────────────────────────────
+
+@socketio.on("list_windows")
+def on_list_windows(data):
+    wins = wc.list_windows()
+    socketio.emit("windows_list", {"windows": wins})
+
+@socketio.on("win_key")
+def on_win_key(data):
+    hwnd = data.get("hwnd")
+    if hwnd:
+        wc.send_key(int(hwnd), data.get("key", ""))
+
+@socketio.on("win_mouse")
+def on_win_mouse(data):
+    hwnd = data.get("hwnd")
+    if not hwnd:
+        return
+    import mss
+    with mss.mss() as s:
+        m = s.monitors[1]
+        sw_r, sh_r = m["width"], m["height"]
+    sx = data.get("x", 0) / data.get("sw", sw_r) * sw_r
+    sy = data.get("y", 0) / data.get("sh", sh_r) * sh_r
+    wc.send_mouse(int(hwnd), sx, sy, data.get("action", "click"), data.get("button", 0))
+
+@socketio.on("desktop_cmd")
+def on_desktop_cmd(data):
+    {"new": wc.desktop_new, "left": wc.desktop_left,
+     "right": wc.desktop_right, "close": wc.desktop_close}.get(data.get("cmd", ""), lambda: None)()
 
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────

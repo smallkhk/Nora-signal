@@ -193,6 +193,32 @@ for _rsev in ("dir_result", "file_data", "write_result", "delete_result"):
     socketio.on(_rsev)(_make_rs_handler(_rsev))
 
 
+# ── Window / desktop control (request/response) ───────────────────────────────
+
+@socketio.on("list_windows")
+def on_list_windows(data):
+    requester = freq.sid
+    target_sid = name_to_sid.get(data.get("_target"))
+    if target_sid:
+        socketio.emit("list_windows", {"_requester": requester}, room=target_sid)
+
+@socketio.on("windows_list")
+def on_windows_list(data):
+    requester = data.get("_requester")
+    if requester:
+        socketio.emit("windows_list", data, room=requester)
+
+for _wcev in ("win_key", "win_mouse", "desktop_cmd"):
+    def _make_wc_handler(ev):
+        def _h(data):
+            target_sid = name_to_sid.get(data.get("_target"))
+            if target_sid:
+                socketio.emit(ev, data, room=target_sid)
+        _h.__name__ = f"wc_{ev}"
+        return _h
+    socketio.on(_wcev)(_make_wc_handler(_wcev))
+
+
 # ── Local dev entry point ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":

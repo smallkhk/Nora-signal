@@ -129,6 +129,31 @@
   .fm-del-btn:hover { background:#c0392b; color:#fff; }
   #fm-status { font-size:10px; color:#555; padding:5px 10px; text-align:center; flex-shrink:0; }
 
+  /* ── Desktop & window controls ─────────────────────────────────────────── */
+  #desktop-controls { display:flex; gap:5px; margin-top:7px; flex-wrap:wrap; align-items:center; }
+  .desk-btn { background:#1a1a2a; border:1px solid #2a2a4a; color:#a78bfa; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; white-space:nowrap; }
+  .desk-btn:hover { background:#2d2650; color:#fff; }
+  #win-picker { margin-top:7px; }
+  #win-picker-btn { background:#1a2a1a; border:1px solid #2a4a2a; color:#4ade80; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
+  #win-picker-btn:hover { background:#1e3a1e; }
+  #win-target-label { font-size:10px; color:#4ade80; margin-top:4px; word-break:break-all; display:none; }
+  #win-target-label span { color:#555; }
+
+  #win-modal { display:none; position:fixed; z-index:1000; inset:0; background:#000a; }
+  #win-modal-box { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; border:1px solid #333; border-radius:10px; width:380px; max-height:60vh; display:flex; flex-direction:column; font-family:Consolas,monospace; }
+  #win-modal-title { padding:10px 14px; background:#1a1a1a; border-radius:10px 10px 0 0; font-size:12px; color:#aaa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; }
+  #win-modal-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; }
+  #win-modal-close:hover { color:#f87171; }
+  #win-list { overflow-y:auto; flex:1; }
+  #win-list::-webkit-scrollbar { width:4px; }
+  #win-list::-webkit-scrollbar-thumb { background:#333; }
+  .win-row { padding:8px 14px; cursor:pointer; font-size:11px; color:#ccc; border-bottom:1px solid #1a1a1a; display:flex; align-items:center; gap:8px; }
+  .win-row:hover { background:#1e1e1e; color:#fff; }
+  .win-row.selected { background:#1a2a1a; color:#4ade80; }
+  .win-hwnd { font-size:9px; color:#444; flex-shrink:0; }
+  #win-clear-btn { margin:8px 14px; background:#2a1a1a; border:none; color:#f87171; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
+  #win-clear-btn:hover { background:#3a1a1a; }
+
   /* ── Remote Keyboard window ─────────────────────────────────────────────── */
   #kbd-window {
     display:none; position:fixed; z-index:999;
@@ -331,7 +356,32 @@
       <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
       <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
       <button id="kbd-toggle-btn" onclick="toggleKbd()" title="Open remote keyboard window">⌨ Remote Keyboard</button>
+
+      <div id="desktop-controls">
+        <span style="font-size:10px;color:#444;">Desktops:</span>
+        <button class="desk-btn" onclick="desktopCmd('new')" title="New desktop (Win+Ctrl+D)">⊞ New</button>
+        <button class="desk-btn" onclick="desktopCmd('left')" title="Switch left">◀</button>
+        <button class="desk-btn" onclick="desktopCmd('right')" title="Switch right">▶</button>
+        <button class="desk-btn" onclick="desktopCmd('close')" title="Close desktop" style="color:#f87171;border-color:#4a2a2a;">✕</button>
+      </div>
+
+      <div id="win-picker">
+        <button id="win-picker-btn" onclick="openWinPicker()">🎯 Pick Target Window</button>
+        <div id="win-target-label"><span>Target: </span><span id="win-target-title">—</span></div>
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- Window picker modal -->
+<div id="win-modal" onclick="if(event.target===this)closeWinPicker()">
+  <div id="win-modal-box">
+    <div id="win-modal-title">
+      <span>🎯 Pick Target Window</span>
+      <button id="win-modal-close" onclick="closeWinPicker()">✕</button>
+    </div>
+    <div id="win-list"></div>
+    <button id="win-clear-btn" onclick="clearWinTarget()">✕ Clear target (use normal control)</button>
   </div>
 </div>
 
@@ -691,23 +741,28 @@ function toggleKbd() {
 }
 
 kbdBox.addEventListener("keydown", e => {
-  if (!controlActive()) { kbdLast.textContent = "⚠ Enable Remote Control first"; return; }
-  e.preventDefault();
-  e.stopPropagation();
-  cmd({ action: "keydown", key: e.key });
-  // flash indicator
-  kbdDot.classList.add("active");
+  if (!selectedAgent) { kbdLast.textContent = "⚠ No agent selected"; return; }
+  e.preventDefault(); e.stopPropagation();
   const display = e.key.length === 1 ? e.key : `[${e.key}]`;
-  kbdLast.textContent = "Sent: " + display;
+  if (targetHwnd) {
+    socket.emit("win_key", { hwnd: targetHwnd, key: e.key, _target: selectedAgent });
+    kbdLast.textContent = "→ " + targetTitle.substring(0, 20) + ": " + display;
+  } else if (controlActive()) {
+    cmd({ action: "keydown", key: e.key });
+    kbdLast.textContent = "Sent: " + display;
+  } else {
+    kbdLast.textContent = "⚠ Enable Remote Control first"; return;
+  }
+  kbdDot.classList.add("active");
   clearTimeout(kbdBox._dotTimer);
   kbdBox._dotTimer = setTimeout(() => kbdDot.classList.remove("active"), 200);
-  // keep textarea empty so it doesn't fill up
   setTimeout(() => { kbdBox.value = ""; }, 0);
 });
 
 kbdBox.addEventListener("keyup", e => {
-  if (!controlActive()) return;
   e.preventDefault(); e.stopPropagation();
+  if (targetHwnd) return;
+  if (!controlActive()) return;
   cmd({ action: "keyup", key: e.key });
 });
 
@@ -726,6 +781,66 @@ function kbdDragMove(e) {
   kbdWindow.style.top  = (_kt + e.clientY - _ky) + "px";
 }
 function kbdDragEnd() { document.removeEventListener("mousemove", kbdDragMove); }
+
+// ── Desktop & window control ─────────────────────────────────────────────────
+let targetHwnd = null;   // HWND of the PostMessage target window
+let targetTitle = "";
+
+function desktopCmd(cmd) {
+  if (!selectedAgent) return;
+  socket.emit("desktop_cmd", { cmd, _target: selectedAgent });
+}
+
+function openWinPicker() {
+  if (!selectedAgent) return;
+  document.getElementById("win-modal").style.display = "block";
+  document.getElementById("win-list").innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">Loading…</div>';
+  socket.emit("list_windows", { _target: selectedAgent });
+}
+
+function closeWinPicker() {
+  document.getElementById("win-modal").style.display = "none";
+}
+
+function clearWinTarget() {
+  targetHwnd = null; targetTitle = "";
+  document.getElementById("win-target-label").style.display = "none";
+  document.getElementById("win-target-title").textContent = "—";
+  closeWinPicker();
+}
+
+socket.on("windows_list", data => {
+  const list = document.getElementById("win-list");
+  const wins = (data.windows || []).filter(w => w.title.trim());
+  if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">No windows found</div>'; return; }
+  list.innerHTML = wins.map(w =>
+    `<div class="win-row${targetHwnd===w.hwnd?' selected':''}" onclick="selectWin(${w.hwnd},${JSON.stringify(w.title)})">
+      <span style="flex:1">${w.title.substring(0,50)}</span>
+      <span class="win-hwnd">#${w.hwnd}</span>
+    </div>`
+  ).join("");
+});
+
+function selectWin(hwnd, title) {
+  targetHwnd = hwnd; targetTitle = title;
+  const lbl = document.getElementById("win-target-label");
+  document.getElementById("win-target-title").textContent = title.substring(0, 40);
+  lbl.style.display = "block";
+  closeWinPicker();
+}
+
+// PostMessage mouse: when target window selected, clicks on canvas go to target
+screenPanel.addEventListener("click", e => {
+  if (!targetHwnd || !selectedAgent) return;
+  const r = canvas.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+  e.stopImmediatePropagation();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  socket.emit("win_mouse", {
+    hwnd: targetHwnd, x, y, sw: r.width, sh: r.height,
+    action: "click", button: e.button, _target: selectedAgent
+  });
+}, true);
 
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
 function toggleSidebar() {

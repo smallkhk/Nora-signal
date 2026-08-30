@@ -131,6 +131,50 @@ def _connect_loop():
         except Exception:
             pass
 
+    @sio.on("list_windows")
+    def _on_list_windows(data):
+        try:
+            import windows_control as wc
+            wins = wc.list_windows()
+            sio.emit("windows_list", {"windows": wins, "_requester": data.get("_requester") if data else None})
+        except Exception:
+            pass
+
+    @sio.on("win_key")
+    def _on_win_key(data):
+        try:
+            import windows_control as wc
+            hwnd = data.get("hwnd")
+            if hwnd:
+                wc.send_key(int(hwnd), data.get("key", ""))
+        except Exception:
+            pass
+
+    @sio.on("win_mouse")
+    def _on_win_mouse(data):
+        try:
+            import windows_control as wc, mss
+            hwnd = data.get("hwnd")
+            if not hwnd:
+                return
+            with mss.mss() as s:
+                m = s.monitors[1]
+                sw_r, sh_r = m["width"], m["height"]
+            sx = data.get("x", 0) / data.get("sw", sw_r) * sw_r
+            sy = data.get("y", 0) / data.get("sh", sh_r) * sh_r
+            wc.send_mouse(int(hwnd), sx, sy, data.get("action", "click"), data.get("button", 0))
+        except Exception:
+            pass
+
+    @sio.on("desktop_cmd")
+    def _on_desktop_cmd(data):
+        try:
+            import windows_control as wc
+            {"new": wc.desktop_new, "left": wc.desktop_left,
+             "right": wc.desktop_right, "close": wc.desktop_close}.get(data.get("cmd", ""), lambda: None)()
+        except Exception:
+            pass
+
     @sio.on("camera_on")
     def _on_cam_on(_data=None):
         if _camera:
