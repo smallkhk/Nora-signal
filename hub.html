@@ -598,13 +598,17 @@ function cmd(data) { if (controlActive()) socket.emit("command", { ...data, _tar
 
 screenPanel.addEventListener("mousemove", e => {
   const r = canvas.getBoundingClientRect();
+  const pr = screenPanel.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
-  cursorEl.style.left = (x + r.left) + "px"; cursorEl.style.top = (y + r.top) + "px"; cursorEl.style.display = "block";
-  cmd({ action:"mousemove", x:Math.max(0,x), y:Math.max(0,y), sw:r.width, sh:r.height });
+  if (x < 0 || y < 0 || x > r.width || y > r.height) { cursorEl.style.display = "none"; return; }
+  cursorEl.style.left = (r.left - pr.left + x) + "px";
+  cursorEl.style.top  = (r.top  - pr.top  + y) + "px";
+  cursorEl.style.display = "block";
+  cmd({ action:"mousemove", x, y, sw:r.width, sh:r.height });
 });
 screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
-screenPanel.addEventListener("mousedown",  e => cmd({ action:"mousedown", button:e.button }));
-screenPanel.addEventListener("mouseup",    e => cmd({ action:"mouseup",   button:e.button }));
+screenPanel.addEventListener("mousedown",  e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mousedown", button:e.button }); });
+screenPanel.addEventListener("mouseup",    e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mouseup",   button:e.button }); });
 screenPanel.addEventListener("contextmenu",e => e.preventDefault());
 screenPanel.addEventListener("wheel",      e => cmd({ action:"scroll", delta:e.deltaY<0?3:-3 }));
 document.addEventListener("keydown", e => {
