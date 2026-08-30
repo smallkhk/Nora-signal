@@ -98,8 +98,12 @@ def _connect_loop():
             try: _camera.stop()
             except Exception: pass
 
-    sio.connect(RELAY_URL, transports=["polling", "websocket"])
-    sio.wait()
+    while True:
+        try:
+            sio.connect(RELAY_URL, transports=["polling"])
+            sio.wait()
+        except Exception:
+            import time; time.sleep(5)
 
 
 def run():
