@@ -68,7 +68,9 @@ if [[ "$SHAKE" == 0\{* ]]; then
   echo "✓ local polling OK: ${SHAKE:0:80}"
 else
   echo "✗ local polling failed: $SHAKE"
-  exit 1
+  echo "--- last 30 lines of error log ---"
+  tail -30 "$APP/gunicorn-error.log"
+  echo "----------------------------------"
 fi
 
 # ── 6. Write .htaccess ────────────────────────────────────────────────────────
