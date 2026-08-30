@@ -104,6 +104,77 @@
   #control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; }
   #control-panel input[type=checkbox] { accent-color:#7c6aff; }
   .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
+
+  /* ── Mobile ──────────────────────────────────────────────────────────────── */
+  #sidebar-handle { display:none; }
+
+  @media (max-width: 768px) {
+    body { touch-action: manipulation; }
+
+    #topbar { padding:6px 10px; gap:6px; }
+    #topbar h1 { font-size:12px; letter-spacing:1px; }
+    #fps-info, #no-agents { display:none; }
+    #status { font-size:11px; padding:3px 8px; }
+    #agent-select { flex:1; min-width:0; font-size:12px; }
+    .topbar-btn { padding:6px 9px; font-size:11px; letter-spacing:0; min-height:34px; touch-action:manipulation; }
+    #rec-btn { margin-left:0; }
+    #rec-timer { display:none !important; }
+
+    #main { flex-direction:column; }
+
+    #view-area { height:52vh; flex:none; overflow:hidden; }
+    #screen-panel { flex:1; }
+    #camera-panel { height:110px; }
+
+    #sidebar {
+      width:100%;
+      flex:none;
+      height:48vh;
+      border-left:none;
+      border-top:2px solid #2a2a2a;
+      transition:height .25s ease;
+      overflow:hidden;
+    }
+    #sidebar.collapsed { height:38px; }
+
+    #sidebar-handle {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 12px;
+      height:38px;
+      background:#1a1a1a;
+      border-bottom:1px solid #2a2a2a;
+      cursor:pointer;
+      flex-shrink:0;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    #sidebar-handle span { font-size:10px; color:#7c6aff; text-transform:uppercase; letter-spacing:1px; }
+    #sidebar-handle svg { width:14px; height:14px; fill:#555; transition:transform .25s; }
+    #sidebar.collapsed #sidebar-handle svg { transform:rotate(180deg); }
+
+    .tab-bar { display:none; }
+    #sidebar:not(.collapsed) .tab-bar { display:flex; }
+
+    .tab { padding:9px 4px; min-height:36px; font-size:10px; }
+
+    #control-panel { padding:6px 10px; }
+    .hotkey-hint { display:none; }
+
+    .proc-row { grid-template-columns:1fr 40px 46px 34px; }
+    .proc-kill { padding:3px 5px; min-height:28px; touch-action:manipulation; }
+
+    .clip-item { padding:8px 10px; }
+    .hdr-btn { padding:4px 9px; min-height:28px; touch-action:manipulation; }
+
+    #alert-input { font-size:13px; padding:5px 8px; }
+    #alert-add-btn { padding:5px 10px; font-size:12px; touch-action:manipulation; }
+  }
+
+  @media (max-width: 480px) {
+    .topbar-btn .btn-label { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -117,9 +188,9 @@
   <span id="no-agents" style="font-size:11px;color:#555;display:none;">Waiting for agents…</span>
   <span id="fps-info">-- fps</span>
   <span id="rec-timer"></span>
-  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
-  <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 Mic</button>
-  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ REC</button>
+  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 <span class="btn-label">Camera</span></button>
+  <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 <span class="btn-label">Mic</span></button>
+  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ <span class="btn-label">REC</span></button>
 </div>
 
 <div id="main">
@@ -135,6 +206,10 @@
   </div>
 
   <div id="sidebar">
+    <div id="sidebar-handle" onclick="toggleSidebar()">
+      <span>Logs &amp; Controls</span>
+      <svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg>
+    </div>
     <div class="tab-bar">
       <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
       <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
@@ -250,13 +325,13 @@ function toggleMic() {
   if (micActive) {
     socket.emit("mic_off", { _target: selectedAgent });
     micActive = false;
-    micBtn.textContent = "🎙 Mic";
+    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic</span>";
     micBtn.className = "topbar-btn";
     audioNextTime = 0;
   } else {
     socket.emit("mic_on", { _target: selectedAgent });
     micActive = true;
-    micBtn.textContent = "🎙 Mic ON";
+    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic ON</span>";
     micBtn.className = "topbar-btn active";
     getAudioCtx();
   }
@@ -505,6 +580,11 @@ document.addEventListener("keyup", e => {
   if (!controlActive() || document.activeElement !== document.body) return;
   e.preventDefault(); cmd({ action:"keyup", key:e.key });
 });
+
+// ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("collapsed");
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
