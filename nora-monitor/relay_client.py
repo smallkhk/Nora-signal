@@ -131,6 +131,24 @@ def _connect_loop():
         except Exception:
             pass
 
+    @sio.on("win_capture_start")
+    def _on_win_capture_start(data):
+        try:
+            import windows_control as wc
+            hwnd = data.get("hwnd")
+            if hwnd:
+                wc.start_window_capture(int(hwnd), lambda b64: sio.emit("win_frame", {"data": b64}))
+        except Exception:
+            pass
+
+    @sio.on("win_capture_stop")
+    def _on_win_capture_stop(_data=None):
+        try:
+            import windows_control as wc
+            wc.stop_window_capture()
+        except Exception:
+            pass
+
     @sio.on("list_windows")
     def _on_list_windows(data):
         try:

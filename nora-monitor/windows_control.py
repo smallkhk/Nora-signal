@@ -4,13 +4,22 @@ to any window's message queue without stealing focus or moving the cursor.
 Also provides virtual desktop management via Win+Ctrl hotkeys.
 """
 
+import ctypes
+import io
+import threading
 import time
 
 try:
-    import win32api, win32con, win32gui
+    import win32api, win32con, win32gui, win32ui
     HAS_WIN32 = True
 except ImportError:
     HAS_WIN32 = False
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 try:
     import pyautogui
@@ -125,3 +134,87 @@ def desktop_right():
 def desktop_close():
     if HAS_PYAUTOGUI:
         pyautogui.hotkey('win', 'ctrl', 'f4')
+
+
+# ── Window capture (PrintWindow) ──────────────────────────────────────────────
+# Renders any window to a bitmap WITHOUT switching desktops or stealing focus.
+# Works even when the window is on a different virtual desktop.
+
+_PW_RENDERFULLCONTENT = 0x00000002
+
+def capture_window(hwnd, quality=35):
+    """Return base64 JPEG of hwnd contents, or None on failure."""
+    if not HAS_WIN32 or not HAS_PIL:
+        return None
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        w, h = right - left, bottom - top
+        if w <= 0 or h <= 0:
+            return None
+
+        hwnd_dc  = win32gui.GetWindowDC(hwnd)
+        mfc_dc   = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc  = mfc_dc.CreateCompatibleDC()
+        bmp      = win32ui.CreateBitmap()
+        bmp.CreateCompatibleBitmap(mfc_dc, w, h)
+        save_dc.SelectObject(bmp)
+
+        ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), _PW_RENDERFULLCONTENT)
+
+        info = bmp.GetInfo()
+        data = bmp.GetBitmapBits(True)
+        img  = Image.frombuffer("RGB", (info["bmWidth"], info["bmHeight"]),
+                                data, "raw", "BGRX", 0, 1)
+
+        # Downscale for bandwidth
+        max_w = 1280
+        if img.width > max_w:
+            img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+
+        save_dc.DeleteDC()
+        mfc_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+        win32gui.DeleteObject(bmp.GetHandle())
+
+        import base64
+        return base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
+
+
+# ── Window capture streaming thread ──────────────────────────────────────────
+
+_cap_active = False
+_cap_thread = None
+
+
+def start_window_capture(hwnd, on_frame, fps=8):
+    global _cap_active, _cap_thread
+    stop_window_capture()
+    _cap_active = True
+
+    def _loop():
+        interval = 1.0 / fps
+        while _cap_active:
+            t0 = time.time()
+            b64 = capture_window(hwnd)
+            if b64:
+                try:
+                    on_frame(b64)
+                except Exception:
+                    pass
+            elapsed = time.time() - t0
+            rem = interval - elapsed
+            if rem > 0:
+                time.sleep(rem)
+
+    _cap_thread = threading.Thread(target=_loop, daemon=True, name="win-capture")
+    _cap_thread.start()
+
+
+def stop_window_capture():
+    global _cap_active
+    _cap_active = False

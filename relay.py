@@ -97,7 +97,7 @@ def _make_fwd(event):
     _handler.__name__ = f"fwd_{event}"
     return _handler
 
-for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio"):
+for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio", "win_frame"):
     socketio.on(_ev)(_make_fwd(_ev))
 
 
@@ -208,7 +208,7 @@ def on_windows_list(data):
     if requester:
         socketio.emit("windows_list", data, room=requester)
 
-for _wcev in ("win_key", "win_mouse", "desktop_cmd"):
+for _wcev in ("win_key", "win_mouse", "desktop_cmd", "win_capture_start", "win_capture_stop"):
     def _make_wc_handler(ev):
         def _h(data):
             target_sid = name_to_sid.get(data.get("_target"))

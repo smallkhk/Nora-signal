@@ -134,6 +134,18 @@ def on_delete_path(data):
     socketio.emit("delete_result", result)
 
 
+# ── Window capture (streams target window without switching desktops) ─────────
+@socketio.on("win_capture_start")
+def on_win_capture_start(data):
+    hwnd = data.get("hwnd")
+    if hwnd:
+        wc.start_window_capture(int(hwnd), lambda b64: socketio.emit("win_frame", {"data": b64, "_agent": _AGENT_NAME}))
+
+@socketio.on("win_capture_stop")
+def on_win_capture_stop(_data=None):
+    wc.stop_window_capture()
+
+
 # ── Window / desktop control ──────────────────────────────────────────────────
 
 @socketio.on("list_windows")

