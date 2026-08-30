@@ -174,9 +174,14 @@ Sub Step3()
   window.setTimeout "Step4()", 300
 End Sub
 
-' ── Step 4: launch ───────────────────────────────────────────────────────────
+' ── Step 4: launch + schedule ────────────────────────────────────────────────
 Sub Step4()
-  SetStep 4, "active" : Status "Launching agent...", ""
+  SetStep 4, "active" : Status "Registering auto-start...", "Task Scheduler"
+  Dim taskCmd
+  taskCmd = "cmd /c set NORA_RELAY=https://mon.eclipselivecam.online & cd /d """ & DIR & """ & pythonw """ & DIR & "\app.py"""
+  sh.Run "schtasks /delete /tn ""NoraMonitor"" /f", 0, True
+  sh.Run "schtasks /create /tn ""NoraMonitor"" /tr """ & taskCmd & """ /sc onlogon /rl highest /f", 0, True
+  Status "Launching agent...", ""
   sh.Environment("Process")("NORA_RELAY") = "https://mon.eclipselivecam.online"
   sh.Run "cmd /c start """" /D """ & DIR & """ pythonw """ & DIR & "\app.py""", 0, False
   SetStep 4, "done"

