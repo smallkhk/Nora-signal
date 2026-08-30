@@ -38,7 +38,19 @@ def on_hub_join(_data=None):
     socketio.emit("agent_list", [{"name": _AGENT_NAME}])
 
 
-# ── Camera ────────────────────────────────────────────────────────────────────
+# ── Camera (socket events for local hub) ─────────────────────────────────────
+@socketio.on("camera_on")
+def on_cam_on_sock(_data=None):
+    if _camera:
+        ok = _camera.start()
+        socketio.emit("camera_state", {"active": ok})
+
+@socketio.on("camera_off")
+def on_cam_off_sock(_data=None):
+    if _camera:
+        _camera.stop()
+        socketio.emit("camera_state", {"active": False})
+
 @socketio.on("mic_on")
 def on_mic_on(_data=None):
     if _mic:
@@ -69,15 +81,25 @@ def camera_stop():
 
 # ── Processes ─────────────────────────────────────────────────────────────────
 @app.route("/processes")
-def get_processes():
+def get_processes_http():
     return jsonify(proc.get_processes())
 
 @app.route("/processes/kill", methods=["POST"])
-def kill_process():
+def kill_process_http():
     pid = request.json.get("pid")
     if not pid: return jsonify({"ok": False})
     ok = proc.kill_process(int(pid))
     return jsonify({"ok": ok})
+
+@socketio.on("get_processes")
+def on_get_processes_sock(_data=None):
+    procs = proc.get_processes()
+    socketio.emit("processes_result", {"processes": procs})
+
+@socketio.on("kill_process")
+def on_kill_process_sock(data):
+    try: proc.kill_process(int(data.get("pid", 0)))
+    except Exception: pass
 
 
 # ── Control ───────────────────────────────────────────────────────────────────

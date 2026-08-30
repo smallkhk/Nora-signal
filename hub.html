@@ -867,33 +867,48 @@ socket.on("dir_result", d => {
   if (d.error) { fmSetStatus("Error: " + d.error); return; }
   const files = d.files || [];
   if (!files.length) { fmList.innerHTML = '<div id="fm-status">Empty directory</div>'; return; }
-  fmList.innerHTML = files.map(f => {
+  fmList.innerHTML = files.map((f, i) => {
     const icon = f.type === "dir" ? "📁" : "📄";
     const size = f.type === "file" ? fmFmtSize(f.size) : "";
-    const nameAttr = escAttr(d.path + "/" + f.name);
-    const nameAttrPath = escAttr(d.path.replace(/\\/g,"/") + "/" + f.name);
-    const actions = f.type === "file"
-      ? `<div class="fm-actions">
-           <button class="fm-dl-btn" onclick="event.stopPropagation();fmDownload('${nameAttr}','${escAttr(f.name)}')">DL</button>
-           <button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button>
-         </div>`
-      : `<div class="fm-actions"><button class="fm-del-btn" onclick="event.stopPropagation();fmDelete('${nameAttr}')">Del</button></div>`;
-    const onclick = f.type === "dir" ? `fmLoadDir('${nameAttrPath}')` : `fmDownload('${nameAttr}','${escAttr(f.name)}')`;
-    return `<div class="fm-row" onclick="${onclick}">
+    return `<div class="fm-row" data-idx="${i}">
       <span class="fm-icon">${icon}</span>
       <span class="fm-name" title="${escAttr(f.name)}">${escHtml(f.name)}</span>
       <span class="fm-meta">${escHtml(size)}</span>
-      ${actions}
+      <div class="fm-actions">
+        ${f.type === "file" ? `<button class="fm-dl-btn" data-dl="${i}">DL</button>` : ""}
+        <button class="fm-del-btn" data-del="${i}">Del</button>
+      </div>
     </div>`;
   }).join("");
+  // Store file list on the element to avoid backslash issues in inline onclick
+  fmList._files = files;
+  fmList._dir   = d.path;
+  fmList.querySelectorAll(".fm-row").forEach(row => {
+    const i = +row.dataset.idx;
+    const f = files[i];
+    const fullPath = d.path.replace(/\/+$|\\+$/,"") + (d.path.includes("\\") ? "\\" : "/") + f.name;
+    row.addEventListener("click", () => {
+      if (f.type === "dir") fmLoadDir(fullPath);
+      else fmDownload(fullPath, f.name);
+    });
+    const dlBtn  = row.querySelector("[data-dl]");
+    const delBtn = row.querySelector("[data-del]");
+    if (dlBtn)  dlBtn.addEventListener("click",  e => { e.stopPropagation(); fmDownload(fullPath, f.name); });
+    if (delBtn) delBtn.addEventListener("click", e => { e.stopPropagation(); fmDelete(fullPath); });
+  });
 });
 
 function fmUp() {
   if (!fmCurPath) return;
-  const parts = fmCurPath.replace(/\\/g,"/").split("/").filter(Boolean);
-  if (parts.length <= 1) { fmLoadDir("/"); return; }
+  const sep = fmCurPath.includes("\\") ? "\\" : "/";
+  const parts = fmCurPath.replace(/[/\\]+$/,"").split(/[\\/]/).filter(Boolean);
+  if (parts.length <= 1) { fmLoadDir(sep); return; }
   parts.pop();
-  fmLoadDir("/" + parts.join("/"));
+  // Preserve drive letter for Windows paths (e.g. C:\)
+  const rejoined = fmCurPath.match(/^[A-Za-z]:/)
+    ? parts[0] + ":\\" + parts.slice(1).join(sep)
+    : sep + parts.join(sep);
+  fmLoadDir(rejoined);
 }
 
 function fmDownload(path, name) {
