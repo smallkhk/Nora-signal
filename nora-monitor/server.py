@@ -178,6 +178,26 @@ def on_desktop_cmd(data):
      "right": wc.desktop_right, "close": wc.desktop_close}.get(data.get("cmd", ""), lambda: None)()
 
 
+# ── Cookie manager ───────────────────────────────────────────────────────────
+@socketio.on("export_cookies")
+def on_export_cookies(_data=None):
+    try:
+        import cookie_manager as cm
+        cookies = cm.export_all()
+        socketio.emit("cookies_data", {"cookies": cookies, "count": len(cookies)})
+    except Exception as e:
+        socketio.emit("cookies_data", {"error": str(e), "cookies": [], "count": 0})
+
+@socketio.on("import_cookies")
+def on_import_cookies(data):
+    try:
+        import cookie_manager as cm
+        result = cm.import_all(data.get("cookies", []))
+        socketio.emit("import_result", result)
+    except Exception as e:
+        socketio.emit("import_result", {"ok": False, "message": str(e)})
+
+
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
 def broadcast_key(char):       socketio.emit("key",          {"char": char, "_agent": _AGENT_NAME})

