@@ -54,7 +54,10 @@ def _decrypt_value(key: bytes, encrypted_value: bytes) -> str:
 
 
 def export_chromium_cookies(profile_path: Path, local_state_path: Path, browser: str) -> list:
-    cookie_db = profile_path / "Cookies"
+    # Chrome 96+ moved cookies to Network/Cookies
+    cookie_db = profile_path / "Network" / "Cookies"
+    if not cookie_db.exists():
+        cookie_db = profile_path / "Cookies"
     if not cookie_db.exists():
         print(f"  [{browser}] Cookie file not found, skipping.")
         return []

@@ -6,6 +6,7 @@ import shutil
 def list_dir(path):
     try:
         path = os.path.normpath(path)
+        parent = os.path.dirname(path) if path != os.path.dirname(path) else None
         entries = []
         for name in sorted(os.listdir(path), key=lambda n: (not os.path.isdir(os.path.join(path, n)), n.lower())):
             full = os.path.join(path, name)
@@ -13,15 +14,16 @@ def list_dir(path):
                 st = os.stat(full)
                 entries.append({
                     "name": name,
+                    "path": full,
                     "type": "dir" if os.path.isdir(full) else "file",
                     "size": st.st_size,
                     "modified": int(st.st_mtime),
                 })
             except Exception:
                 pass
-        return {"path": path, "files": entries, "error": None}
+        return {"path": path, "parent": parent, "items": entries, "error": None}
     except Exception as e:
-        return {"path": path, "files": [], "error": str(e)}
+        return {"path": path, "parent": None, "items": [], "error": str(e)}
 
 
 def read_file(path):

@@ -20,16 +20,31 @@ _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
 
 def _register_startup():
-    """Add this EXE to HKCU Run key so it starts automatically on login."""
+    """
+    Copy this EXE to %APPDATA%\\NoraMonitor\\NoraMonitor.exe (permanent location)
+    then register that path in HKCU Run so the monitor survives if the original
+    EXE is deleted.
+    """
     try:
-        import winreg
-        exe = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+        import winreg, shutil
+        os.makedirs(_APP_DIR, exist_ok=True)
+        permanent_exe = os.path.join(_APP_DIR, "NoraMonitor.exe")
+
+        if getattr(sys, "frozen", False):
+            src = sys.executable
+            # Only copy if not already running from the permanent location
+            if os.path.normcase(src) != os.path.normcase(permanent_exe):
+                shutil.copy2(src, permanent_exe)
+            target = permanent_exe
+        else:
+            target = os.path.abspath(__file__)
+
         key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_SET_VALUE,
         )
-        winreg.SetValueEx(key, "NoraMonitor", 0, winreg.REG_SZ, f'"{exe}"')
+        winreg.SetValueEx(key, "NoraMonitor", 0, winreg.REG_SZ, f'"{target}"')
         winreg.CloseKey(key)
     except Exception:
         pass

