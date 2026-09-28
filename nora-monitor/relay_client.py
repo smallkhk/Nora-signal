@@ -1,7 +1,7 @@
 """
 Connects the nora-monitor to the relay server as a Socket.IO client.
 
-Set NORA_RELAY env var to the relay URL (default: https://mon.eclipselivecam.online).
+Set NORA_RELAY env var to the relay URL (default: http://16.55.3.205:5000).
 The PC's hostname is used as the agent name; override with NORA_NAME.
 """
 
@@ -11,7 +11,7 @@ import socket
 import threading
 import socketio
 
-RELAY_URL = os.environ.get("NORA_RELAY", "https://mon.eclipselivecam.online")
+RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
 AGENT_NAME = os.environ.get("NORA_NAME", "") or platform.node() or socket.gethostname() or "agent"
 
 _sio = None

