@@ -46,16 +46,10 @@ def broadcast_ngrok_url(url):  _emit("ngrok_url",    {"url": url})
 def broadcast_audio(b64):      _emit("audio",        {"data": b64})
 
 
-def _connect_loop():
+def _make_client():
+    """Create a fresh Socket.IO client with all handlers registered."""
     global _sio
-    sio = socketio.Client(
-        reconnection=True,
-        reconnection_attempts=0,
-        reconnection_delay=2,
-        reconnection_delay_max=30,
-        logger=False,
-        engineio_logger=False,
-    )
+    sio = socketio.Client(reconnection=False, logger=False, engineio_logger=False)
     with _lock:
         _sio = sio
 
@@ -244,13 +238,20 @@ def _connect_loop():
             try: _mic.stop()
             except Exception: pass
 
+    return sio
+
+
+def _connect_loop():
+    import time
     while True:
         try:
+            sio = _make_client()
             sio.connect(RELAY_URL, transports=["polling"])
             sio.wait()
+            print("[relay] disconnected, reconnecting in 5s...", flush=True)
         except Exception as e:
             print(f"[relay] connection failed: {e}", flush=True)
-            import time; time.sleep(5)
+        time.sleep(5)
 
 
 def run():
