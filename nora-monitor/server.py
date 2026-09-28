@@ -1,4 +1,5 @@
 import os
+import sys
 import platform
 import socket as _sock
 from flask import Flask, render_template, jsonify, request
@@ -7,7 +8,11 @@ import processes as proc
 import file_manager as fm
 import windows_control as wc
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+def _res(rel):
+    base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, rel)
+
+app = Flask(__name__, template_folder=_res("templates"), static_folder=None)
 app.config["SECRET_KEY"] = os.urandom(24)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
