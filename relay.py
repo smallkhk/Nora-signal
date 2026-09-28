@@ -20,6 +20,9 @@ The relay forwards agent events to all hubs (adding "_agent" key),
 and hub commands to the named target agent.
 """
 
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, send_from_directory, request as freq
 from flask_socketio import SocketIO, emit, join_room
 import os
@@ -30,7 +33,7 @@ app = Flask(__name__, static_folder=_DIR)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="threading",
+    async_mode="eventlet",
     max_http_buffer_size=10 * 1024 * 1024,
 )
 
