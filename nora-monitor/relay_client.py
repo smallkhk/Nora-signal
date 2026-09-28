@@ -61,6 +61,7 @@ def _connect_loop():
 
     @sio.on("connect")
     def _on_connect():
+        print(f"[relay] connected to {RELAY_URL} as {AGENT_NAME}", flush=True)
         sio.emit("register", {"name": AGENT_NAME})
 
     @sio.on("command")
@@ -247,7 +248,8 @@ def _connect_loop():
         try:
             sio.connect(RELAY_URL, transports=["polling"])
             sio.wait()
-        except Exception:
+        except Exception as e:
+            print(f"[relay] connection failed: {e}", flush=True)
             import time; time.sleep(5)
 
 
