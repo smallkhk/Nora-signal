@@ -244,14 +244,18 @@ def _make_client():
 def _connect_loop():
     import time
     while True:
+        sio = _make_client()
         try:
-            sio = _make_client()
             sio.connect(RELAY_URL, transports=["polling"])
             sio.wait()
-            print("[relay] disconnected, reconnecting in 5s...", flush=True)
         except Exception as e:
             print(f"[relay] connection failed: {e}", flush=True)
-        time.sleep(5)
+        try:
+            sio.disconnect()
+        except Exception:
+            pass
+        print("[relay] reconnecting in 10s...", flush=True)
+        time.sleep(10)
 
 
 def run():
