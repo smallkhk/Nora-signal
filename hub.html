@@ -106,10 +106,10 @@ body { background: var(--bg); color: var(--text); display: flex; flex-direction:
   display: flex; align-items: center; justify-content: center;
   background: #000; position: relative;
 }
-#screen-img {
+#screen-canvas {
   max-width: 100%; max-height: 100%;
-  object-fit: contain; display: block;
-  cursor: crosshair;
+  display: block; cursor: crosshair;
+  image-rendering: auto;
 }
 #screen-overlay {
   position: absolute; top: 8px; right: 8px;
@@ -410,7 +410,7 @@ body { background: var(--bg); color: var(--text); display: flex; flex-direction:
     <!-- SCREEN -->
     <div class="panel active" id="screen-panel">
       <div id="screen-wrap">
-        <img id="screen-img" src="" alt="Waiting for stream…" draggable="false">
+        <canvas id="screen-canvas"></canvas>
         <div id="screen-overlay">
           <button class="screen-btn" id="fs-btn">⛶ Fullscreen</button>
         </div>
@@ -608,26 +608,48 @@ function tickFps() {
   }
 }
 
-/* ── Screen ──────────────────────────────────────────────── */
-const screenImg = document.getElementById("screen-img");
+/* ── Screen (canvas for flicker-free rendering) ──────────── */
+const screenCanvas = document.getElementById("screen-canvas");
+const screenCtx    = screenCanvas.getContext("2d");
+let _pendingFrame  = null;
+let _rafPending    = false;
+
+function _drawPending() {
+  _rafPending = false;
+  if (!_pendingFrame) return;
+  const img = _pendingFrame; _pendingFrame = null;
+  if (screenCanvas.width !== img.naturalWidth)  screenCanvas.width  = img.naturalWidth;
+  if (screenCanvas.height !== img.naturalHeight) screenCanvas.height = img.naturalHeight;
+  screenCtx.drawImage(img, 0, 0);
+}
+
 socket.on("frame", d => {
   if (d._agent !== currentAgent) return;
   tickFps();
-  screenImg.src = "data:image/jpeg;base64," + d.data;
+  const img = new Image();
+  img.onload = () => {
+    _pendingFrame = img;
+    if (!_rafPending) { _rafPending = true; requestAnimationFrame(_drawPending); }
+  };
+  img.src = "data:image/jpeg;base64," + d.data;
 });
 
-screenImg.addEventListener("click", e => {
+function _screenPos(e) {
+  const r = screenCanvas.getBoundingClientRect();
+  return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
+}
+screenCanvas.addEventListener("click", e => {
   if (!currentAgent) return;
-  const r = screenImg.getBoundingClientRect();
-  socket.emit("command", { action:"mouse_click", x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height, _target:currentAgent });
+  const {x,y} = _screenPos(e);
+  socket.emit("command", { action:"mouse_click", x, y, _target:currentAgent });
 });
-screenImg.addEventListener("contextmenu", e => {
+screenCanvas.addEventListener("contextmenu", e => {
   e.preventDefault();
   if (!currentAgent) return;
-  const r = screenImg.getBoundingClientRect();
-  socket.emit("command", { action:"mouse_right", x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height, _target:currentAgent });
+  const {x,y} = _screenPos(e);
+  socket.emit("command", { action:"mouse_right", x, y, _target:currentAgent });
 });
-screenImg.addEventListener("wheel", e => {
+screenCanvas.addEventListener("wheel", e => {
   e.preventDefault();
   if (!currentAgent) return;
   socket.emit("command", { action:"scroll", dy:e.deltaY>0?3:-3, _target:currentAgent });
@@ -744,7 +766,9 @@ function _getAudioCtx() {
 }
 
 socket.on("audio", d => {
-  if (d._agent !== currentAgent || !micOn) return;
+  if (!micOn) return;
+  // Only filter by agent if both sides are known; never drop when uncertain
+  if (currentAgent && d._agent && d._agent !== currentAgent) return;
   try {
     const ctx = _getAudioCtx();
     // Decode base64 → Int16 PCM → Float32
@@ -762,12 +786,12 @@ socket.on("audio", d => {
     src.buffer = buf;
     src.connect(ctx.destination);
 
-    // Schedule back-to-back without gaps; add 80ms jitter buffer on first chunk
+    // Schedule back-to-back; 80ms jitter buffer on first chunk
     const now = ctx.currentTime;
     if (_nextPlayAt < now + 0.01) _nextPlayAt = now + 0.08;
     src.start(_nextPlayAt);
     _nextPlayAt += buf.duration;
-  } catch {}
+  } catch(e) { console.warn("audio playback:", e); }
 });
 
 document.getElementById("mic-toggle").addEventListener("click", function() {
