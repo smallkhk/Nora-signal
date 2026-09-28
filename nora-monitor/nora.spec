@@ -17,8 +17,6 @@ a = Analysis(
         'engineio.async_drivers.threading',
         'socketio',
         'socketio.exceptions',
-        'gevent',
-        'gevent.monkey',
         # pynput
         'pynput',
         'pynput.keyboard',
