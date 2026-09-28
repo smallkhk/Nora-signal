@@ -3,17 +3,13 @@ cookie_manager.py — Programmatic wrapper for export/import cookie scripts.
 Called by server.py and relay_client.py in response to socket events.
 """
 
-import json
 import os
 from pathlib import Path
 
 
 def export_all() -> list:
     """Return all browser cookies as a list of dicts (Chrome, Edge, Firefox)."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("export_cookies", Path(__file__).parent / "export_cookies.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import export_cookies as mod
 
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     browsers = {
@@ -38,10 +34,8 @@ def export_all() -> list:
 
 def import_all(cookies: list) -> dict:
     """Import a cookies list into Chrome, Edge, and Firefox. Returns {ok, message}."""
-    import importlib.util, io, contextlib
-    spec = importlib.util.spec_from_file_location("import_cookies", Path(__file__).parent / "import_cookies.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import import_cookies as mod
+    import io, contextlib
 
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     out = io.StringIO()

@@ -9,6 +9,32 @@ from PIL import Image
 import io
 
 
+def _draw_cursor(img, scale):
+    """Draw the Windows mouse cursor onto the PIL image."""
+    try:
+        import win32api, win32con, win32gui
+        flags, hcursor, (cx, cy) = win32gui.GetCursorInfo()
+        if not (flags & 0x1):  # cursor hidden
+            return
+        # Scale cursor position to match the scaled image
+        px = int(cx * scale)
+        py = int(cy * scale)
+        # Draw a simple crosshair cursor indicator
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        r = max(4, int(8 * scale))
+        # White outline + black fill for visibility
+        draw.ellipse([px - r - 1, py - r - 1, px + r + 1, py + r + 1], outline="white", width=2)
+        draw.ellipse([px - r, py - r, px + r, py + r], outline="black", width=1)
+        # Crosshair lines
+        draw.line([px - r, py, px + r, py], fill="white", width=2)
+        draw.line([px, py - r, px, py + r], fill="white", width=2)
+        draw.line([px - r, py, px + r, py], fill="black", width=1)
+        draw.line([px, py - r, px, py + r], fill="black", width=1)
+    except Exception:
+        pass
+
+
 class ScreenCapture:
     def __init__(self, on_frame, fps=10, quality=40, scale=0.5):
         self._on_frame = on_frame
@@ -49,7 +75,6 @@ class ScreenCapture:
                     self._last_hash = h
 
                     if not changed and not self._recorder:
-                        # Nothing moved, don't send (saves bandwidth like AnyDesk)
                         elapsed = time.time() - t0
                         sleep = interval - elapsed
                         if sleep > 0:
@@ -60,6 +85,10 @@ class ScreenCapture:
                         w = int(img.width * self._scale)
                         h_px = int(img.height * self._scale)
                         img = img.resize((w, h_px), Image.LANCZOS)
+
+                    # Overlay mouse cursor
+                    _draw_cursor(img, self._scale)
+
                     buf = io.BytesIO()
                     img.save(buf, format="JPEG", quality=self._quality)
                     b64 = base64.b64encode(buf.getvalue()).decode()

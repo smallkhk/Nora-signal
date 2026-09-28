@@ -53,6 +53,8 @@ a = Analysis(
         'sqlite3',
         'pyautogui',
         'requests',
+        'export_cookies',
+        'import_cookies',
     ],
     hookspath=[],
     runtime_hooks=[],
