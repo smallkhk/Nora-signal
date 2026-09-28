@@ -40,7 +40,7 @@ class ScreenCapture:
                     if self._scale != 1.0:
                         w = int(img.width * self._scale)
                         h = int(img.height * self._scale)
-                        img = img.resize((w, h), Image.BILINEAR)
+                        img = img.resize((w, h), Image.LANCZOS)
                     buf = io.BytesIO()
                     img.save(buf, format="JPEG", quality=self._quality)
                     b64 = base64.b64encode(buf.getvalue()).decode()

