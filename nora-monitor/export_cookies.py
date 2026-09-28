@@ -16,7 +16,37 @@ import shutil
 import sqlite3
 import base64
 import tempfile
+import ctypes
+import ctypes.wintypes
 from pathlib import Path
+
+
+def _copy_locked_file(src: Path, dst: str):
+    """
+    Copy a file that Windows has locked (e.g. Chrome/Edge cookies DB while
+    the browser is open) by opening it with full sharing flags via CreateFileW.
+    Falls back to shutil.copy2 if the Win32 call is unavailable.
+    """
+    try:
+        GENERIC_READ          = 0x80000000
+        FILE_SHARE_ALL        = 0x00000001 | 0x00000002 | 0x00000004
+        OPEN_EXISTING         = 3
+        FILE_ATTRIBUTE_NORMAL = 0x80
+
+        handle = ctypes.windll.kernel32.CreateFileW(
+            str(src), GENERIC_READ, FILE_SHARE_ALL,
+            None, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None,
+        )
+        if handle == ctypes.wintypes.HANDLE(-1).value:
+            raise OSError("CreateFileW failed")
+
+        import msvcrt
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+        with os.fdopen(fd, "rb") as fin, open(dst, "wb") as fout:
+            fout.write(fin.read())
+    except Exception:
+        shutil.copy2(src, dst)
+
 
 # ── Chrome / Edge helpers ──────────────────────────────────────────────────────
 
@@ -68,10 +98,10 @@ def export_chromium_cookies(profile_path: Path, local_state_path: Path, browser:
         print(f"  [{browser}] Could not read encryption key: {e}")
         return []
 
-    # Copy DB to temp so Chrome doesn't lock us out
+    # Copy DB to temp (using sharing flags so it works even while browser is open)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
         tmp_path = tmp.name
-    shutil.copy2(cookie_db, tmp_path)
+    _copy_locked_file(cookie_db, tmp_path)
 
     rows = []
     try:
@@ -136,7 +166,7 @@ def export_firefox_cookies() -> list:
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
             tmp_path = tmp.name
-        shutil.copy2(cookie_db, tmp_path)
+        _copy_locked_file(cookie_db, tmp_path)
 
         try:
             con = sqlite3.connect(tmp_path)
