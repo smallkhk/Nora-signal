@@ -452,7 +452,7 @@ let allProcs = [];
 let alertKeywords = [];
 let keylogText = "";
 
-const socket = io(RELAY, { transports: ["polling", "websocket"] });
+const socket = io(RELAY, { transports: ["websocket", "polling"] });
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 let audioCtx = null, audioNextTime = 0;

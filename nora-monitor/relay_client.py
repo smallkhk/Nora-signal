@@ -246,7 +246,7 @@ def _connect_loop():
     while True:
         sio = _make_client()
         try:
-            sio.connect(RELAY_URL, transports=["polling"])
+            sio.connect(RELAY_URL, transports=["websocket", "polling"])
             sio.wait()
         except Exception as e:
             print(f"[relay] connection failed: {e}", flush=True)
