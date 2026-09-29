@@ -256,6 +256,101 @@ def on_clipboard_set(data):
         socketio.emit("clipboard_set_result", {"ok": False, "error": str(e)})
 
 
+# ── Notification sender ──────────────────────────────────────────────────────
+@socketio.on("send_notification")
+def on_send_notification(data):
+    try:
+        import wintools as wt
+        result = wt.send_notification(data.get("title", "Nora"), data.get("message", ""))
+        socketio.emit("notification_result", result)
+    except Exception as e:
+        socketio.emit("notification_result", {"ok": False, "error": str(e)})
+
+
+# ── Wallpaper ────────────────────────────────────────────────────────────────
+@socketio.on("get_wallpaper")
+def on_get_wallpaper(_data=None):
+    try:
+        import wintools as wt
+        result = wt.get_wallpaper()
+        socketio.emit("wallpaper_result", result)
+    except Exception as e:
+        socketio.emit("wallpaper_result", {"path": "", "error": str(e)})
+
+@socketio.on("set_wallpaper")
+def on_set_wallpaper(data):
+    try:
+        import wintools as wt
+        result = wt.set_wallpaper(data.get("path", ""))
+        socketio.emit("set_wallpaper_result", result)
+    except Exception as e:
+        socketio.emit("set_wallpaper_result", {"ok": False, "error": str(e)})
+
+
+# ── Installed programs ───────────────────────────────────────────────────────
+@socketio.on("get_programs")
+def on_get_programs(_data=None):
+    try:
+        import wintools as wt
+        programs = wt.list_installed_programs()
+        socketio.emit("programs_result", {"programs": programs, "count": len(programs)})
+    except Exception as e:
+        socketio.emit("programs_result", {"error": str(e), "programs": [], "count": 0})
+
+
+# ── Network connections ──────────────────────────────────────────────────────
+@socketio.on("get_netconns")
+def on_get_netconns(_data=None):
+    try:
+        import wintools as wt
+        conns = wt.list_network_connections()
+        socketio.emit("netconns_result", {"connections": conns, "count": len(conns)})
+    except Exception as e:
+        socketio.emit("netconns_result", {"error": str(e), "connections": [], "count": 0})
+
+
+# ── Startup programs ────────────────────────────────────────────────────────
+@socketio.on("get_startup")
+def on_get_startup(_data=None):
+    try:
+        import wintools as wt
+        items = wt.list_startup_programs()
+        socketio.emit("startup_result", {"items": items, "count": len(items)})
+    except Exception as e:
+        socketio.emit("startup_result", {"error": str(e), "items": [], "count": 0})
+
+@socketio.on("remove_startup")
+def on_remove_startup(data):
+    try:
+        import wintools as wt
+        result = wt.remove_startup_program(data.get("name", ""), data.get("scope", "HKCU"))
+        socketio.emit("remove_startup_result", result)
+    except Exception as e:
+        socketio.emit("remove_startup_result", {"ok": False, "error": str(e)})
+
+
+# ── Volume control ──────────────────────────────────────────────────────────
+@socketio.on("volume_control")
+def on_volume_control(data):
+    try:
+        import wintools as wt
+        result = wt.volume_control(data.get("action", "mute"))
+        socketio.emit("volume_result", result)
+    except Exception as e:
+        socketio.emit("volume_result", {"ok": False, "error": str(e)})
+
+
+# ── Monitor list ────────────────────────────────────────────────────────────
+@socketio.on("get_monitors")
+def on_get_monitors(_data=None):
+    try:
+        import wintools as wt
+        monitors = wt.list_monitors()
+        socketio.emit("monitors_result", {"monitors": monitors})
+    except Exception as e:
+        socketio.emit("monitors_result", {"monitors": [], "error": str(e)})
+
+
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
 def broadcast_key(data):       socketio.emit("key",          {**data,       "_agent": _AGENT_NAME})

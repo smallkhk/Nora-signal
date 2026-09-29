@@ -301,6 +301,104 @@ def _make_client():
                 "_requester": data.get("_requester") if data else None,
             })
 
+    @sio.on("send_notification")
+    def _on_send_notification(data):
+        try:
+            import wintools as wt
+            result = wt.send_notification(data.get("title", "Nora"), data.get("message", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("notification_result", result)
+        except Exception as e:
+            sio.emit("notification_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_wallpaper")
+    def _on_get_wallpaper(data):
+        try:
+            import wintools as wt
+            result = wt.get_wallpaper()
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("wallpaper_result", result)
+        except Exception as e:
+            sio.emit("wallpaper_result", {"path": "", "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("set_wallpaper")
+    def _on_set_wallpaper(data):
+        try:
+            import wintools as wt
+            result = wt.set_wallpaper(data.get("path", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("set_wallpaper_result", result)
+        except Exception as e:
+            sio.emit("set_wallpaper_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_programs")
+    def _on_get_programs(data):
+        try:
+            import wintools as wt
+            programs = wt.list_installed_programs()
+            sio.emit("programs_result", {
+                "programs": programs, "count": len(programs),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("programs_result", {"error": str(e), "programs": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_netconns")
+    def _on_get_netconns(data):
+        try:
+            import wintools as wt
+            conns = wt.list_network_connections()
+            sio.emit("netconns_result", {
+                "connections": conns, "count": len(conns),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("netconns_result", {"error": str(e), "connections": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_startup")
+    def _on_get_startup(data):
+        try:
+            import wintools as wt
+            items = wt.list_startup_programs()
+            sio.emit("startup_result", {
+                "items": items, "count": len(items),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("startup_result", {"error": str(e), "items": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("remove_startup")
+    def _on_remove_startup(data):
+        try:
+            import wintools as wt
+            result = wt.remove_startup_program(data.get("name", ""), data.get("scope", "HKCU"))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("remove_startup_result", result)
+        except Exception as e:
+            sio.emit("remove_startup_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("volume_control")
+    def _on_volume_control(data):
+        try:
+            import wintools as wt
+            result = wt.volume_control(data.get("action", "mute"))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("volume_result", result)
+        except Exception as e:
+            sio.emit("volume_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_monitors")
+    def _on_get_monitors(data):
+        try:
+            import wintools as wt
+            monitors = wt.list_monitors()
+            sio.emit("monitors_result", {
+                "monitors": monitors,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("monitors_result", {"monitors": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
     return sio
 
 

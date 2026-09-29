@@ -57,6 +57,7 @@ a = Analysis(
         'import_cookies',
         'sysinfo',
         'browser_history',
+        'wintools',
         'configparser',
     ],
     hookspath=[],

