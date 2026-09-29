@@ -564,6 +564,34 @@ for _wcev in ("win_key", "win_mouse", "desktop_cmd", "win_capture_start", "win_c
     socketio.on(_wcev)(_make_wc_handler(_wcev))
 
 
+# ── System info / history / screenshot / clipboard (request/response) ────
+
+def _make_req_resp(req_event, resp_event):
+    def _on_req(data):
+        target_sid = name_to_sid.get((data or {}).get("_target"))
+        if target_sid:
+            payload = dict(data) if data else {}
+            payload["_requester"] = freq.sid
+            socketio.emit(req_event, payload, room=target_sid)
+    _on_req.__name__ = f"rr_{req_event}"
+    socketio.on(req_event)(_on_req)
+
+    def _on_resp(data):
+        requester = (data or {}).get("_requester")
+        if requester:
+            socketio.emit(resp_event, data, room=requester)
+    _on_resp.__name__ = f"rr_{resp_event}"
+    socketio.on(resp_event)(_on_resp)
+
+for _rr in [
+    ("get_sysinfo", "sysinfo_result"),
+    ("get_history", "history_result"),
+    ("take_screenshot", "screenshot_result"),
+    ("clipboard_set", "clipboard_set_result"),
+]:
+    _make_req_resp(*_rr)
+
+
 # ── Local dev entry point ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":

