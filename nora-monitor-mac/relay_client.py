@@ -12,7 +12,8 @@ import threading
 import socketio
 
 RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
-AGENT_NAME = os.environ.get("NORA_NAME", "") or platform.node() or socket.gethostname() or "agent"
+AGENT_NAME   = os.environ.get("NORA_NAME",   "") or platform.node() or socket.gethostname() or "agent"
+AGENT_SECRET = os.environ.get("NORA_SECRET", "")
 
 _sio = None
 _controller = None
@@ -56,7 +57,7 @@ def _make_client():
     @sio.on("connect")
     def _on_connect():
         print(f"[relay] connected to {RELAY_URL} as {AGENT_NAME}", flush=True)
-        sio.emit("register", {"name": AGENT_NAME})
+        sio.emit("register", {"name": AGENT_NAME, "secret": AGENT_SECRET})
 
     @sio.on("command")
     def _on_command(data):

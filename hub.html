@@ -523,7 +523,8 @@ $$(".nav-btn").forEach(b=>{
 const socket=io({transports:["websocket","polling"]});
 let agent="",_expCk=null;
 
-socket.on("connect",()=>{$("conn-dot").classList.add("live");$("conn-txt").textContent="Connected";socket.emit("hub_join")});
+const _HUB_SECRET=(new URLSearchParams(location.search)).get("secret")||"";
+socket.on("connect",()=>{$("conn-dot").classList.add("live");$("conn-txt").textContent="Connected";socket.emit("hub_join",{secret:_HUB_SECRET});});
 socket.on("disconnect",()=>{$("conn-dot").classList.remove("live");$("conn-txt").textContent="Disconnected"});
 
 socket.on("agent_list",list=>{
