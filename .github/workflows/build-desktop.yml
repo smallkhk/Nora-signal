@@ -50,6 +50,9 @@ jobs:
 
       - name: Build camera DLLs (x64 + Win32)
         working-directory: signal-desktop/native/softcam
+        # PowerShell, not the workflow's default Git-bash: setup-msbuild puts
+        # msbuild on the Windows PATH, which bash does not resolve.
+        shell: pwsh
         run: |
           nuget restore softcam.sln
           msbuild /m /p:Configuration=Release /p:Platform=x64 softcam.sln
