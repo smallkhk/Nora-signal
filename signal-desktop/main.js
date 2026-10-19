@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Tray, Menu, shell, session, Notification, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, session, Notification, nativeImage, ipcMain } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
+const vcam = require("./vcam");
 
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -52,6 +53,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     isQuitting = true;
+    vcam.stop();
   });
 
   app.whenReady().then(() => {
@@ -73,6 +75,23 @@ if (!gotLock) {
       const origin = requestingOrigin || (webContents ? webContents.getURL() : "");
       return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(origin);
     });
+
+    // Virtual camera: start feeding the "SIGNAL" camera (Windows only; a no-op
+    // elsewhere). The renderer's injected grabber pushes frames over IPC.
+    ipcMain.on("vcam:frame", (e, data) => vcam.frame(data));
+    ipcMain.handle("vcam:status", () => vcam.status());
+    ipcMain.handle("vcam:install", async () => {
+      await vcam.install();
+      await vcam.restart();
+      return vcam.status();
+    });
+    vcam.onStatus(() => {
+      updateTrayMenu();
+      const wc = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null;
+      if (wc) wc.send("vcam:status", vcam.status());
+    });
+    vcam.refreshInstalled();
+    vcam.setOrientation(store.get("cameraOrientation", "landscape")).then(() => vcam.start());
 
     createWindow();
     createTray();
@@ -105,6 +124,9 @@ function createWindow() {
       devTools: IS_DEV,
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep feeding the virtual camera while the window is minimised or
+      // hidden behind Zoom — that is exactly when it is being used.
+      backgroundThrottling: false,
     },
   });
 
@@ -165,48 +187,106 @@ function createWindow() {
   });
 }
 
+function showMainWindow() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// Human-readable one-line summary of the virtual camera for the tray.
+function cameraStatusLabel() {
+  const s = vcam.status();
+  if (s.state === "unsupported") return "Camera: Windows only";
+  if (s.state === "error") return `Camera: error (${s.error || "unknown"})`;
+  if (s.state === "starting") return "Camera: starting…";
+  if (s.state === "ready" && s.installed === false) return "Camera: not installed";
+  if (s.state === "ready") return `Camera: ${s.name} — on`;
+  return "Camera: off";
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const s = vcam.status();
+  const launchAtStartup = app.getLoginItemSettings().openAtLogin;
+
+  const template = [
+    { label: "Open SIGNAL", click: showMainWindow },
+    { type: "separator" },
+    { label: cameraStatusLabel(), enabled: false },
+  ];
+
+  if (s.state === "ready" && s.installed === false) {
+    template.push({
+      label: "Install SIGNAL camera…",
+      click: async () => {
+        const after = await vcam.install().then(() => vcam.status()).catch(() => null);
+        if (after && after.installed && Notification.isSupported()) {
+          new Notification({ title: "SIGNAL", body: "SIGNAL camera installed. Restart Zoom/Meet if it was open." }).show();
+        }
+        updateTrayMenu();
+      },
+    });
+  }
+
+  if (vcam.isSupported()) {
+    template.push({
+      label: "Camera orientation",
+      submenu: [
+        {
+          label: "Landscape (16:9)",
+          type: "radio",
+          checked: s.orientation === "landscape",
+          click: () => {
+            store.set("cameraOrientation", "landscape");
+            vcam.setOrientation("landscape").then(updateTrayMenu);
+          },
+        },
+        {
+          label: "Portrait (9:16)",
+          type: "radio",
+          checked: s.orientation === "portrait",
+          click: () => {
+            store.set("cameraOrientation", "portrait");
+            vcam.setOrientation("portrait").then(updateTrayMenu);
+          },
+        },
+      ],
+    });
+  }
+
+  template.push(
+    { type: "separator" },
+    {
+      label: "Launch on startup",
+      type: "checkbox",
+      checked: launchAtStartup,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+        store.set("launchAtStartup", item.checked);
+        updateTrayMenu();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    }
+  );
+
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(ICON_PATH);
   tray = new Tray(icon);
   tray.setToolTip("SIGNAL");
-
-  const showWindow = () => {
-    if (!mainWindow) {
-      createWindow();
-      return;
-    }
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  };
-
-  const updateMenu = () => {
-    const launchAtStartup = app.getLoginItemSettings().openAtLogin;
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "Open SIGNAL", click: showWindow },
-        { type: "separator" },
-        {
-          label: "Launch on startup",
-          type: "checkbox",
-          checked: launchAtStartup,
-          click: (item) => {
-            app.setLoginItemSettings({ openAtLogin: item.checked });
-            store.set("launchAtStartup", item.checked);
-            updateMenu();
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Quit",
-          click: () => {
-            isQuitting = true;
-            app.quit();
-          },
-        },
-      ])
-    );
-  };
 
   // Reconcile the persisted "launch on startup" preference (default OFF) with
   // the OS before the menu is first built, so the checkbox matches reality.
@@ -215,8 +295,8 @@ function createTray() {
     app.setLoginItemSettings({ openAtLogin: persistedLaunchAtStartup });
   }
 
-  updateMenu();
-  tray.on("click", showWindow);
+  updateTrayMenu();
+  tray.on("click", showMainWindow);
 }
 
 // Stay alive in the tray when the window is hidden/closed. Simply having a

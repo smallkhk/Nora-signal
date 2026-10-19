@@ -3,7 +3,7 @@ name: Build SIGNAL Desktop (Windows)
 on:
   push:
     branches:
-      - claude/new-session-m3wo1q
+      - claude/video-call-virtual-camera-a8rlur
     paths:
       - "signal-desktop/**"
       - ".github/workflows/build-desktop.yml"
@@ -11,6 +11,11 @@ on:
 
 permissions:
   contents: write
+
+env:
+  # Pinned softcam release commit (MIT). Bump deliberately; the patch script
+  # fails loudly if the lines it rebrands have moved.
+  SOFTCAM_COMMIT: 8f545e2a3faa2c0d6e6e05378f945ee2a7adfc1d
 
 jobs:
   build:
@@ -30,6 +35,62 @@ jobs:
           cache: npm
           cache-dependency-path: signal-desktop/package-lock.json
 
+      # ── Virtual camera: native back-ends ─────────────────────────────────
+      - name: Fetch softcam (DirectShow camera, Windows 10)
+        run: |
+          git init native/softcam
+          git -C native/softcam remote add origin https://github.com/tshino/softcam.git
+          git -C native/softcam fetch --depth 1 origin "$SOFTCAM_COMMIT"
+          git -C native/softcam checkout FETCH_HEAD
+
+      - name: Rebrand camera as SIGNAL
+        run: node native/patch-softcam.mjs native/softcam
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build camera DLLs (x64 + Win32)
+        working-directory: signal-desktop/native/softcam
+        run: |
+          nuget restore softcam.sln
+          msbuild /m /p:Configuration=Release /p:Platform=x64 softcam.sln
+          msbuild /m /p:Configuration=Release /p:Platform=Win32 softcam.sln
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Fetch Windows Implementation Library (for the Windows 11 camera)
+        shell: cmd
+        run: nuget install Microsoft.Windows.ImplementationLibrary -Version 1.0.260126.7 -OutputDirectory native\packages
+
+      # Windows 11 camera: Media Foundation virtual camera source, based on
+      # smourier/VCamSample (MIT). C++/WinRT headers come with the Windows SDK.
+      - name: Build Windows 11 camera source
+        shell: cmd
+        run: |
+          mkdir native\out\x64 native\out\x86 native\obj
+          cl /nologo /std:c++20 /EHsc /O2 /MT /W3 /permissive- /DUNICODE /D_UNICODE /DNDEBUG ^
+            /I native\mfcam /I native\packages\Microsoft.Windows.ImplementationLibrary.1.0.260126.7\include ^
+            /I "%WindowsSdkDir%Include\%WindowsSDKVersion%cppwinrt" ^
+            native\mfcam\*.cpp /LD /Fo:native\obj\ /Fe:native\out\x64\signal-mfcam.dll ^
+            /link /DEF:native\mfcam\mfcam.def mfplat.lib mfuuid.lib mf.lib mfsensorgroup.lib ole32.lib oleaut32.lib ^
+            advapi32.lib user32.lib propsys.lib windowsapp.lib d2d1.lib dwrite.lib d3d11.lib dxgi.lib windowscodecs.lib
+          if errorlevel 1 exit /b 1
+          del native\out\x64\signal-mfcam.exp native\out\x64\signal-mfcam.lib
+          copy /y native\mfcam\LICENSE-VCamSample.txt native\out\VCamSample-LICENSE.txt
+
+      - name: Build frame helper
+        shell: cmd
+        run: |
+          cl /nologo /O2 /EHsc /MT /W4 /I native native\signal-vcam.cpp /Fo:native\obj\ /Fe:native\out\signal-vcam.exe ^
+            /link mfplat.lib ole32.lib advapi32.lib
+          if errorlevel 1 exit /b 1
+          copy /y native\softcam\dist\bin\x64\softcam.dll native\out\x64\
+          copy /y native\softcam\dist\bin\Win32\softcam.dll native\out\x86\
+          copy /y native\softcam\LICENSE native\out\softcam-LICENSE.txt
+          dir /s native\out
+
+      # ── Electron app ─────────────────────────────────────────────────────
       - name: Install dependencies
         run: npm ci
 
@@ -48,14 +109,14 @@ jobs:
           TAG="desktop-v1.0.0-build.${{ github.run_number }}"
           gh release create "$TAG" dist/*.exe \
             --title "SIGNAL Desktop 1.0.0 (build ${{ github.run_number }})" \
-            --notes "Unsigned Windows build of the SIGNAL desktop wrapper.
+            --notes "Windows build of the SIGNAL desktop app with the built-in **SIGNAL** virtual camera.
 
-          - \`SIGNAL Setup 1.0.0.exe\` — NSIS installer (adds an uninstaller entry, desktop + start menu shortcuts).
-          - \`SIGNAL 1.0.0.exe\` — portable, no installation required.
+          - \`SIGNAL Setup 1.0.0.exe\` — NSIS installer. Run it and accept the admin prompt (it registers the camera). Then pick **SIGNAL** as your camera in Zoom, Meet, Teams, Discord, WhatsApp (Windows 11) or OBS — it shows your live AI output.
+          - \`SIGNAL 1.0.0.exe\` — portable. The camera is registered from the app's tray menu (\"Install SIGNAL camera\") the first time.
 
           Built from commit ${{ github.sha }}.
 
-          **Note:** these builds are unsigned, so Windows SmartScreen will show an \"unrecognized publisher\" warning on first run. Click *More info* → *Run anyway*. Code signing is tracked as future work."
+          **Note:** these builds are unsigned, so Windows SmartScreen will show an \"unrecognized publisher\" warning on first run (click *More info* → *Run anyway*). Code signing is tracked as future work."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
