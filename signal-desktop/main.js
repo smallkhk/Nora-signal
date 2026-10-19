@@ -124,7 +124,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       partition: PARTITION, // persistent session: cookies/localStorage survive restarts
-      devTools: IS_DEV,
+      devTools: true, // allow the tray's "Open DevTools" diagnostic action
       contextIsolation: true,
       nodeIntegration: false,
       // Keep feeding the virtual camera while the window is minimised or
@@ -295,6 +295,15 @@ function updateTrayMenu() {
       ],
     });
   }
+
+  template.push({ type: "separator" });
+  template.push({
+    label: "Open DevTools (debug)",
+    click: () => {
+      if (!mainWindow) createWindow();
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    },
+  });
 
   if (app.isPackaged) {
     template.push({ type: "separator" });
