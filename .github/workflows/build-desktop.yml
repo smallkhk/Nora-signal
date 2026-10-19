@@ -97,6 +97,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Each build gets its own version (1.0.<run number>) so the app's
+      # auto-updater can tell a newer release from the one installed.
+      - name: Set build version
+        run: |
+          base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          npm version "${base}.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+
       - name: Build Windows installer + portable exe
         # --publish never: electron-builder should only package here; the
         # release is created explicitly in the next step.
@@ -105,17 +112,21 @@ jobs:
       - name: List build output
         run: ls -la dist/
 
+      # Every build becomes a GitHub Release with the installer, the portable
+      # exe, and the update feed (latest.yml + .blockmap) that installed apps
+      # read to auto-update. gh marks the newest release as "Latest", which is
+      # what electron-updater's GitHub provider checks.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="desktop-v1.0.0-build.${{ github.run_number }}"
-          gh release create "$TAG" dist/*.exe \
-            --title "SIGNAL Desktop 1.0.0 (build ${{ github.run_number }})" \
-            --notes "Windows build of the SIGNAL desktop app with the built-in **SIGNAL** virtual camera.
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "v${VERSION}" dist/*.exe dist/latest.yml dist/*.blockmap \
+            --title "SIGNAL Desktop ${VERSION}" \
+            --notes "Windows build of the SIGNAL desktop app with the built-in **SIGNAL** virtual camera and auto-update.
 
-          - \`SIGNAL Setup 1.0.0.exe\` — NSIS installer. Run it and accept the admin prompt (it registers the camera). Then pick **SIGNAL** as your camera in Zoom, Meet, Teams, Discord, WhatsApp (Windows 11) or OBS — it shows your live AI output.
-          - \`SIGNAL 1.0.0.exe\` — portable. The camera is registered from the app's tray menu (\"Install SIGNAL camera\") the first time.
+          - \`SIGNAL Setup ${VERSION}.exe\` — NSIS installer. Run it and accept the admin prompt (it registers the camera). Then pick **SIGNAL** as your camera in Zoom, Meet, Teams, Discord, WhatsApp (Windows 11) or OBS — it shows your live AI output. Installed copies auto-update to future releases.
+          - \`SIGNAL ${VERSION}.exe\` — portable. The camera is registered from the app's tray menu (\"Install SIGNAL camera\") the first time. (Portable builds do not auto-update.)
 
           Built from commit ${{ github.sha }}.
 
@@ -125,5 +136,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: signal-desktop-windows
-          path: signal-desktop/dist/*.exe
+          path: |
+            signal-desktop/dist/*.exe
+            signal-desktop/dist/latest.yml
           if-no-files-found: error

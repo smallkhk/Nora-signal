@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, shell, session, Notification, nativeImag
 const path = require("path");
 const Store = require("electron-store");
 const vcam = require("./vcam");
+const { autoUpdater } = require("electron-updater");
 
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -19,6 +20,7 @@ const store = new Store();
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let updateReady = false; // a newer version has been downloaded, pending restart
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -95,6 +97,7 @@ if (!gotLock) {
 
     createWindow();
     createTray();
+    setupUpdater();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -187,6 +190,41 @@ function createWindow() {
   });
 }
 
+// ── Auto-update ────────────────────────────────────────────────────────────
+// Checks GitHub Releases, downloads a newer version in the background, and
+// installs it on quit (or immediately via the tray). No code signing needed:
+// electron-updater verifies the download against the sha512 in latest.yml.
+function setupUpdater() {
+  if (!app.isPackaged) return; // the updater only works in a packaged build
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-downloaded", (info) => {
+    updateReady = true;
+    updateTrayMenu();
+    if (Notification.isSupported()) {
+      const n = new Notification({
+        title: "SIGNAL update ready",
+        body: `Version ${info.version} installs when you restart. Click to restart now.`,
+      });
+      n.on("click", installUpdateNow);
+      n.show();
+    }
+  });
+  // Never let a failed check crash or interrupt the app.
+  autoUpdater.on("error", () => {});
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 6 * 60 * 60 * 1000); // re-check every 6 hours
+}
+
+function installUpdateNow() {
+  isQuitting = true;
+  vcam.stop();
+  autoUpdater.quitAndInstall();
+}
+
 function showMainWindow() {
   if (!mainWindow) {
     createWindow();
@@ -256,6 +294,23 @@ function updateTrayMenu() {
         },
       ],
     });
+  }
+
+  if (app.isPackaged) {
+    template.push({ type: "separator" });
+    if (updateReady) {
+      template.push({ label: "Restart to update SIGNAL", click: installUpdateNow });
+    } else {
+      template.push({
+        label: "Check for updates…",
+        click: () => {
+          autoUpdater.checkForUpdates().catch(() => {});
+          if (Notification.isSupported()) {
+            new Notification({ title: "SIGNAL", body: "Checking for updates…" }).show();
+          }
+        },
+      });
+    }
   }
 
   template.push(

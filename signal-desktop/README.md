@@ -32,6 +32,16 @@ folder) is distinct from EclipseLiveCam's, so both apps can be installed on the
 same PC without clashing. softcam and VCamSample are MIT-licensed; their licence
 files ship in the build.
 
+## Auto-update
+
+Installed copies check GitHub Releases on launch (and every 6 hours), download a
+newer version in the background, and install it on quit — or immediately via the
+tray's "Restart to update SIGNAL". No code signing is required: electron-updater
+verifies each download against the `sha512` in `latest.yml`. CI publishes
+`latest.yml` + the installer to every release and bumps the version to
+`1.0.<build>` so the app can tell a build is newer. (The portable `.exe` does not
+auto-update.)
+
 ## Develop
 
 ```sh

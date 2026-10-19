@@ -14,7 +14,8 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.3.9"
   },
   "build": {
     "appId": "online.eclipselivecam.signal",
@@ -22,6 +23,13 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "smallkhk",
+        "repo": "Nora-signal"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
