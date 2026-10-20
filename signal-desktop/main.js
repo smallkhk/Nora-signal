@@ -4,6 +4,12 @@ const Store = require("electron-store");
 const vcam = require("./vcam");
 const { autoUpdater } = require("electron-updater");
 
+// Some Windows GPU/driver combos paint <video> and WebGL surfaces as solid
+// blank/black inside Electron's hardware compositor (both the camera preview
+// and the transformed output come up blank). Falling back to software
+// compositing fixes that. Must run before the app is ready.
+app.disableHardwareAcceleration();
+
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
 const PARTITION = "persist:signal";
