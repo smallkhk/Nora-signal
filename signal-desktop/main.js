@@ -1,6 +1,14 @@
-const { app, BrowserWindow, Tray, Menu, shell, session, Notification, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, shell, session, Notification, nativeImage, ipcMain } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
+const vcam = require("./vcam");
+const { autoUpdater } = require("electron-updater");
+
+// Some Windows GPU/driver combos paint <video> and WebGL surfaces as solid
+// blank/black inside Electron's hardware compositor (both the camera preview
+// and the transformed output come up blank). Falling back to software
+// compositing fixes that. Must run before the app is ready.
+app.disableHardwareAcceleration();
 
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -18,6 +26,7 @@ const store = new Store();
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let updateReady = false; // a newer version has been downloaded, pending restart
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -52,6 +61,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     isQuitting = true;
+    vcam.stop();
   });
 
   app.whenReady().then(() => {
@@ -74,8 +84,26 @@ if (!gotLock) {
       return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(origin);
     });
 
+    // Virtual camera: start feeding the "SIGNAL" camera (Windows only; a no-op
+    // elsewhere). The renderer's injected grabber pushes frames over IPC.
+    ipcMain.on("vcam:frame", (e, data) => vcam.frame(data));
+    ipcMain.handle("vcam:status", () => vcam.status());
+    ipcMain.handle("vcam:install", async () => {
+      await vcam.install();
+      await vcam.restart();
+      return vcam.status();
+    });
+    vcam.onStatus(() => {
+      updateTrayMenu();
+      const wc = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null;
+      if (wc) wc.send("vcam:status", vcam.status());
+    });
+    vcam.refreshInstalled();
+    vcam.setOrientation(store.get("cameraOrientation", "landscape")).then(() => vcam.start());
+
     createWindow();
     createTray();
+    setupUpdater();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -105,6 +133,9 @@ function createWindow() {
       devTools: IS_DEV,
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep feeding the virtual camera while the window is minimised or
+      // hidden behind Zoom — that is exactly when it is being used.
+      backgroundThrottling: false,
     },
   });
 
@@ -165,48 +196,158 @@ function createWindow() {
   });
 }
 
+// ── Auto-update ────────────────────────────────────────────────────────────
+// Checks GitHub Releases, downloads a newer version in the background, and
+// installs it on quit (or immediately via the tray). No code signing needed:
+// electron-updater verifies the download against the sha512 in latest.yml.
+function setupUpdater() {
+  if (!app.isPackaged) return; // the updater only works in a packaged build
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-downloaded", (info) => {
+    updateReady = true;
+    updateTrayMenu();
+    if (Notification.isSupported()) {
+      const n = new Notification({
+        title: "SIGNAL update ready",
+        body: `Version ${info.version} installs when you restart. Click to restart now.`,
+      });
+      n.on("click", installUpdateNow);
+      n.show();
+    }
+  });
+  // Never let a failed check crash or interrupt the app.
+  autoUpdater.on("error", () => {});
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 6 * 60 * 60 * 1000); // re-check every 6 hours
+}
+
+function installUpdateNow() {
+  isQuitting = true;
+  vcam.stop();
+  autoUpdater.quitAndInstall();
+}
+
+function showMainWindow() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// Human-readable one-line summary of the virtual camera for the tray.
+function cameraStatusLabel() {
+  const s = vcam.status();
+  if (s.state === "unsupported") return "Camera: Windows only";
+  if (s.state === "error") return `Camera: error (${s.error || "unknown"})`;
+  if (s.state === "starting") return "Camera: starting…";
+  if (s.state === "ready" && s.installed === false) return "Camera: not installed";
+  if (s.state === "ready") return `Camera: ${s.name} — on`;
+  return "Camera: off";
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const s = vcam.status();
+  const launchAtStartup = app.getLoginItemSettings().openAtLogin;
+
+  const template = [
+    { label: "Open SIGNAL", click: showMainWindow },
+    { type: "separator" },
+    { label: cameraStatusLabel(), enabled: false },
+  ];
+
+  if (s.state === "ready" && s.installed === false) {
+    template.push({
+      label: "Install SIGNAL camera…",
+      click: async () => {
+        const after = await vcam.install().then(() => vcam.status()).catch(() => null);
+        if (after && after.installed && Notification.isSupported()) {
+          new Notification({ title: "SIGNAL", body: "SIGNAL camera installed. Restart Zoom/Meet if it was open." }).show();
+        }
+        updateTrayMenu();
+      },
+    });
+  }
+
+  if (vcam.isSupported()) {
+    template.push({
+      label: "Camera orientation",
+      submenu: [
+        {
+          label: "Landscape (16:9)",
+          type: "radio",
+          checked: s.orientation === "landscape",
+          click: () => {
+            store.set("cameraOrientation", "landscape");
+            vcam.setOrientation("landscape").then(updateTrayMenu);
+          },
+        },
+        {
+          label: "Portrait (9:16)",
+          type: "radio",
+          checked: s.orientation === "portrait",
+          click: () => {
+            store.set("cameraOrientation", "portrait");
+            vcam.setOrientation("portrait").then(updateTrayMenu);
+          },
+        },
+      ],
+    });
+  }
+
+  if (app.isPackaged) {
+    template.push({ type: "separator" });
+    if (updateReady) {
+      template.push({ label: "Restart to update SIGNAL", click: installUpdateNow });
+    } else {
+      template.push({
+        label: "Check for updates…",
+        click: () => {
+          autoUpdater.checkForUpdates().catch(() => {});
+          if (Notification.isSupported()) {
+            new Notification({ title: "SIGNAL", body: "Checking for updates…" }).show();
+          }
+        },
+      });
+    }
+  }
+
+  template.push(
+    { type: "separator" },
+    {
+      label: "Launch on startup",
+      type: "checkbox",
+      checked: launchAtStartup,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+        store.set("launchAtStartup", item.checked);
+        updateTrayMenu();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    }
+  );
+
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(ICON_PATH);
   tray = new Tray(icon);
   tray.setToolTip("SIGNAL");
-
-  const showWindow = () => {
-    if (!mainWindow) {
-      createWindow();
-      return;
-    }
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  };
-
-  const updateMenu = () => {
-    const launchAtStartup = app.getLoginItemSettings().openAtLogin;
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "Open SIGNAL", click: showWindow },
-        { type: "separator" },
-        {
-          label: "Launch on startup",
-          type: "checkbox",
-          checked: launchAtStartup,
-          click: (item) => {
-            app.setLoginItemSettings({ openAtLogin: item.checked });
-            store.set("launchAtStartup", item.checked);
-            updateMenu();
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Quit",
-          click: () => {
-            isQuitting = true;
-            app.quit();
-          },
-        },
-      ])
-    );
-  };
 
   // Reconcile the persisted "launch on startup" preference (default OFF) with
   // the OS before the menu is first built, so the checkbox matches reality.
@@ -215,8 +356,8 @@ function createTray() {
     app.setLoginItemSettings({ openAtLogin: persistedLaunchAtStartup });
   }
 
-  updateMenu();
-  tray.on("click", showWindow);
+  updateTrayMenu();
+  tray.on("click", showMainWindow);
 }
 
 // Stay alive in the tray when the window is hidden/closed. Simply having a
