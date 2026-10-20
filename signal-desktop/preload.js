@@ -189,83 +189,6 @@ function grabberSource() {
   D.vcamStatus().then(render);
 }
 
-// ── WebRTC diagnostics (injected into the page's main world) ─────────────────
-// Prints [SIGNAL-DIAG] lines so we can see, in DevTools, whether the camera
-// track is live and whether the WebRTC media path to Decart actually connects.
-// Purely observational — it wraps getUserMedia / RTCPeerConnection and never
-// changes their behaviour.
-function diagnosticsSource() {
-  const TAG = "[SIGNAL-DIAG]";
-  const log = (...a) => {
-    try {
-      console.log(TAG, ...a);
-    } catch {}
-  };
-  log("active on", location.href);
-
-  try {
-    const md = navigator.mediaDevices;
-    if (md && md.getUserMedia) {
-      const orig = md.getUserMedia.bind(md);
-      md.getUserMedia = async (constraints) => {
-        log("getUserMedia request:", JSON.stringify(constraints));
-        try {
-          const stream = await orig(constraints);
-          stream.getVideoTracks().forEach((t) => {
-            const s = t.getSettings ? t.getSettings() : {};
-            log("camera track:", JSON.stringify({ label: t.label, readyState: t.readyState, muted: t.muted, enabled: t.enabled, w: s.width, h: s.height }));
-            t.addEventListener("mute", () => log("camera track MUTED — no frames"));
-            t.addEventListener("ended", () => log("camera track ENDED"));
-          });
-          return stream;
-        } catch (e) {
-          log("getUserMedia FAILED:", e && e.name, e && e.message);
-          throw e;
-        }
-      };
-    }
-  } catch (e) {
-    log("getUserMedia hook error:", e && e.message);
-  }
-
-  try {
-    const Native = window.RTCPeerConnection;
-    if (Native) {
-      const Wrapped = function (cfg) {
-        const servers = (cfg && cfg.iceServers) || [];
-        const urls = servers.flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
-        log("RTCPeerConnection created; ICE servers:", JSON.stringify(urls));
-        const pc = new Native(cfg);
-        pc.addEventListener("iceconnectionstatechange", () => log("iceConnectionState:", pc.iceConnectionState));
-        pc.addEventListener("connectionstatechange", () => log("connectionState:", pc.connectionState));
-        pc.addEventListener("icecandidateerror", (e) => log("ICE candidate error:", e.url, e.errorCode, e.errorText));
-        pc.addEventListener("track", () => log("remote track received — output should appear"));
-        setTimeout(async () => {
-          try {
-            const stats = await pc.getStats();
-            let sent = 0;
-            let pair = "";
-            stats.forEach((r) => {
-              if (r.type === "outbound-rtp" && r.kind === "video") sent = r.bytesSent || 0;
-              if (r.type === "candidate-pair" && r.nominated) pair = r.state;
-            });
-            log("after 8s — video bytesSent:", sent, "| nominated pair:", pair || "none", "| iceState:", pc.iceConnectionState);
-            if (!sent) log("=> NO video reaching Decart. Likely firewall/ICE blocking media (UDP), or the camera track is muted.");
-          } catch (e) {
-            log("getStats error:", e && e.message);
-          }
-        }, 8000);
-        return pc;
-      };
-      Wrapped.prototype = Native.prototype;
-      window.RTCPeerConnection = Wrapped;
-      if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = Wrapped;
-    }
-  } catch (e) {
-    log("RTCPeerConnection hook error:", e && e.message);
-  }
-}
-
 function injectInPage(fn) {
   const script = document.createElement("script");
   script.textContent = `(${fn.toString()})();`;
@@ -274,7 +197,6 @@ function injectInPage(fn) {
 }
 
 function injectAll() {
-  injectInPage(diagnosticsSource); // wrap WebRTC before the page uses it
   injectInPage(grabberSource);
 }
 
