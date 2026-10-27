@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Nora Monitor"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <EditText
+        android:id="@+id/relay_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Relay URL"
+        android:inputType="textUri"
+        android:layout_marginBottom="16dp"/>
+
+    <EditText
+        android:id="@+id/secret"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Secret (optional)"
+        android:inputType="textPassword"
+        android:layout_marginBottom="32dp"/>
+
+    <Button
+        android:id="@+id/start_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Monitoring"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/stop_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Stop"/>
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Stopped"
+        android:textColor="#888"
+        android:layout_marginTop="24dp"/>
+
+</LinearLayout>

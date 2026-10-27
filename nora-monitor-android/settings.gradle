@@ -1,0 +1,2 @@
+rootProject.name = "NoraMonitorAndroid"
+include ':app'
