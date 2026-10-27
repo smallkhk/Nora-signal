@@ -1,14 +1,21 @@
-// Bridge + virtual-camera feed for the wrapped SIGNAL web app.
+// Bridge + virtual-camera feed for the wrapped Nora AI Video Call web app.
 //
-// The web app is loaded from the live site, so instead of shipping a
-// frame-grabber inside the page we expose a small `signalDesktop` API to the
-// page's main world and inject a grabber that finds the Studio's OUTPUT video
-// (the AI-transformed stream) and pushes each frame to the "SIGNAL" virtual
-// camera via the main process.
+// The web app is loaded from the live site, so instead of shipping code inside
+// the page we expose a small `noraDesktop` API to the page's main world and
+// inject three helpers:
+//   - a camera guard, so the AI input is always a real webcam and never the
+//     app's own virtual camera (which would feed the output back in);
+//   - a standby picture on the OUTPUT panel, so Pop out (PiP) works before the
+//     AI output starts;
+//   - a grabber that pushes the OUTPUT video (only) into the
+//     "Nora AI Video Call" virtual camera via the main process.
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("signalDesktop", {
+contextBridge.exposeInMainWorld("noraDesktop", {
   vcamFrame: (rgba) => ipcRenderer.send("vcam:frame", rgba),
+  reportCameras: (list) => ipcRenderer.send("camera:devices", list),
+  cameraPreference: () => ipcRenderer.invoke("camera:preference"),
+  onCameraPreference: (cb) => ipcRenderer.on("camera:preference", (e, label) => cb(label)),
   vcamStatus: () => ipcRenderer.invoke("vcam:status"),
   vcamInstall: () => ipcRenderer.invoke("vcam:install"),
   onVcamStatus: (cb) => ipcRenderer.on("vcam:status", (e, s) => cb(s)),
@@ -19,7 +26,7 @@ contextBridge.exposeInMainWorld("signalDesktop", {
 // use MediaStreamTrackProcessor (which keeps delivering frames while the
 // window is minimised — exactly when the camera is in use).
 function grabberSource() {
-  const D = window.signalDesktop;
+  const D = window.noraDesktop;
   if (!D) return;
 
   const FPS = 30;
@@ -81,10 +88,10 @@ function grabberSource() {
     ctx.textAlign = "center";
     ctx.fillStyle = "#e8e8f0";
     ctx.font = '700 44px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText("SIGNAL", W / 2, H / 2 + 54);
+    ctx.fillText("Nora AI Video Call", W / 2, H / 2 + 54);
     ctx.fillStyle = "rgba(232,232,240,.55)";
     ctx.font = '400 22px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText("Camera on standby — go live in the SIGNAL app", W / 2, H / 2 + 94);
+    ctx.fillText("Camera on standby — go live in the app", W / 2, H / 2 + 94);
   }
 
   // Preferred path: read frames straight off the WebRTC track. This keeps
@@ -151,21 +158,64 @@ function grabberSource() {
     }
   }
 
-  // Find the Studio's OUTPUT video. The output panel is the only one with a
-  // pop-out (PiP) button; failing that, take a playing, unmuted <video> that
-  // carries a live stream (the camera preview is muted).
-  function findOutputStream() {
-    const videos = Array.from(document.querySelectorAll("video"));
-    const withStream = videos.filter((v) => v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks().length);
-    if (!withStream.length) return null;
-    const byPip = withStream.find((v) => {
-      const frame = v.closest(".video-frame") || v.parentElement;
-      return frame && frame.querySelector(".pip-btn");
-    });
-    if (byPip) return byPip.srcObject;
-    const unmuted = withStream.find((v) => !v.muted);
-    return (unmuted || withStream[withStream.length - 1]).srcObject;
+  // The Studio's OUTPUT video is the one whose panel has the Pop out (PiP)
+  // button. Only that video may feed the camera: never fall back to "some
+  // other video", which could be the raw webcam preview.
+  function outputVideo() {
+    const pip = document.querySelector(".pip-btn");
+    const frame = pip && (pip.closest(".video-frame") || pip.parentElement);
+    return frame ? frame.querySelector("video") : null;
   }
+
+  function isLive(stream) {
+    return !!(stream && stream.getVideoTracks && stream.getVideoTracks().some((t) => t.readyState === "live"));
+  }
+
+  function findOutputStream() {
+    const v = outputVideo();
+    const stream = v && v.srcObject;
+    if (!stream || stream.__noraStandby || !isLive(stream)) return null;
+    return stream;
+  }
+
+  // Standby picture on the OUTPUT panel, so Pop out (PiP) works before the AI
+  // output starts. When the Studio attaches the live output it replaces this
+  // stream, and an open PiP window switches to the live video by itself.
+  const pipCanvas = document.createElement("canvas");
+  pipCanvas.width = 640;
+  pipCanvas.height = 360;
+  const pctx = pipCanvas.getContext("2d");
+  let pulse = 0;
+  function drawPipStandby() {
+    pulse = (pulse + 1) % 20;
+    const g = pctx.createLinearGradient(0, 0, 640, 360);
+    g.addColorStop(0, "#0c0c12");
+    g.addColorStop(1, "#1b1030");
+    pctx.fillStyle = g;
+    pctx.fillRect(0, 0, 640, 360);
+    pctx.beginPath();
+    pctx.arc(320, 140, 10 + (pulse < 10 ? pulse : 20 - pulse), 0, Math.PI * 2);
+    pctx.fillStyle = "#a855f7";
+    pctx.fill();
+    pctx.textAlign = "center";
+    pctx.fillStyle = "#e8e8f0";
+    pctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
+    pctx.fillText("Nora AI Video Call", 320, 215);
+    pctx.fillStyle = "rgba(232,232,240,.6)";
+    pctx.font = '400 17px "Segoe UI", system-ui, sans-serif';
+    pctx.fillText("Waiting for the AI output…", 320, 248);
+  }
+  drawPipStandby();
+  const standbyStream = pipCanvas.captureStream(10);
+  standbyStream.__noraStandby = true;
+  setInterval(() => {
+    drawPipStandby();
+    const v = outputVideo();
+    if (v && v.srcObject !== standbyStream && !isLive(v.srcObject)) {
+      v.srcObject = standbyStream;
+      v.play().catch(() => {});
+    }
+  }, 100);
 
   setInterval(() => setStream(findOutputStream()), 300);
   // Re-send the standby card now and then, e.g. after the camera restarts.
@@ -189,6 +239,83 @@ function grabberSource() {
   D.vcamStatus().then(render);
 }
 
+// ── Camera guard, injected into the page's main world ────────────────────────
+// The Studio asks for "the front camera" without naming one, so Windows may
+// hand it the app's own virtual camera — the AI output would then be fed back
+// in as the input. Pick a real webcam instead (the one chosen in the tray, else
+// the first physical one), hide our virtual camera from the page, and report
+// the real webcams so the tray can list them.
+function cameraGuardSource() {
+  const D = window.noraDesktop;
+  const md = navigator.mediaDevices;
+  if (!D || !md || !md.getUserMedia || !md.enumerateDevices) return;
+
+  // Our own camera (current name, and the old one from before the rename).
+  const OWN = /nora ai video call|^signal$/i;
+  // Other virtual cameras: allowed, but a physical webcam is preferred.
+  const VIRTUAL = /virtual|eclipselivecam|obs|manycam|snap camera|xsplit|droidcam|iriun|camo|broadcast/i;
+
+  let preferred = "";
+  D.cameraPreference().then((p) => (preferred = p || "")).catch(() => {});
+  D.onCameraPreference((p) => (preferred = p || ""));
+
+  const origEnumerate = md.enumerateDevices.bind(md);
+  const origGetUserMedia = md.getUserMedia.bind(md);
+
+  async function realCameras() {
+    const all = await origEnumerate();
+    return all.filter((d) => d.kind === "videoinput" && !OWN.test(d.label || ""));
+  }
+  function report(cams) {
+    try {
+      D.reportCameras(cams.filter((d) => d.label).map((d) => ({ label: d.label })));
+    } catch {}
+  }
+
+  md.enumerateDevices = async () =>
+    (await origEnumerate()).filter((d) => !(d.kind === "videoinput" && OWN.test(d.label || "")));
+
+  async function chooseCamera() {
+    const cams = await realCameras();
+    report(cams);
+    if (!cams.length) return null;
+    const picked = preferred && cams.find((d) => d.label === preferred);
+    if (picked) return picked.deviceId;
+    const physical = cams.find((d) => d.label && !VIRTUAL.test(d.label));
+    return (physical || cams[0]).deviceId;
+  }
+
+  md.getUserMedia = async (constraints) => {
+    const c = constraints || {};
+    if (!c.video) return origGetUserMedia(c);
+    const video = typeof c.video === "object" ? { ...c.video } : {};
+    if (!video.deviceId) {
+      const id = await chooseCamera();
+      if (id) {
+        delete video.facingMode;
+        video.deviceId = { exact: id };
+      }
+    }
+    let stream = await origGetUserMedia({ ...c, video });
+
+    // Safety net (e.g. labels were hidden before permission): never use our
+    // own virtual camera as the input.
+    const track = stream.getVideoTracks()[0];
+    if (track && OWN.test(track.label || "")) {
+      stream.getTracks().forEach((t) => t.stop());
+      const cams = await realCameras();
+      report(cams);
+      if (!cams.length) throw new DOMException("No webcam found — only the app's own virtual camera.", "NotFoundError");
+      delete video.facingMode;
+      video.deviceId = { exact: cams[0].deviceId };
+      stream = await origGetUserMedia({ ...c, video });
+    }
+    return stream;
+  };
+
+  realCameras().then(report).catch(() => {});
+}
+
 function injectInPage(fn) {
   const script = document.createElement("script");
   script.textContent = `(${fn.toString()})();`;
@@ -197,6 +324,7 @@ function injectInPage(fn) {
 }
 
 function injectAll() {
+  injectInPage(cameraGuardSource); // before the page opens a camera
   injectInPage(grabberSource);
 }
 

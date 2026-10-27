@@ -1,5 +1,5 @@
-// signal-vcam.exe — feeds the AI output from the SIGNAL app into the
-// "SIGNAL" virtual camera.
+// signal-vcam.exe — feeds the AI output from the Nora AI Video Call app into the
+// "Nora AI Video Call" virtual camera.
 //
 // Usage:
 //   signal-vcam.exe <softcam.dll> <width> <height> <fps>
@@ -28,7 +28,7 @@
 
 // Must match CLSID_VCam in native/mfcam/dllmain.cpp.
 static const wchar_t MF_SOURCE_CLSID[] = L"{E74F3E0A-EFD3-4242-ABD8-1D8D8AD6403C}";
-static const wchar_t CAMERA_NAME[] = L"SIGNAL";
+static const wchar_t CAMERA_NAME[] = L"Nora AI Video Call";
 
 typedef void* scCamera;
 typedef scCamera (__cdecl *CreateCameraFn)(int width, int height, float framerate);

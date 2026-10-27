@@ -1,10 +1,10 @@
-; SIGNAL installer additions: register / remove the virtual camera.
+; Nora AI Video Call installer additions: register / remove the virtual camera.
 ;
 ; Windows 11 (build 22000+): registers the Media Foundation camera source
 ;   (signal-mfcam.dll). Every app sees it, including Store apps like WhatsApp.
 ; Windows 10: registers softcam, a DirectShow camera (64- and 32-bit), seen
 ;   by Chrome, Zoom, OBS, Discord …
-; Only one is registered so apps never list "SIGNAL" twice.
+; Only one is registered so apps never list "Nora AI Video Call" twice.
 ; Registering a camera needs admin rights, which is why the installer is
 ; per-machine.
 ;
@@ -16,7 +16,7 @@
 !define VCAM_CLSID "{B7123D88-046A-402A-81EC-B8B252CA709A}"
 !define MFCAM_CLSID "{E74F3E0A-EFD3-4242-ABD8-1D8D8AD6403C}"
 ; DirectShow "Video Capture Sources" category. softcam registers the camera
-; there under its friendly name (Instance\SIGNAL).
+; there under its friendly name (Instance\Nora AI Video Call).
 !define VCAM_CATEGORY "{860BB310-5D01-11d0-BD3B-00A0C911CE86}"
 
 ; Windows' Frame Server service loads the Windows 11 camera DLL and keeps it
@@ -41,6 +41,14 @@
   ExpandEnvStrings $1 "%ProgramData%\SIGNAL"
   CreateDirectory "$1"
   nsExec::Exec 'icacls "$1" /grant *S-1-5-11:(OI)(CI)M'
+
+  ; The camera was called "SIGNAL" before the rename; remove its old DirectShow
+  ; entry so apps don't list a stale second camera after an upgrade.
+  SetRegView 64
+  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\SIGNAL"
+  SetRegView 32
+  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\SIGNAL"
+  SetRegView lastused
 
   ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion" "CurrentBuildNumber"
   ${DisableX64FSRedirection}
@@ -69,9 +77,9 @@
   SetRegView 64
   DeleteRegKey HKLM "SOFTWARE\Classes\CLSID\${MFCAM_CLSID}"
   DeleteRegKey HKCR "CLSID\${VCAM_CLSID}"
-  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\SIGNAL"
+  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\Nora AI Video Call"
   SetRegView 32
   DeleteRegKey HKCR "CLSID\${VCAM_CLSID}"
-  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\SIGNAL"
+  DeleteRegKey HKCR "CLSID\${VCAM_CATEGORY}\Instance\Nora AI Video Call"
   SetRegView lastused
 !macroend

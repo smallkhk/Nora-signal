@@ -1,6 +1,6 @@
 // Virtual camera bridge (Windows only).
 //
-// Two camera back-ends, both named "SIGNAL" (see native/):
+// Two camera back-ends, both named "Nora AI Video Call" (see native/):
 //   Windows 11: a Media Foundation virtual camera (native/mfcam). Every app
 //     sees it, including Microsoft Store apps like WhatsApp.
 //   Windows 10: softcam, a DirectShow camera (Chrome, Zoom, OBS, Discord …).
@@ -15,7 +15,7 @@ const os = require("os");
 
 // Must match native/patch-softcam.mjs and build/installer.nsh.
 const CAMERA_CLSID = "{B7123D88-046A-402A-81EC-B8B252CA709A}";
-const CAMERA_NAME = "SIGNAL";
+const CAMERA_NAME = "Nora AI Video Call";
 // DirectShow "Video Capture Sources" category; softcam registers itself here
 // under its friendly name.
 const VIDEO_CAPTURE_CATEGORY = "{860BB310-5D01-11d0-BD3B-00A0C911CE86}";
@@ -118,7 +118,7 @@ function install() {
   const cmds = [];
   if (isWindows11()) {
     // One camera that every app sees; remove the DirectShow one so apps
-    // don't list "SIGNAL" twice.
+    // don't list "Nora AI Video Call" twice.
     cmds.push(run(regsvr, ["/s", `"${mfDllPath()}"`]));
     cmds.push(run(regsvr, ["/s", "/u", `"${dllPath("x64")}"`]));
     if (fs.existsSync(regsvr32bit)) cmds.push(run(regsvr32bit, ["/s", "/u", `"${dllPath("x86")}"`]));

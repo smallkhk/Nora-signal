@@ -1,8 +1,8 @@
 {
   "name": "signal-desktop",
   "version": "1.0.0",
-  "description": "SIGNAL desktop app",
-  "author": "SIGNAL",
+  "description": "Nora AI Video Call desktop app",
+  "author": "Nora AI Video Call",
   "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "online.eclipselivecam.signal",
-    "productName": "SIGNAL",
+    "productName": "Nora AI Video Call",
     "directories": {
       "output": "dist"
     },
@@ -51,12 +51,16 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
+      "artifactName": "Nora-AI-Video-Call-Setup-${version}.${ext}",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "include": "build/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "Nora-AI-Video-Call-${version}-portable.${ext}"
     }
   }
 }

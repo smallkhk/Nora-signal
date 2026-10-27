@@ -1,4 +1,4 @@
-name: Build SIGNAL Desktop (Windows)
+name: Build Nora AI Video Call Desktop (Windows)
 
 on:
   push:
@@ -43,7 +43,7 @@ jobs:
           git -C native/softcam fetch --depth 1 origin "$SOFTCAM_COMMIT"
           git -C native/softcam checkout FETCH_HEAD
 
-      - name: Rebrand camera as SIGNAL
+      - name: Rebrand camera as Nora AI Video Call
         run: node native/patch-softcam.mjs native/softcam
 
       - uses: microsoft/setup-msbuild@v2
@@ -122,11 +122,11 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           gh release create "v${VERSION}" dist/*.exe dist/latest.yml dist/*.blockmap \
-            --title "SIGNAL Desktop ${VERSION}" \
-            --notes "Windows build of the SIGNAL desktop app with the built-in **SIGNAL** virtual camera and auto-update.
+            --title "Nora AI Video Call ${VERSION}" \
+            --notes "Windows build of the Nora AI Video Call desktop app with its built-in **Nora AI Video Call** virtual camera and auto-update.
 
-          - \`SIGNAL Setup ${VERSION}.exe\` — NSIS installer. Run it and accept the admin prompt (it registers the camera). Then pick **SIGNAL** as your camera in Zoom, Meet, Teams, Discord, WhatsApp (Windows 11) or OBS — it shows your live AI output. Installed copies auto-update to future releases.
-          - \`SIGNAL ${VERSION}.exe\` — portable. The camera is registered from the app's tray menu (\"Install SIGNAL camera\") the first time. (Portable builds do not auto-update.)
+          - \`Nora-AI-Video-Call-Setup-${VERSION}.exe\` — NSIS installer. Run it and accept the admin prompt (it registers the camera). Then pick **Nora AI Video Call** as your camera in Zoom, Meet, Teams, Discord, WhatsApp (Windows 11) or OBS — it shows your live AI output. Installed copies auto-update to future releases.
+          - \`Nora-AI-Video-Call-${VERSION}-portable.exe\` — portable. The camera is registered from the app's tray menu (\"Install the virtual camera\") the first time. (Portable builds do not auto-update.)
 
           Built from commit ${{ github.sha }}.
 

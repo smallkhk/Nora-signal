@@ -1,4 +1,4 @@
-// Rebrands a softcam checkout so the virtual camera shows up as "SIGNAL"
+// Rebrands a softcam checkout so the virtual camera shows up as "Nora AI Video Call"
 // and cannot collide with any other app that also ships softcam.
 //
 // Usage: node native/patch-softcam.mjs <path-to-softcam-checkout>
@@ -12,7 +12,7 @@ import path from 'node:path';
 // Must match CAMERA_CLSID in vcam.js and build/installer.nsh.
 // {B7123D88-046A-402A-81EC-B8B252CA709A}
 const GUID_DEFINE = '0xb7123d88, 0x046a, 0x402a, 0x81, 0xec, 0xb8, 0xb2, 0x52, 0xca, 0x70, 0x9a';
-const CAMERA_NAME = 'SIGNAL';
+const CAMERA_NAME = 'Nora AI Video Call';
 
 const root = process.argv[2];
 if (!root) {

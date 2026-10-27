@@ -10,6 +10,12 @@ const { autoUpdater } = require("electron-updater");
 // compositing fixes that. Must run before the app is ready.
 app.disableHardwareAcceleration();
 
+const APP_NAME = "Nora AI Video Call";
+// The app used to be called "SIGNAL", and Electron derives the user-data folder
+// from the product name. Keep the old folder so the login session, settings
+// and saved camera choice survive the rename.
+app.setPath("userData", path.join(app.getPath("appData"), "SIGNAL"));
+
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
 const PARTITION = "persist:signal";
@@ -27,6 +33,7 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let updateReady = false; // a newer version has been downloaded, pending restart
+let inputCameras = []; // real webcams reported by the page: [{ label }]
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -84,9 +91,18 @@ if (!gotLock) {
       return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(origin);
     });
 
-    // Virtual camera: start feeding the "SIGNAL" camera (Windows only; a no-op
+    // Virtual camera: start feeding the "Nora AI Video Call" camera (Windows only; a no-op
     // elsewhere). The renderer's injected grabber pushes frames over IPC.
     ipcMain.on("vcam:frame", (e, data) => vcam.frame(data));
+
+    // Input camera: the page reports the real cameras it can see (our own
+    // virtual camera already filtered out) and asks which one to use.
+    // "" means automatic (first real webcam).
+    ipcMain.on("camera:devices", (e, list) => {
+      if (Array.isArray(list)) inputCameras = list.filter((d) => d && typeof d.label === "string");
+      updateTrayMenu();
+    });
+    ipcMain.handle("camera:preference", () => store.get("inputCamera", ""));
     ipcMain.handle("vcam:status", () => vcam.status());
     ipcMain.handle("vcam:install", async () => {
       await vcam.install();
@@ -122,7 +138,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: "SIGNAL",
+    title: APP_NAME,
     // NOTE: build/icon.ico is a placeholder. Drop in a real 256x256
     // multi-resolution .ico here before the final build.
     icon: ICON_PATH,
@@ -143,6 +159,12 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 
   mainWindow.loadURL(APP_URL);
+
+  // The website sets its own <title>; keep the window named after the app.
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow.setTitle(APP_NAME);
+  });
 
   // Block devtools shortcuts in production builds.
   if (!IS_DEV) {
@@ -182,8 +204,8 @@ function createWindow() {
       if (!store.get("trayNoticeShown")) {
         if (Notification.isSupported()) {
           new Notification({
-            title: "SIGNAL",
-            body: "SIGNAL is still running in the tray.",
+            title: APP_NAME,
+            body: `${APP_NAME} is still running in the tray.`,
           }).show();
         }
         store.set("trayNoticeShown", true);
@@ -210,7 +232,7 @@ function setupUpdater() {
     updateTrayMenu();
     if (Notification.isSupported()) {
       const n = new Notification({
-        title: "SIGNAL update ready",
+        title: `${APP_NAME} update ready`,
         body: `Version ${info.version} installs when you restart. Click to restart now.`,
       });
       n.on("click", installUpdateNow);
@@ -260,7 +282,7 @@ function updateTrayMenu() {
   const launchAtStartup = app.getLoginItemSettings().openAtLogin;
 
   const template = [
-    { label: "Open SIGNAL", click: showMainWindow },
+    { label: `Open ${APP_NAME}`, click: showMainWindow },
     { type: "separator" },
     { label: cameraStatusLabel(), enabled: false },
   ];
@@ -270,16 +292,38 @@ function updateTrayMenu() {
 
   if (s.state === "ready" && s.installed === false) {
     template.push({
-      label: "Install SIGNAL camera…",
+      label: "Install the virtual camera…",
       click: async () => {
         const after = await vcam.install().then(() => vcam.status()).catch(() => null);
         if (after && after.installed && Notification.isSupported()) {
-          new Notification({ title: "SIGNAL", body: "SIGNAL camera installed. Restart Zoom/Meet if it was open." }).show();
+          new Notification({ title: APP_NAME, body: `${APP_NAME} camera installed. Restart Zoom/Meet/WhatsApp if it was open.` }).show();
         }
         updateTrayMenu();
       },
     });
   }
+
+  // Which real webcam feeds the AI (never the app's own virtual camera).
+  const chosen = store.get("inputCamera", "");
+  const pickInput = (label) => {
+    store.set("inputCamera", label);
+    const wc = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null;
+    if (wc) wc.send("camera:preference", label);
+    updateTrayMenu();
+  };
+  template.push({
+    label: "Input webcam",
+    submenu: [
+      { label: "Automatic (first real webcam)", type: "radio", checked: !chosen, click: () => pickInput("") },
+      ...inputCameras.map((d) => ({
+        label: d.label,
+        type: "radio",
+        checked: chosen === d.label,
+        click: () => pickInput(d.label),
+      })),
+      ...(inputCameras.length ? [] : [{ label: "Open the app once to list webcams", enabled: false }]),
+    ],
+  });
 
   if (vcam.isSupported()) {
     template.push({
@@ -310,14 +354,14 @@ function updateTrayMenu() {
   if (app.isPackaged) {
     template.push({ type: "separator" });
     if (updateReady) {
-      template.push({ label: "Restart to update SIGNAL", click: installUpdateNow });
+      template.push({ label: `Restart to update ${APP_NAME}`, click: installUpdateNow });
     } else {
       template.push({
         label: "Check for updates…",
         click: () => {
           autoUpdater.checkForUpdates().catch(() => {});
           if (Notification.isSupported()) {
-            new Notification({ title: "SIGNAL", body: "Checking for updates…" }).show();
+            new Notification({ title: APP_NAME, body: "Checking for updates…" }).show();
           }
         },
       });
@@ -352,7 +396,7 @@ function updateTrayMenu() {
 function createTray() {
   const icon = nativeImage.createFromPath(ICON_PATH);
   tray = new Tray(icon);
-  tray.setToolTip("SIGNAL");
+  tray.setToolTip(APP_NAME);
 
   // Reconcile the persisted "launch on startup" preference (default OFF) with
   // the OS before the menu is first built, so the checkbox matches reality.
