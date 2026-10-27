@@ -54,6 +54,7 @@ const mfDllPath = () => path.join(vcamDir(), "x64", "signal-mfcam.dll");
 let proc = null;
 let state = "off"; // off | starting | ready | error | unsupported
 let errorReason = "";
+let detail = ""; // last diagnostic line from the helper (why the Windows 11 camera fell back)
 let mode = null; // 'mf' (Windows 11 camera) | 'ds' (DirectShow) once running
 let installed = null; // null = unknown
 let dropped = 0;
@@ -66,7 +67,7 @@ function emit() {
 
 function status() {
   const [width, height] = size();
-  return { state, error: errorReason, installed, mode, orientation, width, height, fps: FPS, name: CAMERA_NAME };
+  return { state, error: errorReason, detail, installed, mode, win11: isWindows11(), orientation, width, height, fps: FPS, name: CAMERA_NAME };
 }
 
 function onStatus(fn) {
@@ -153,12 +154,24 @@ function start() {
 
   state = "starting";
   errorReason = "";
+  detail = "";
   emit();
   writeConfig();
   const [width, height] = size();
   const args = [dllPath("x64"), String(width), String(height), String(FPS)];
-  const child = spawn(helperPath(), args, { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+  const child = spawn(helperPath(), args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   proc = child;
+
+  // The helper explains on stderr why the Windows 11 camera could not start
+  // before it falls back to DirectShow; keep the last line for the tray.
+  let errOut = "";
+  child.stderr.on("data", (chunk) => {
+    errOut += chunk.toString();
+    const lines = errOut.split(/\r?\n/).filter(Boolean);
+    if (lines.length) detail = lines[lines.length - 1].trim();
+    errOut = errOut.slice(-2048);
+    emit();
+  });
 
   let out = "";
   child.stdout.on("data", (chunk) => {

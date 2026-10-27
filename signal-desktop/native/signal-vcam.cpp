@@ -79,16 +79,16 @@ static bool mfSourceRegistered()
 static int runMediaFoundation(int width, int height)
 {
 	// Must fit the shared memory, sized for 1280x720 / 720x1280.
-	if ((size_t)width * height > ECLIPSE_FRAME_MAX_PIXELS) return -1;
+	if ((size_t)width * height > ECLIPSE_FRAME_MAX_PIXELS) { std::fprintf(stderr, "MF camera: frame size too large\n"); return -1; }
 
 	// Loaded at runtime so the helper still starts on Windows 10.
 	HMODULE sensorGroup = LoadLibraryW(L"mfsensorgroup.dll");
 	auto createVirtualCamera = sensorGroup
 		? (CreateVirtualCameraFn)(void*)GetProcAddress(sensorGroup, "MFCreateVirtualCamera") : nullptr;
-	if (!createVirtualCamera) return -1;
+	if (!createVirtualCamera) { std::fprintf(stderr, "MF camera: MFCreateVirtualCamera unavailable on this Windows\n"); return -1; }
 
-	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return -1;
-	if (FAILED(MFStartup(MF_VERSION))) return -1;
+	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) { std::fprintf(stderr, "MF camera: COM init failed\n"); return -1; }
+	if (FAILED(MFStartup(MF_VERSION))) { std::fprintf(stderr, "MF camera: Media Foundation startup failed\n"); return -1; }
 
 	IMFVirtualCamera* camera = nullptr;
 	HRESULT hr = createVirtualCamera(MFVirtualCameraType_SoftwareCameraSource, MFVirtualCameraLifetime_Session,
@@ -203,6 +203,8 @@ int main(int argc, char** argv)
 	if (width < 16 || height < 16 || width > 3840 || height > 2160 || width % 4 || height % 4)
 		return fail("bad-size", 1);
 
+	if (isWindows11() && !mfSourceRegistered())
+		std::fprintf(stderr, "MF camera: not registered (reinstall with the Setup installer)\n");
 	if (isWindows11() && mfSourceRegistered())
 	{
 		int result = runMediaFoundation(width, height);

@@ -248,6 +248,8 @@ function cameraStatusLabel() {
   if (s.state === "error") return `Camera: error (${s.error || "unknown"})`;
   if (s.state === "starting") return "Camera: starting…";
   if (s.state === "ready" && s.installed === false) return "Camera: not installed";
+  if (s.state === "ready" && s.mode === "mf") return `Camera: ${s.name} — on (Windows 11 camera, all apps)`;
+  if (s.state === "ready" && s.mode === "ds" && s.win11) return `Camera: ${s.name} — on (basic mode: WhatsApp/Store apps can't see it)`;
   if (s.state === "ready") return `Camera: ${s.name} — on`;
   return "Camera: off";
 }
@@ -262,6 +264,9 @@ function updateTrayMenu() {
     { type: "separator" },
     { label: cameraStatusLabel(), enabled: false },
   ];
+  if (s.state === "ready" && s.mode === "ds" && s.win11 && s.detail) {
+    template.push({ label: `Why: ${s.detail}`.slice(0, 120), enabled: false });
+  }
 
   if (s.state === "ready" && s.installed === false) {
     template.push({
