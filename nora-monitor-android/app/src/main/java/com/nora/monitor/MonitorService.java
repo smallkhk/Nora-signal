@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
@@ -62,7 +63,14 @@ public class MonitorService extends Service {
             .setContentText("Monitoring active — tap to open")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .build();
-        startForeground(NOTIF_ID, notif);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, notif,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION |
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA |
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+        } else {
+            startForeground(NOTIF_ID, notif);
+        }
 
         if (intent == null) return START_STICKY;
 
