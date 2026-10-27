@@ -1,5 +1,6 @@
 package com.nora.monitor;
 
+import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
 
@@ -100,6 +101,33 @@ public class RelayClient {
                     socket.emit("file_data", res);
                 } catch (Exception e) {
                     Log.e(TAG, "read_file error", e);
+                }
+            });
+
+            socket.on("inject_input", args -> {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
+                InputService svc = InputService.getInstance();
+                if (svc == null) { Log.w(TAG, "AccessibilityService not running"); return; }
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    String type = p.optString("type", "tap");
+                    switch (type) {
+                        case "tap":
+                            svc.tap((float) p.optDouble("x", 0), (float) p.optDouble("y", 0));
+                            break;
+                        case "swipe":
+                            svc.swipe(
+                                (float) p.optDouble("x1", 0), (float) p.optDouble("y1", 0),
+                                (float) p.optDouble("x2", 0), (float) p.optDouble("y2", 0),
+                                p.optLong("duration", 300));
+                            break;
+                        case "back":    svc.goBack();    break;
+                        case "home":    svc.goHome();    break;
+                        case "recents": svc.goRecents(); break;
+                        default: Log.w(TAG, "unknown input type: " + type);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "inject_input error", e);
                 }
             });
 

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nora Monitor</string>
+    <string name="accessibility_desc">Allows remote input control for Nora Monitor</string>
 </resources>
