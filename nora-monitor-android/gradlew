@@ -1,0 +1,2 @@
+#!/bin/sh
+exec java $JAVA_OPTS -jar "$(dirname "$0")/gradle/wrapper/gradle-wrapper.jar" "$@"
