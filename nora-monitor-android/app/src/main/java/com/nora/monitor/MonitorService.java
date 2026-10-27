@@ -33,7 +33,7 @@ public class MonitorService extends Service {
     private static final String CHANNEL   = "nora_monitor";
     private static final int    NOTIF_ID  = 1;
 
-    public static String DEFAULT_RELAY  = "http://84.200.81.161:5000";
+    public static String DEFAULT_RELAY  = "http://16.55.3.205:5000";
     public static String AGENT_SECRET   = "";
 
     private MediaProjection  mediaProjection;
