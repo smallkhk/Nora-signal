@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("noraDesktop", {
   vcamInstall: () => ipcRenderer.invoke("vcam:install"),
   onVcamStatus: (cb) => ipcRenderer.on("vcam:status", (e, s) => cb(s)),
   streamAutoStopped: (reason) => ipcRenderer.send("stream:auto-stopped", reason),
+  streamState: (state) => ipcRenderer.send("stream:state", state),
 });
 
 // ── Frame grabber, injected into the page's main world ───────────────────────
@@ -34,8 +35,8 @@ function grabberSource() {
   // travels to the camera helper) and is plenty for a video call.
   const FPS = 15;
   const FRAME_MS = 1000 / FPS;
-  let W = 1280,
-    H = 720; // replaced by the camera's real size from the app
+  let W = 960,
+    H = 540; // replaced by the camera's real size from the app
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -427,6 +428,13 @@ function connectWatchdogSource() {
       const queue = [];
       let pumping = false;
       const pump = () => {
+        // Once the connection is closed (Stop), drop anything still queued:
+        // a late send would make the fal client reconnect — and bill again.
+        if (pc.signalingState === "closed") {
+          queue.length = 0;
+          pumping = false;
+          return;
+        }
         const ev = queue.shift();
         if (!ev) {
           pumping = false;
@@ -485,16 +493,27 @@ function connectWatchdogSource() {
   }
 
   let startedAt = 0;
+  let reported = "";
+  const report = (state) => {
+    if (state === reported) return;
+    reported = state;
+    try {
+      D.streamState(state);
+    } catch {}
+  };
   setInterval(() => {
     const btn = stopButton();
     if (!btn) {
       startedAt = 0;
+      report("idle");
       return;
     }
     if (outputLive()) {
       startedAt = 0; // it worked; leave it running
+      report("live");
       return;
     }
+    report("connecting");
     if (!startedAt) {
       startedAt = Date.now();
       lastServerError = "";

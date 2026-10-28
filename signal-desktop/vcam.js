@@ -25,8 +25,10 @@ const MF_SOURCE_CLSID = "{E74F3E0A-EFD3-4242-ABD8-1D8D8AD6403C}";
 // Windows 11 is build 22000 and later (os.release() is "10.0.<build>").
 const isWindows11 = () => process.platform === "win32" && Number(os.release().split(".")[2]) >= 22000;
 
-// Landscape (1280x720, like the AI output) or portrait (720x1280).
-const SIZES = { landscape: [1280, 720], portrait: [720, 1280] };
+// Landscape (960x540, same shape as the AI output) or portrait (540x960).
+// 960x540 keeps the per-frame copy light (each frame crosses from the page to
+// the camera helper); plenty for video calls. Must match native/mfcam/SharedFrame.h.
+const SIZES = { landscape: [960, 540], portrait: [540, 960] };
 const FPS = 15;
 let orientation = "landscape";
 const size = () => SIZES[orientation];

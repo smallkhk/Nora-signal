@@ -78,7 +78,7 @@ static bool mfSourceRegistered()
 // ── Windows 11: Media Foundation virtual camera ─────────────────────────────
 static int runMediaFoundation(int width, int height)
 {
-	// Must fit the shared memory, sized for 1280x720 / 720x1280.
+	// Must fit the shared memory, sized for 960x540 / 540x960.
 	if ((size_t)width * height > ECLIPSE_FRAME_MAX_PIXELS) { std::fprintf(stderr, "MF camera: frame size too large\n"); return -1; }
 
 	// Loaded at runtime so the helper still starts on Windows 10.

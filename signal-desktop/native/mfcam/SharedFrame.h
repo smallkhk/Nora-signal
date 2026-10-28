@@ -11,10 +11,10 @@
 #include <cstdio>
 
 #define ECLIPSE_SHARED_FRAME_NAME L"Global\\NoraAIVideoCall_Frames"
-// Camera size: 720x1280 (portrait) or 1280x720 (landscape). Both have the
+// Camera size: 540x960 (portrait) or 960x540 (landscape). Both have the
 // same pixel count, so the shared memory is the same size either way.
-#define ECLIPSE_FRAME_LONG_SIDE 1280
-#define ECLIPSE_FRAME_SHORT_SIDE 720
+#define ECLIPSE_FRAME_LONG_SIDE 960
+#define ECLIPSE_FRAME_SHORT_SIDE 540
 #define ECLIPSE_FRAME_MAX_PIXELS (ECLIPSE_FRAME_LONG_SIDE * ECLIPSE_FRAME_SHORT_SIDE)
 #define ECLIPSE_FRAME_MAGIC 0x31434C45u  // "ELC1"
 // A frame older than this means the app stopped sending; show standby.

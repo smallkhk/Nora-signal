@@ -24,11 +24,6 @@ function migrateLoginFromOldFolder() {
   }
 }
 
-// Some Windows GPU/driver combos paint <video> and WebGL surfaces as solid
-// blank/black inside Electron's hardware compositor (both the camera preview
-// and the transformed output come up blank). Falling back to software
-// compositing fixes that. Must run before the app is ready.
-app.disableHardwareAcceleration();
 
 const APP_NAME = "Nora AI Video Call";
 const PARTITION_NAME = "nora";
@@ -53,6 +48,19 @@ const ICON_PATH = path.join(__dirname, "build/icon.ico");
 const ALLOWED_PERMISSIONS = new Set(["media", "fullscreen"]);
 
 const store = new Store();
+
+// Video drawing. Some Windows GPU/driver combos paint <video> as solid blank
+// inside Electron's hardware compositor, so by default we draw in software.
+// Software drawing is CPU-heavy and can make the app sluggish; the tray's
+// "Faster video (use graphics card)" turns the GPU back on, keeping it off
+// the DirectComposition overlay path that causes the blank video. Takes
+// effect on restart; must run before the app is ready.
+if (store.get("useGpu", false)) {
+  app.commandLine.appendSwitch("disable-direct-composition");
+  app.commandLine.appendSwitch("disable-features", "DirectCompositionVideoOverlays");
+} else {
+  app.disableHardwareAcceleration();
+}
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -60,6 +68,7 @@ let updateReady = false; // a newer version has been downloaded, pending restart
 let inputCameras = []; // real webcams reported by the page: [{ label }]
 let streamStoppedForQuit = false;
 let lastStreamFailure = ""; // why the last stream was auto-stopped, shown in the tray
+let streaming = false; // the page reports while a stream is connecting/live
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -138,6 +147,28 @@ if (!gotLock) {
       updateTrayMenu();
     });
     ipcMain.handle("camera:preference", () => store.get("inputCamera", ""));
+
+    // While a stream is running, make sure the page can still act on Stop. If
+    // it is so overloaded that it doesn't answer within 10 seconds, cut the
+    // stream from here (killing the page drops the camera and the Decart
+    // link) instead of letting fal and the platform keep billing.
+    ipcMain.on("stream:state", (e, state) => {
+      streaming = state === "live" || state === "connecting";
+    });
+    setInterval(() => {
+      const wc = pageContents();
+      if (!streaming || !wc || wc.isCrashed() || resetting) return;
+      let answered = false;
+      wc.executeJavaScript("1", true)
+        .then(() => (answered = true))
+        .catch(() => {});
+      setTimeout(() => {
+        if (!answered && streaming) {
+          streaming = false;
+          hardResetPage("The app was too busy to respond");
+        }
+      }, 10000);
+    }, 5000);
 
     // The page stopped a stream that never went live (so fal stops billing).
     ipcMain.on("stream:auto-stopped", (e, reason) => {
@@ -482,6 +513,25 @@ function updateTrayMenu() {
       });
     }
   }
+
+  template.push({
+    label: "Faster video (use graphics card)",
+    type: "checkbox",
+    checked: store.get("useGpu", false),
+    click: (item) => {
+      store.set("useGpu", item.checked);
+      if (Notification.isSupported()) {
+        new Notification({
+          title: APP_NAME,
+          body: item.checked
+            ? "Restarting with the graphics card on. If the video panels go blank, untick this option."
+            : "Restarting with software video drawing.",
+        }).show();
+      }
+      app.relaunch();
+      app.quit();
+    },
+  });
 
   template.push(
     { type: "separator" },
