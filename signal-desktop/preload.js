@@ -178,44 +178,69 @@ function grabberSource() {
     return stream;
   }
 
-  // Standby picture on the OUTPUT panel, so Pop out (PiP) works before the AI
-  // output starts. When the Studio attaches the live output it replaces this
-  // stream, and an open PiP window switches to the live video by itself.
+  // Pop out (PiP) before the AI output starts. The browser can only pop out a
+  // video that is already playing, so when Pop out is clicked and the output
+  // is not live yet we show a small standby picture on it and pop that out.
+  // When the Studio attaches the live output it replaces the standby stream
+  // and the PiP window switches to it. Nothing here runs unless Pop out is
+  // clicked, so starting and stopping a stream is never touched.
   const pipCanvas = document.createElement("canvas");
   pipCanvas.width = 640;
   pipCanvas.height = 360;
   const pctx = pipCanvas.getContext("2d");
-  let pulse = 0;
   function drawPipStandby() {
-    pulse = (pulse + 1) % 20;
     const g = pctx.createLinearGradient(0, 0, 640, 360);
     g.addColorStop(0, "#0c0c12");
     g.addColorStop(1, "#1b1030");
     pctx.fillStyle = g;
     pctx.fillRect(0, 0, 640, 360);
-    pctx.beginPath();
-    pctx.arc(320, 140, 10 + (pulse < 10 ? pulse : 20 - pulse), 0, Math.PI * 2);
-    pctx.fillStyle = "#a855f7";
-    pctx.fill();
     pctx.textAlign = "center";
     pctx.fillStyle = "#e8e8f0";
     pctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
-    pctx.fillText("Nora AI Video Call", 320, 215);
+    pctx.fillText("Nora AI Video Call", 320, 170);
     pctx.fillStyle = "rgba(232,232,240,.6)";
     pctx.font = '400 17px "Segoe UI", system-ui, sans-serif';
-    pctx.fillText("Waiting for the AI output…", 320, 248);
+    pctx.fillText("Waiting for the AI output…", 320, 205);
   }
-  drawPipStandby();
-  const standbyStream = pipCanvas.captureStream(10);
-  standbyStream.__noraStandby = true;
-  setInterval(() => {
-    drawPipStandby();
-    const v = outputVideo();
-    if (v && v.srcObject !== standbyStream && !isLive(v.srcObject)) {
+  let standbyStream = null;
+  let standbyTimer = null;
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const btn = e.target && e.target.closest && e.target.closest(".pip-btn");
+      if (!btn) return;
+      const v = outputVideo();
+      if (!v || isLive(v.srcObject) || document.pictureInPictureElement) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!standbyStream) {
+        drawPipStandby();
+        standbyStream = pipCanvas.captureStream(5);
+        standbyStream.__noraStandby = true;
+      }
+      // Keep the canvas producing frames only while the standby is showing.
+      clearInterval(standbyTimer);
+      standbyTimer = setInterval(() => {
+        if (v.srcObject !== standbyStream) return clearInterval(standbyTimer);
+        drawPipStandby();
+      }, 500);
       v.srcObject = standbyStream;
-      v.play().catch(() => {});
-    }
-  }, 100);
+      v.play()
+        .then(() => v.requestPictureInPicture())
+        .catch(() => {});
+    },
+    true
+  );
+
+  // Used by the desktop app to stop a stream (tray "Stop stream now", closing
+  // the window, quitting): presses the Studio's own Stop button so the session
+  // is ended and billed correctly.
+  window.__noraStopStream = () => {
+    const stop = Array.from(document.querySelectorAll("button")).find((b) => /stop stream/i.test(b.textContent || ""));
+    if (stop) stop.click();
+    return !!stop;
+  };
 
   setInterval(() => setStream(findOutputStream()), 300);
   // Re-send the standby card now and then, e.g. after the camera restarts.

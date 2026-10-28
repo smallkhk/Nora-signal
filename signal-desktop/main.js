@@ -58,6 +58,7 @@ let tray = null;
 let isQuitting = false;
 let updateReady = false; // a newer version has been downloaded, pending restart
 let inputCameras = []; // real webcams reported by the page: [{ label }]
+let streamStoppedForQuit = false;
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -90,9 +91,18 @@ if (!gotLock) {
   // match the electron-builder appId.
   app.setAppUserModelId("online.eclipselivecam.signal");
 
-  app.on("before-quit", () => {
+  // Quitting: stop any running stream first (so it is billed and closed
+  // properly), then quit. If the page doesn't answer in time it is killed,
+  // which drops the stream anyway.
+  app.on("before-quit", (event) => {
     isQuitting = true;
-    vcam.stop();
+    if (streamStoppedForQuit) {
+      vcam.stop();
+      return;
+    }
+    event.preventDefault();
+    streamStoppedForQuit = true;
+    stopStreamInPage().finally(() => app.quit());
   });
 
   app.whenReady().then(() => {
@@ -221,9 +231,20 @@ function createWindow() {
     }
   });
 
+  // A frozen page keeps streaming (the camera and the WebRTC link to Decart
+  // run on their own threads) while it stops sending billing heartbeats, so
+  // fal keeps charging. Kill a frozen or crashed page straight away.
+  mainWindow.on("unresponsive", () => hardResetPage("The app stopped responding"));
+  mainWindow.webContents.on("render-process-gone", (event, details) => {
+    if (details.reason === "clean-exit") return;
+    hardResetPage("The app crashed");
+  });
+
   mainWindow.on("close", (event) => {
     if (!isQuitting) {
       event.preventDefault();
+      // Closing the window must not leave a stream running in the tray.
+      stopStreamInPage();
       mainWindow.hide();
       if (!store.get("trayNoticeShown")) {
         if (Notification.isSupported()) {
@@ -273,8 +294,56 @@ function setupUpdater() {
 
 function installUpdateNow() {
   isQuitting = true;
-  vcam.stop();
-  autoUpdater.quitAndInstall();
+  stopStreamInPage().finally(() => {
+    streamStoppedForQuit = true;
+    vcam.stop();
+    autoUpdater.quitAndInstall();
+  });
+}
+
+// ── Stopping a stream from the app ─────────────────────────────────────────
+function pageContents() {
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null;
+}
+
+// Press the Studio's own Stop button (ends and bills the session properly).
+// If the page doesn't answer within 3 seconds it is frozen: kill it.
+function stopStreamInPage() {
+  const wc = pageContents();
+  if (!wc || wc.isCrashed()) return Promise.resolve(false);
+  const press = wc
+    .executeJavaScript("window.__noraStopStream ? window.__noraStopStream() : false", true)
+    .catch(() => false);
+  const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 3000));
+  return Promise.race([press, timeout]).then((result) => {
+    if (result === "timeout") {
+      hardResetPage("The app did not respond to Stop");
+      return true;
+    }
+    return result;
+  });
+}
+
+// Kill the page's process (this drops the camera and the WebRTC link to
+// Decart, so fal stops charging), then load it again.
+let resetting = false;
+function hardResetPage(reason) {
+  const wc = pageContents();
+  if (!wc || resetting) return;
+  resetting = true;
+  try {
+    if (!wc.isCrashed()) wc.forcefullyCrashRenderer();
+  } catch {}
+  setTimeout(() => {
+    resetting = false;
+    if (!wc.isDestroyed()) wc.reload();
+  }, 1000);
+  if (Notification.isSupported()) {
+    new Notification({
+      title: APP_NAME,
+      body: `${reason}, so the live stream was stopped to protect your credits. Reloading…`,
+    }).show();
+  }
 }
 
 function showMainWindow() {
@@ -307,6 +376,7 @@ function updateTrayMenu() {
 
   const template = [
     { label: `Open ${APP_NAME}`, click: showMainWindow },
+    { label: "Stop stream now", click: () => stopStreamInPage() },
     { type: "separator" },
     { label: cameraStatusLabel(), enabled: false },
   ];
