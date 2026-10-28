@@ -30,7 +30,9 @@ function grabberSource() {
   const D = window.noraDesktop;
   if (!D) return;
 
-  const FPS = 30;
+  // 15 fps keeps the page responsive (each frame is a full-size copy that
+  // travels to the camera helper) and is plenty for a video call.
+  const FPS = 15;
   const FRAME_MS = 1000 / FPS;
   let W = 1280,
     H = 720; // replaced by the camera's real size from the app
@@ -237,13 +239,32 @@ function grabberSource() {
   // Used by the desktop app to stop a stream (tray "Stop stream now", closing
   // the window, quitting): presses the Studio's own Stop button so the session
   // is ended and billed correctly.
+  // When Stop is pressed, stop copying frames to the virtual camera at once so
+  // the page has its hands free to close the stream (frame copying is the
+  // heaviest work the page does while live).
+  let pausedUntil = 0;
+  document.addEventListener(
+    "click",
+    (e) => {
+      const b = e.target && e.target.closest && e.target.closest("button");
+      if (!b || !/stop stream/i.test(b.textContent || "")) return;
+      pausedUntil = Date.now() + 5000;
+      feedToken++;
+      current = null;
+    },
+    true
+  );
+
   window.__noraStopStream = () => {
     const stop = Array.from(document.querySelectorAll("button")).find((b) => /stop stream/i.test(b.textContent || ""));
     if (stop) stop.click();
     return !!stop;
   };
 
-  setInterval(() => setStream(findOutputStream()), 300);
+  setInterval(() => {
+    if (Date.now() < pausedUntil) return;
+    setStream(findOutputStream());
+  }, 300);
   // Re-send the standby card now and then, e.g. after the camera restarts.
   setInterval(() => {
     if (!current) {

@@ -27,7 +27,7 @@ const isWindows11 = () => process.platform === "win32" && Number(os.release().sp
 
 // Landscape (1280x720, like the AI output) or portrait (720x1280).
 const SIZES = { landscape: [1280, 720], portrait: [720, 1280] };
-const FPS = 30;
+const FPS = 15;
 let orientation = "landscape";
 const size = () => SIZES[orientation];
 

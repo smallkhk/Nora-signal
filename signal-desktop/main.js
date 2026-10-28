@@ -247,7 +247,14 @@ function createWindow() {
   // A frozen page keeps streaming (the camera and the WebRTC link to Decart
   // run on their own threads) while it stops sending billing heartbeats, so
   // fal keeps charging. Kill a frozen or crashed page straight away.
-  mainWindow.on("unresponsive", () => hardResetPage("The app stopped responding"));
+  // Only act if it stays frozen for 5 more seconds, so a brief hiccup under
+  // load never cuts a working stream.
+  let frozenTimer = null;
+  mainWindow.on("unresponsive", () => {
+    clearTimeout(frozenTimer);
+    frozenTimer = setTimeout(() => hardResetPage("The app stopped responding"), 5000);
+  });
+  mainWindow.on("responsive", () => clearTimeout(frozenTimer));
   mainWindow.webContents.on("render-process-gone", (event, details) => {
     if (details.reason === "clean-exit") return;
     hardResetPage("The app crashed");
