@@ -1,7 +1,7 @@
 ; Nora AI Video Call installer additions: register / remove the virtual camera.
 ;
 ; Windows 11 (build 22000+): registers the Media Foundation camera source
-;   (signal-mfcam.dll). Every app sees it, including Store apps like WhatsApp.
+;   (nora-mfcam.dll). Every app sees it, including Store apps like WhatsApp.
 ; Windows 10: registers softcam, a DirectShow camera (64- and 32-bit), seen
 ;   by Chrome, Zoom, OBS, Discord …
 ; Only one is registered so apps never list "Nora AI Video Call" twice.
@@ -38,7 +38,7 @@
 !macro customInstall
   ; Camera settings (orientation) written by the app, read by the Windows 11
   ; camera inside the Frame Server service. Any signed-in user may change it.
-  ExpandEnvStrings $1 "%ProgramData%\SIGNAL"
+  ExpandEnvStrings $1 "%ProgramData%\NoraAIVideoCall"
   CreateDirectory "$1"
   nsExec::Exec 'icacls "$1" /grant *S-1-5-11:(OI)(CI)M'
 
@@ -55,7 +55,7 @@
   ${If} $0 >= 22000
     ; Windows 11: Media Foundation camera only; clear any DirectShow one left
     ; by an older version.
-    nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s "$INSTDIR\resources\vcam\x64\signal-mfcam.dll"'
+    nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s "$INSTDIR\resources\vcam\x64\nora-mfcam.dll"'
     nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x64\softcam.dll"'
     ${EnableX64FSRedirection}
     nsExec::ExecToLog '"$WINDIR\SysWOW64\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x86\softcam.dll"'
@@ -70,7 +70,7 @@
   ; Try a clean unregister first, then remove the keys directly in case the
   ; DLLs are already gone, so no dead camera is left behind.
   ${DisableX64FSRedirection}
-  nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x64\signal-mfcam.dll"'
+  nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x64\nora-mfcam.dll"'
   nsExec::ExecToLog '"$WINDIR\System32\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x64\softcam.dll"'
   ${EnableX64FSRedirection}
   nsExec::ExecToLog '"$WINDIR\SysWOW64\regsvr32.exe" /s /u "$INSTDIR\resources\vcam\x86\softcam.dll"'

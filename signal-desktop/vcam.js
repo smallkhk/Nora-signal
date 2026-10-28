@@ -5,7 +5,7 @@
 //     sees it, including Microsoft Store apps like WhatsApp.
 //   Windows 10: softcam, a DirectShow camera (Chrome, Zoom, OBS, Discord …).
 // The installer registers the one that fits the PC. While the app runs, a
-// small helper process (signal-vcam.exe) owns the camera and we stream raw
+// small helper process (nora-vcam.exe) owns the camera and we stream raw
 // RGBA frames to its stdin.
 const { app } = require("electron");
 const { spawn, execFile } = require("child_process");
@@ -33,7 +33,7 @@ const size = () => SIZES[orientation];
 
 // The Windows 11 camera runs inside a Windows service, so it reads the
 // orientation from this file (see native/mfcam/SharedFrame.h).
-const configFile = () => path.join(process.env.ProgramData || "C:\\ProgramData", "SIGNAL", "camera.cfg");
+const configFile = () => path.join(process.env.ProgramData || "C:\\ProgramData", "NoraAIVideoCall", "camera.cfg");
 function writeConfig() {
   if (process.platform !== "win32") return;
   try {
@@ -47,9 +47,9 @@ function vcamDir() {
     ? path.join(process.resourcesPath, "vcam")
     : path.join(__dirname, "native", "out");
 }
-const helperPath = () => process.env.SIGNAL_VCAM_HELPER || path.join(vcamDir(), "signal-vcam.exe");
+const helperPath = () => process.env.NORA_VCAM_HELPER || path.join(vcamDir(), "nora-vcam.exe");
 const dllPath = (arch = "x64") => path.join(vcamDir(), arch, "softcam.dll");
-const mfDllPath = () => path.join(vcamDir(), "x64", "signal-mfcam.dll");
+const mfDllPath = () => path.join(vcamDir(), "x64", "nora-mfcam.dll");
 
 let proc = null;
 let state = "off"; // off | starting | ready | error | unsupported
@@ -75,7 +75,7 @@ function onStatus(fn) {
 }
 
 function isSupported() {
-  return process.platform === "win32" || !!process.env.SIGNAL_VCAM_HELPER;
+  return process.platform === "win32" || !!process.env.NORA_VCAM_HELPER;
 }
 
 const regKeyExists = (key) =>
@@ -89,7 +89,7 @@ const regKeyExists = (key) =>
 // can load the DLL) and the "Video Capture Sources" entry (so apps like OBS
 // list it as a camera).
 async function checkInstalled() {
-  if (process.env.SIGNAL_VCAM_HELPER) return true;
+  if (process.env.NORA_VCAM_HELPER) return true;
   if (process.platform !== "win32") return false;
   if (isWindows11()) {
     return regKeyExists(`HKLM\\SOFTWARE\\Classes\\CLSID\\${MF_SOURCE_CLSID}\\InprocServer32`);

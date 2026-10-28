@@ -3,6 +3,26 @@ const path = require("path");
 const Store = require("electron-store");
 const vcam = require("./vcam");
 const { autoUpdater } = require("electron-updater");
+const fs = require("fs");
+
+// One-time copy of the login session out of the old shared folder. Only our
+// own partition folder ("Partitions/signal") is read; nothing in the Signal
+// messenger's files is written, moved or deleted.
+function migrateLoginFromOldFolder() {
+  try {
+    const oldPartition = path.join(app.getPath("appData"), "SIGNAL", "Partitions", "signal");
+    const newPartition = path.join(app.getPath("userData"), "Partitions", PARTITION_NAME);
+    if (fs.existsSync(newPartition) || !fs.existsSync(oldPartition)) return;
+    fs.mkdirSync(path.dirname(newPartition), { recursive: true });
+    fs.cpSync(oldPartition, newPartition, {
+      recursive: true,
+      // Lock files belong to the old running instance; never copy them.
+      filter: (src) => !/(^|[\\/])(LOCK|lockfile|SingletonLock)$/i.test(src),
+    });
+  } catch {
+    // If the copy fails the user simply logs in again.
+  }
+}
 
 // Some Windows GPU/driver combos paint <video> and WebGL surfaces as solid
 // blank/black inside Electron's hardware compositor (both the camera preview
@@ -11,14 +31,18 @@ const { autoUpdater } = require("electron-updater");
 app.disableHardwareAcceleration();
 
 const APP_NAME = "Nora AI Video Call";
-// The app used to be called "SIGNAL", and Electron derives the user-data folder
-// from the product name. Keep the old folder so the login session, settings
-// and saved camera choice survive the rename.
-app.setPath("userData", path.join(app.getPath("appData"), "SIGNAL"));
+const PARTITION_NAME = "nora";
+
+// Our own data folder. Earlier versions were named "SIGNAL" and so used
+// %APPDATA%\SIGNAL — the same folder (Windows ignores case) as the Signal
+// messenger app, which made the two apps share Electron's single-instance lock
+// and get in each other's way.
+app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
+migrateLoginFromOldFolder();
 
 const APP_URL = "https://nora.eclipselivecam.online";
 const APP_ORIGIN = new URL(APP_URL).origin;
-const PARTITION = "persist:signal";
+const PARTITION = `persist:${PARTITION_NAME}`;
 const IS_DEV = process.env.NODE_ENV === "development";
 const ICON_PATH = path.join(__dirname, "build/icon.ico");
 
@@ -72,7 +96,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    // The window renders in the "persist:signal" partition, so the permission
+    // The window renders in the "persist:nora" partition, so the permission
     // handlers MUST be installed on that session — handlers on
     // session.defaultSession would never be consulted for this window.
     const appSession = session.fromPartition(PARTITION);

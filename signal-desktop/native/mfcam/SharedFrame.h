@@ -1,16 +1,16 @@
-// Frame hand-off between signal-vcam.exe (writer, runs as the user) and this
+// Frame hand-off between nora-vcam.exe (writer, runs as the user) and this
 // media source (reader, runs inside Windows' Frame Server service).
 //
 // The media source creates the mapping, because only the service is allowed
 // to create objects in the Global namespace; the helper opens it for writing.
 // Layout: header followed by width*height BGRA pixels, top-down.
 //
-// Shared by native/signal-vcam.cpp and native/mfcam.
+// Shared by native/nora-vcam.cpp and native/mfcam.
 #pragma once
 #include <windows.h>
 #include <cstdio>
 
-#define ECLIPSE_SHARED_FRAME_NAME L"Global\\SIGNAL_Frames"
+#define ECLIPSE_SHARED_FRAME_NAME L"Global\\NoraAIVideoCall_Frames"
 // Camera size: 720x1280 (portrait) or 1280x720 (landscape). Both have the
 // same pixel count, so the shared memory is the same size either way.
 #define ECLIPSE_FRAME_LONG_SIDE 1280
@@ -23,7 +23,7 @@
 // The app writes the chosen orientation here ("portrait" or "landscape")
 // before starting the camera; the media source reads it when an app opens
 // the camera. ProgramData is readable by the Frame Server service.
-#define ECLIPSE_CAMERA_CONFIG L"%ProgramData%\\SIGNAL\\camera.cfg"
+#define ECLIPSE_CAMERA_CONFIG L"%ProgramData%\\NoraAIVideoCall\\camera.cfg"
 
 struct EclipseSharedFrame
 {

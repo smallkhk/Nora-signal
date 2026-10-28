@@ -8,8 +8,8 @@
 #include "MediaSource.h"
 #include "Activator.h"
 
-// SIGNAL Media Foundation camera source.
-// Must match MF_SOURCE_CLSID in native/signal-vcam.cpp, src/main/vcam.js and build/installer.nsh.
+// Nora AI Video Call Media Foundation camera source.
+// Must match MF_SOURCE_CLSID in native/nora-vcam.cpp, src/main/vcam.js and build/installer.nsh.
 // {E74F3E0A-EFD3-4242-ABD8-1D8D8AD6403C}
 GUID CLSID_VCam = { 0xe74f3e0a,0xefd3,0x4242,{0xab,0xd8,0x1d,0x8d,0x8a,0xd6,0x40,0x3c} };
 HMODULE _hModule;

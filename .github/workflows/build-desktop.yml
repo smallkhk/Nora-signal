@@ -75,17 +75,17 @@ jobs:
           cl /nologo /std:c++20 /EHsc /O2 /MT /W3 /permissive- /DUNICODE /D_UNICODE /DNDEBUG ^
             /I native\mfcam /I native\packages\Microsoft.Windows.ImplementationLibrary.1.0.260126.7\include ^
             /I "%WindowsSdkDir%Include\%WindowsSDKVersion%cppwinrt" ^
-            native\mfcam\*.cpp /LD /Fo:native\obj\ /Fe:native\out\x64\signal-mfcam.dll ^
+            native\mfcam\*.cpp /LD /Fo:native\obj\ /Fe:native\out\x64\nora-mfcam.dll ^
             /link /DEF:native\mfcam\mfcam.def mfplat.lib mfuuid.lib mf.lib mfsensorgroup.lib ole32.lib oleaut32.lib ^
             advapi32.lib user32.lib propsys.lib windowsapp.lib d2d1.lib dwrite.lib d3d11.lib dxgi.lib windowscodecs.lib
           if errorlevel 1 exit /b 1
-          del native\out\x64\signal-mfcam.exp native\out\x64\signal-mfcam.lib
+          del native\out\x64\nora-mfcam.exp native\out\x64\nora-mfcam.lib
           copy /y native\mfcam\LICENSE-VCamSample.txt native\out\VCamSample-LICENSE.txt
 
       - name: Build frame helper
         shell: cmd
         run: |
-          cl /nologo /O2 /EHsc /MT /W4 /I native native\signal-vcam.cpp /Fo:native\obj\ /Fe:native\out\signal-vcam.exe ^
+          cl /nologo /O2 /EHsc /MT /W4 /I native native\nora-vcam.cpp /Fo:native\obj\ /Fe:native\out\nora-vcam.exe ^
             /link mfplat.lib ole32.lib advapi32.lib
           if errorlevel 1 exit /b 1
           copy /y native\softcam\dist\bin\x64\softcam.dll native\out\x64\
@@ -135,7 +135,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: signal-desktop-windows
+          name: nora-ai-video-call-windows
           path: |
             signal-desktop/dist/*.exe
             signal-desktop/dist/latest.yml

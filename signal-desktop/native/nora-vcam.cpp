@@ -1,8 +1,8 @@
-// signal-vcam.exe — feeds the AI output from the Nora AI Video Call app into the
+// nora-vcam.exe — feeds the AI output from the Nora AI Video Call app into the
 // "Nora AI Video Call" virtual camera.
 //
 // Usage:
-//   signal-vcam.exe <softcam.dll> <width> <height> <fps>
+//   nora-vcam.exe <softcam.dll> <width> <height> <fps>
 //
 // The app writes raw RGBA frames (width * height * 4 bytes each) to stdin.
 // Closing stdin (or the app exiting) removes the camera cleanly.
@@ -194,7 +194,7 @@ static int runSoftcam(const char* dllPath, int width, int height, float fps)
 
 int main(int argc, char** argv)
 {
-	if (argc != 5) return fail("usage: signal-vcam.exe <softcam.dll> <width> <height> <fps>", 1);
+	if (argc != 5) return fail("usage: nora-vcam.exe <softcam.dll> <width> <height> <fps>", 1);
 
 	const int width = std::atoi(argv[2]);
 	const int height = std::atoi(argv[3]);

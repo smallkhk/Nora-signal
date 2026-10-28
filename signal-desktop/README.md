@@ -19,7 +19,7 @@ How it works (all under `native/`, built in CI — see the workflow):
 
 - The renderer grabs each output frame (`preload.js` injects a grabber that
   reads the Studio's output `<video>`) and sends raw RGBA to the main process.
-- `vcam.js` runs a small helper (`signal-vcam.exe`) that owns the camera and
+- `vcam.js` runs a small helper (`nora-vcam.exe`) that owns the camera and
   receives frames on stdin, dropping frames rather than queueing so the camera
   never lags.
 - Two camera back-ends: a Media Foundation virtual camera (`native/mfcam`,
