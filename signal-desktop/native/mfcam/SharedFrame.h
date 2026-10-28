@@ -47,10 +47,12 @@ inline BYTE* EclipseSharedFramePixels(EclipseSharedFrame* frame)
 	return reinterpret_cast<BYTE*>(frame) + sizeof(EclipseSharedFrame);
 }
 
-// Camera size from the config file; portrait unless it says "landscape".
+// Camera size from the config file; landscape (the app's default, matching the
+// AI output) unless it says "portrait". If the sizes ever disagree the camera
+// drops every frame and shows plain standby, so the defaults must match.
 inline void EclipseCameraSize(UINT* width, UINT* height)
 {
-	bool landscape = false;
+	bool landscape = true;
 	wchar_t path[MAX_PATH];
 	if (ExpandEnvironmentStringsW(ECLIPSE_CAMERA_CONFIG, path, MAX_PATH))
 	{
@@ -60,7 +62,7 @@ inline void EclipseCameraSize(UINT* width, UINT* height)
 			char buf[32] = {};
 			fread(buf, 1, sizeof(buf) - 1, f);
 			fclose(f);
-			landscape = strncmp(buf, "landscape", 9) == 0;
+			landscape = strncmp(buf, "portrait", 8) != 0;
 		}
 	}
 	*width = landscape ? ECLIPSE_FRAME_LONG_SIDE : ECLIPSE_FRAME_SHORT_SIDE;

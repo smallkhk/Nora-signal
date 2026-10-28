@@ -401,8 +401,8 @@ function updateTrayMenu() {
     { type: "separator" },
     { label: cameraStatusLabel(), enabled: false },
   ];
-  if (s.state === "ready" && s.mode === "ds" && s.win11 && s.detail) {
-    template.push({ label: `Why: ${s.detail}`.slice(0, 120), enabled: false });
+  if (s.detail) {
+    template.push({ label: `Camera note: ${s.detail}`.slice(0, 120), enabled: false });
   }
 
   if (s.state === "ready" && s.installed === false) {

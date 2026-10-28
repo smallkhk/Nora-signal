@@ -39,7 +39,11 @@ function writeConfig() {
   try {
     fs.mkdirSync(path.dirname(configFile()), { recursive: true });
     fs.writeFileSync(configFile(), orientation);
-  } catch {}
+  } catch (err) {
+    // The Windows 11 camera only accepts frames of the size this file names;
+    // surface a failure instead of silently showing a blank camera.
+    detail = `could not write ${configFile()} (${err.code || err.message})`;
+  }
 }
 
 function vcamDir() {
