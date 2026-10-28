@@ -73,8 +73,7 @@ public class MonitorService extends Service {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA |
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIF_ID, notif);
         }
@@ -107,6 +106,18 @@ public class MonitorService extends Service {
     private void startScreenStream(int resultCode, Intent data) {
         if (streaming) return;
         try {
+            // Upgrade foreground service type to include mediaProjection
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Notification notif = new NotificationCompat.Builder(this, CHANNEL)
+                    .setContentTitle("Nora Monitor")
+                    .setContentText("Screen active")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .build();
+                startForeground(NOTIF_ID, notif,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC |
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            }
+
             android.media.projection.MediaProjectionManager pm =
                 (android.media.projection.MediaProjectionManager)
                     getSystemService(MEDIA_PROJECTION_SERVICE);

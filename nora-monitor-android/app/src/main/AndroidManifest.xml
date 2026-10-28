@@ -40,7 +40,7 @@
 
         <service
             android:name=".MonitorService"
-            android:foregroundServiceType="mediaProjection|camera|microphone"
+            android:foregroundServiceType="dataSync|mediaProjection|camera|microphone"
             android:exported="false"
             tools:targetApi="29"/>
 
