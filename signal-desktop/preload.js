@@ -378,6 +378,74 @@ function connectWatchdogSource() {
   let lastServerError = "";
   let lastPc = null;
 
+  // ── Hard stop ──
+  // Pressing Stop must end ALL billing even if the Studio's own stop logic
+  // misbehaves. So on Stop we also: close every peer connection the page
+  // opened (and turn off its camera tracks), close every fal connection, refuse
+  // new fal connections, and answer the Studio's billing heartbeats with
+  // "stop" — until Go live is pressed again.
+  const allPcs = new Set();
+  const falSockets = new Set();
+  let stopped = false;
+  const isFal = (url) => /fal\.(run|ai|media)/i.test(String(url || ""));
+
+  function hardStop() {
+    allPcs.forEach((pc) => {
+      try {
+        if (pc.signalingState !== "closed") {
+          pc.getSenders().forEach((sender) => sender.track && sender.track.stop());
+          pc.close();
+        }
+      } catch {}
+    });
+    allPcs.clear();
+    falSockets.forEach((ws) => {
+      try {
+        if (ws.readyState === 0 || ws.readyState === 1) ws.close(1000, "stopped by user");
+      } catch {}
+    });
+    falSockets.clear();
+  }
+  window.__noraHardStop = () => {
+    stopped = true;
+    hardStop();
+  };
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const b = e.target && e.target.closest && e.target.closest("button");
+      const text = (b && b.textContent) || "";
+      if (/stop stream/i.test(text)) {
+        stopped = true;
+        // Let the Studio run its own stop first (it ends and bills the
+        // session), then make sure nothing is left open.
+        setTimeout(hardStop, 300);
+        setTimeout(hardStop, 2000);
+      } else if (/go live/i.test(text)) {
+        stopped = false;
+      }
+    },
+    true
+  );
+
+  // While stopped, the Studio's billing heartbeat is answered with "stop"
+  // (without reaching the server), which also makes the Studio finish its own
+  // stop properly if it hadn't.
+  const nativeFetch = window.fetch;
+  window.fetch = function (input, init) {
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    if (stopped && /\/api\/session\/heartbeat/.test(url)) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ keepStreaming: false, reason: "stopped" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      );
+    }
+    return nativeFetch.apply(this, arguments);
+  };
+
   // Remember any error text the model's realtime connection sends.
   const NativeWS = window.WebSocket;
   if (NativeWS) {
@@ -388,6 +456,14 @@ function connectWatchdogSource() {
     };
     const Wrapped = function (url, protocols) {
       const ws = protocols === undefined ? new NativeWS(url) : new NativeWS(url, protocols);
+      if (isFal(url)) {
+        if (stopped) {
+          // A late message after Stop would reconnect to fal and bill again.
+          ws.addEventListener("open", () => ws.close(1000, "stopped by user"));
+        } else {
+          falSockets.add(ws);
+        }
+      }
       ws.addEventListener("message", (ev) => {
         try {
           if (typeof ev.data === "string") sniff(ev.data);
@@ -423,6 +499,7 @@ function connectWatchdogSource() {
     const WrappedPC = function (cfg) {
       const pc = new NativePC(cfg);
       lastPc = pc;
+      allPcs.add(pc);
 
       let pageHandler = null;
       const queue = [];

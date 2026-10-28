@@ -363,7 +363,11 @@ function stopStreamInPage() {
   const wc = pageContents();
   if (!wc || wc.isCrashed()) return Promise.resolve(false);
   const press = wc
-    .executeJavaScript("window.__noraStopStream ? window.__noraStopStream() : false", true)
+    .executeJavaScript(
+      "(() => { const r = window.__noraStopStream ? window.__noraStopStream() : false;" +
+        " setTimeout(() => window.__noraHardStop && window.__noraHardStop(), 500); return r; })()",
+      true
+    )
     .catch(() => false);
   const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 3000));
   return Promise.race([press, timeout]).then((result) => {
