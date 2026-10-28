@@ -406,12 +406,57 @@ function connectWatchdogSource() {
     window.WebSocket = Wrapped;
   }
 
-  // Remember the latest peer connection, to report how far it got.
+  // Remember the latest peer connection, to report how far it got, and pace
+  // its ICE candidates.
+  //
+  // Why pacing: the fal client throttles connection.send() to one message per
+  // 128 ms and silently DROPS all but the last message of a burst. The Studio
+  // sends the WebRTC offer and then, within a few ms, a burst of ICE
+  // candidates — so the offer is often dropped, Decart never answers, and fal
+  // ends with "TIMEOUT: no inputs" while the output stays blank. Delivering
+  // candidate events to the Studio 200 ms apart (starting 200 ms after the
+  // first) keeps every send outside the throttle window, offer included.
   const NativePC = window.RTCPeerConnection;
+  const PACE_MS = 200;
   if (NativePC) {
     const WrappedPC = function (cfg) {
       const pc = new NativePC(cfg);
       lastPc = pc;
+
+      let pageHandler = null;
+      const queue = [];
+      let pumping = false;
+      const pump = () => {
+        const ev = queue.shift();
+        if (!ev) {
+          pumping = false;
+          return;
+        }
+        try {
+          if (pageHandler) pageHandler.call(pc, ev);
+        } catch (err) {
+          setTimeout(() => {
+            throw err;
+          });
+        }
+        setTimeout(pump, PACE_MS);
+      };
+      // The Studio sets pc.onicecandidate; take that slot over and feed it
+      // from our paced queue instead of the browser's back-to-back events.
+      Object.defineProperty(pc, "onicecandidate", {
+        configurable: true,
+        get: () => pageHandler,
+        set: (fn) => {
+          pageHandler = typeof fn === "function" ? fn : null;
+        },
+      });
+      NativePC.prototype.addEventListener.call(pc, "icecandidate", (ev) => {
+        queue.push(ev);
+        if (!pumping) {
+          pumping = true;
+          setTimeout(pump, PACE_MS);
+        }
+      });
       return pc;
     };
     WrappedPC.prototype = NativePC.prototype;
@@ -430,6 +475,9 @@ function connectWatchdogSource() {
     return !!(st && !st.__noraStandby && st.getVideoTracks && st.getVideoTracks().some((t) => t.readyState === "live"));
   }
   function describe() {
+    if (lastServerError && /TIMEOUT/.test(lastServerError) && lastPc && !lastPc.remoteDescription) {
+      return "the video connection request never reached the model (fal: TIMEOUT, no inputs)";
+    }
     if (lastServerError) return "Decart/fal said: " + lastServerError;
     if (!lastPc) return "the model never sent connection details";
     if (!lastPc.remoteDescription) return "the model never answered the video connection request";
