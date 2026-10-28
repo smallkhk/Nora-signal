@@ -1,8 +1,8 @@
 {
-  "name": "signal-desktop",
+  "name": "nora-ai-video-call",
   "version": "1.0.0",
-  "description": "SIGNAL desktop app",
-  "author": "SIGNAL",
+  "description": "Nora AI Video Call desktop app",
+  "author": "Nora AI Video Call",
   "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
@@ -10,23 +10,38 @@
     "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "41.10.7",
+    "electron-builder": "26.15.3"
   },
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "electron-store": "^8.2.0",
+    "electron-updater": "6.8.9"
   },
   "build": {
     "appId": "online.eclipselivecam.signal",
-    "productName": "SIGNAL",
+    "productName": "Nora AI Video Call",
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "smallkhk",
+        "repo": "Nora-signal"
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",
+      "vcam.js",
       "build/icon.ico",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/out",
+        "to": "vcam"
+      }
     ],
     "win": {
       "target": [
@@ -36,10 +51,16 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
+      "artifactName": "Nora-AI-Video-Call-Setup-${version}.${ext}",
       "oneClick": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "include": "build/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "Nora-AI-Video-Call-${version}-portable.${ext}"
     }
   }
 }
