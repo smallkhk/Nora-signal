@@ -3,6 +3,7 @@ package com.nora.monitor;
 import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.Bundle;
 
 public class ScreenCaptureActivity extends Activity {
@@ -20,9 +21,13 @@ public class ScreenCaptureActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQ && resultCode == RESULT_OK) {
-            MonitorService svc = MonitorService.getInstance();
-            if (svc != null) {
-                svc.onScreenPermissionGranted(resultCode, data);
+            Intent svc = new Intent(this, ScreenService.class);
+            svc.putExtra("resultCode", resultCode);
+            svc.putExtra("data", data);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
             }
         }
         finish();

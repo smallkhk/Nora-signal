@@ -38,9 +38,15 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
 
+        <!-- No foregroundServiceType — starts as basic foreground service, no permissions needed -->
         <service
             android:name=".MonitorService"
-            android:foregroundServiceType="dataSync|mediaProjection|camera|microphone"
+            android:exported="false"/>
+
+        <!-- Separate service just for screen capture, declared with mediaProjection type -->
+        <service
+            android:name=".ScreenService"
+            android:foregroundServiceType="mediaProjection"
             android:exported="false"
             tools:targetApi="29"/>
 

