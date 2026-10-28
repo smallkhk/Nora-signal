@@ -59,6 +59,7 @@ let isQuitting = false;
 let updateReady = false; // a newer version has been downloaded, pending restart
 let inputCameras = []; // real webcams reported by the page: [{ label }]
 let streamStoppedForQuit = false;
+let lastStreamFailure = ""; // why the last stream was auto-stopped, shown in the tray
 
 /**
  * Strict same-origin test. Deliberately NOT a `startsWith` check: the string
@@ -137,6 +138,18 @@ if (!gotLock) {
       updateTrayMenu();
     });
     ipcMain.handle("camera:preference", () => store.get("inputCamera", ""));
+
+    // The page stopped a stream that never went live (so fal stops billing).
+    ipcMain.on("stream:auto-stopped", (e, reason) => {
+      lastStreamFailure = String(reason || "unknown reason").slice(0, 200);
+      updateTrayMenu();
+      if (Notification.isSupported()) {
+        new Notification({
+          title: `${APP_NAME}: stream stopped`,
+          body: `The AI output didn't start within 15 seconds, so the stream was stopped to save credits. Reason: ${lastStreamFailure}`,
+        }).show();
+      }
+    });
     ipcMain.handle("vcam:status", () => vcam.status());
     ipcMain.handle("vcam:install", async () => {
       await vcam.install();
@@ -377,6 +390,7 @@ function updateTrayMenu() {
   const template = [
     { label: `Open ${APP_NAME}`, click: showMainWindow },
     { label: "Stop stream now", click: () => stopStreamInPage() },
+    ...(lastStreamFailure ? [{ label: `Last failed start: ${lastStreamFailure}`.slice(0, 120), enabled: false }] : []),
     { type: "separator" },
     { label: cameraStatusLabel(), enabled: false },
   ];

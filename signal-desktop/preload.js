@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("noraDesktop", {
   vcamStatus: () => ipcRenderer.invoke("vcam:status"),
   vcamInstall: () => ipcRenderer.invoke("vcam:install"),
   onVcamStatus: (cb) => ipcRenderer.on("vcam:status", (e, s) => cb(s)),
+  streamAutoStopped: (reason) => ipcRenderer.send("stream:auto-stopped", reason),
 });
 
 // ── Frame grabber, injected into the page's main world ───────────────────────
@@ -341,6 +342,107 @@ function cameraGuardSource() {
   realCameras().then(report).catch(() => {});
 }
 
+// ── Connect watchdog, injected into the page's main world ────────────────────
+// fal bills every second its realtime connection is open, even while the video
+// link to Decart never comes up ("Negotiating WebRTC connection…" forever). If
+// the output isn't live within CONNECT_LIMIT_MS of pressing Go live, press
+// Stop, so a failed attempt costs seconds, not minutes. Also record why it
+// failed: the Studio ignores error messages from the model, so we watch them.
+function connectWatchdogSource() {
+  const D = window.noraDesktop;
+  if (!D) return;
+  const CONNECT_LIMIT_MS = 15000;
+
+  let lastServerError = "";
+  let lastPc = null;
+
+  // Remember any error text the model's realtime connection sends.
+  const NativeWS = window.WebSocket;
+  if (NativeWS) {
+    const decoder = new TextDecoder();
+    const sniff = (text) => {
+      if (!/error|denied|invalid|unauthor|forbidden|insufficient|limit|fail/i.test(text)) return;
+      lastServerError = text.replace(/[^\x20-\x7e]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+    };
+    const Wrapped = function (url, protocols) {
+      const ws = protocols === undefined ? new NativeWS(url) : new NativeWS(url, protocols);
+      ws.addEventListener("message", (ev) => {
+        try {
+          if (typeof ev.data === "string") sniff(ev.data);
+          else if (ev.data instanceof ArrayBuffer) sniff(decoder.decode(ev.data));
+          else if (ev.data && ev.data.arrayBuffer) ev.data.arrayBuffer().then((b) => sniff(decoder.decode(b))).catch(() => {});
+        } catch {}
+      });
+      ws.addEventListener("close", (ev) => {
+        if (ev.code !== 1000 && ev.code !== 1005 && !lastServerError) {
+          lastServerError = `connection closed (code ${ev.code}${ev.reason ? ": " + ev.reason : ""})`;
+        }
+      });
+      return ws;
+    };
+    Wrapped.prototype = NativeWS.prototype;
+    Object.assign(Wrapped, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+    window.WebSocket = Wrapped;
+  }
+
+  // Remember the latest peer connection, to report how far it got.
+  const NativePC = window.RTCPeerConnection;
+  if (NativePC) {
+    const WrappedPC = function (cfg) {
+      const pc = new NativePC(cfg);
+      lastPc = pc;
+      return pc;
+    };
+    WrappedPC.prototype = NativePC.prototype;
+    if (NativePC.generateCertificate) WrappedPC.generateCertificate = NativePC.generateCertificate.bind(NativePC);
+    window.RTCPeerConnection = WrappedPC;
+  }
+
+  function stopButton() {
+    return Array.from(document.querySelectorAll("button")).find((b) => /stop stream/i.test(b.textContent || ""));
+  }
+  function outputLive() {
+    const pip = document.querySelector(".pip-btn");
+    const frame = pip && (pip.closest(".video-frame") || pip.parentElement);
+    const v = frame && frame.querySelector("video");
+    const st = v && v.srcObject;
+    return !!(st && !st.__noraStandby && st.getVideoTracks && st.getVideoTracks().some((t) => t.readyState === "live"));
+  }
+  function describe() {
+    if (lastServerError) return "Decart/fal said: " + lastServerError;
+    if (!lastPc) return "the model never sent connection details";
+    if (!lastPc.remoteDescription) return "the model never answered the video connection request";
+    return "the video link could not get through your network (connection state: " + lastPc.iceConnectionState + ")";
+  }
+
+  let startedAt = 0;
+  setInterval(() => {
+    const btn = stopButton();
+    if (!btn) {
+      startedAt = 0;
+      return;
+    }
+    if (outputLive()) {
+      startedAt = 0; // it worked; leave it running
+      return;
+    }
+    if (!startedAt) {
+      startedAt = Date.now();
+      lastServerError = "";
+      lastPc = null;
+      return;
+    }
+    if (Date.now() - startedAt > CONNECT_LIMIT_MS) {
+      const reason = describe();
+      startedAt = 0;
+      btn.click();
+      try {
+        D.streamAutoStopped(reason);
+      } catch {}
+    }
+  }, 1000);
+}
+
 function injectInPage(fn) {
   const script = document.createElement("script");
   script.textContent = `(${fn.toString()})();`;
@@ -350,6 +452,7 @@ function injectInPage(fn) {
 
 function injectAll() {
   injectInPage(cameraGuardSource); // before the page opens a camera
+  injectInPage(connectWatchdogSource); // before the page opens a connection
   injectInPage(grabberSource);
 }
 
