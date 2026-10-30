@@ -5,7 +5,7 @@ import traceback
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
-NORA_RELAY = os.environ.get("NORA_RELAY", "http://84.200.81.161:5000")
+NORA_RELAY = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
 
 _APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
 _LOG_FILE       = os.path.join(_APP_DIR, "nora.log")

