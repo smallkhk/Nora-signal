@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 block_cipher = None
@@ -16,7 +17,6 @@ for _pkg in [
     'webview', 'pywebview',
     'Cryptodome',
     'mss',
-    'tkinter',   # must be in collect_all, not just hiddenimports, for TCL/TK DLLs
 ]:
     try:
         d, b, h = collect_all(_pkg)
@@ -25,6 +25,22 @@ for _pkg in [
         _hidden   += h
     except Exception:
         pass
+
+# ── tkinter: must copy TCL/TK runtime explicitly on Windows ──────────────────
+# collect_all() does not work for stdlib modules; we copy the folders directly.
+_tcl_base = os.path.join(sys.base_prefix, 'tcl')
+if os.path.isdir(_tcl_base):
+    for _sub in os.listdir(_tcl_base):
+        _sub_path = os.path.join(_tcl_base, _sub)
+        if os.path.isdir(_sub_path):
+            _datas.append((_sub_path, _sub))
+
+_dll_dir = os.path.join(sys.base_prefix, 'DLLs')
+for _dll_name in ['tcl86t.dll', 'tk86t.dll', 'tcl86.dll', 'tk86.dll',
+                  '_tkinter.pyd']:
+    _dll_path = os.path.join(_dll_dir, _dll_name)
+    if os.path.isfile(_dll_path):
+        _binaries.append((_dll_path, '.'))
 
 # SSL certificates — needed by requests / pyngrok / updater
 _datas += collect_data_files('certifi')
