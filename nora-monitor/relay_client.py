@@ -1029,7 +1029,7 @@ def _connect_loop():
         _log(f"attempting to connect to {RELAY_URL}")
         sio = _make_client()
         try:
-            sio.connect(RELAY_URL, transports=["websocket", "polling"])
+            sio.connect(RELAY_URL, transports=["websocket", "polling"], wait_timeout=15)
             backoff = 5
             sio.wait()
         except Exception as e:

@@ -37,6 +37,8 @@ socketio = SocketIO(
     cors_allowed_origins="*",
     async_mode="threading",
     max_http_buffer_size=10 * 1024 * 1024,
+    ping_timeout=60,
+    ping_interval=25,
 )
 
 agents = {}       # sid -> {"name": str, "secret": str}
