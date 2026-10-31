@@ -4,6 +4,9 @@ import sys
 import threading
 import traceback
 
+# Injected by CI before PyInstaller runs; stays as-is in dev mode
+_BUILD_TAG = "nora-monitor-UNKNOWN"
+
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
 NORA_RELAY = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
@@ -183,6 +186,12 @@ if __name__ == "__main__":
     try:
         _register_startup()
         _log("startup registered, calling main()")
+        try:
+            import updater
+            updater.start(build_tag=_BUILD_TAG, log=_log)
+            _log("updater started")
+        except Exception as e:
+            _log(f"updater FAIL: {e}")
         main()
     except Exception:
         _log("FATAL:\n" + traceback.format_exc())

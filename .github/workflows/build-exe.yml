@@ -31,6 +31,14 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pyaudio pytesseract
 
+      - name: Inject build tag into app.py
+        shell: bash
+        run: |
+          SHORT=$(git rev-parse --short HEAD)
+          TAG="nora-monitor-${SHORT}"
+          sed -i "s/nora-monitor-UNKNOWN/${TAG}/" nora-monitor/app.py
+          echo "Injected tag: $TAG"
+
       - name: Build EXE
         working-directory: nora-monitor
         run: pyinstaller nora.spec

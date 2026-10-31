@@ -63,6 +63,7 @@ a = Analysis(
         'webview.platforms.winforms',
         'configparser',
         'pytesseract',
+        'updater',
     ],
     hookspath=[],
     runtime_hooks=[],
