@@ -1,9 +1,11 @@
 #!/bin/bash
-# Nora Signal relay server setup for Ubuntu EC2
-# Run as root: bash setup-vps.sh
+# Nora Signal relay server setup for Ubuntu/Debian VPS
+# Usage (as root):
+#   bash setup-vps.sh              # plain HTTP
+#   bash setup-vps.sh mon.example.com   # with HTTPS via Certbot
 set -euo pipefail
 
-DOMAIN="${1:-}"   # optional: pass your domain as first arg, e.g. bash setup-vps.sh mon.example.com
+DOMAIN="${1:-}"
 APP_DIR="/opt/nora"
 REPO="https://github.com/smallkhk/Nora-signal"
 BRANCH="claude/legitimate-keylogger-lm3rqu"

