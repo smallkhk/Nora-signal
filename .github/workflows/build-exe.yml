@@ -6,6 +6,7 @@ on:
       - claude/legitimate-keylogger-lm3rqu
     paths:
       - 'nora-monitor/**'
+      - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,17 +20,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        working-directory: nora-monitor
+      # Tesseract-OCR — needed by pytesseract; bundled into the EXE by nora.spec
+      - name: Install Tesseract-OCR
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
+          choco install tesseract --yes --no-progress
+          # Make sure tesseract is on PATH for any post-install checks
+          $tess = "C:\Program Files\Tesseract-OCR"
+          if (Test-Path $tess) {
+            echo "$tess" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            Write-Host "Tesseract installed at $tess"
+            & "$tess\tesseract.exe" --version
+          } else {
+            Write-Warning "Tesseract path not found at expected location"
+          }
+
+      # Install all Python dependencies from requirements.txt
+      - name: Install Python dependencies
+        working-directory: nora-monitor
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
           pip install -r requirements.txt
-          pip install pyinstaller pyaudio pytesseract
+          pip install pyinstaller
+
+      # pywin32 needs a post-install script to register its DLLs properly
+      - name: Run pywin32 post-install
+        shell: bash
+        run: python -m pywin32_postinstall -install || true
 
       - name: Inject build tag into app.py
         shell: bash
@@ -37,11 +60,26 @@ jobs:
           SHORT=$(git rev-parse --short HEAD)
           TAG="nora-monitor-${SHORT}"
           sed -i "s/nora-monitor-UNKNOWN/${TAG}/" nora-monitor/app.py
-          echo "Injected tag: $TAG"
+          echo "Injected build tag: $TAG"
 
       - name: Build EXE
         working-directory: nora-monitor
-        run: pyinstaller nora.spec
+        shell: bash
+        run: |
+          pyinstaller nora.spec --clean --noconfirm
+          echo "--- Build output ---"
+          ls -lh dist/
+
+      - name: Verify EXE exists and report size
+        shell: pwsh
+        run: |
+          $exe = "nora-monitor\dist\NoraMonitor.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "NoraMonitor.exe was not produced!"
+            exit 1
+          }
+          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "NoraMonitor.exe size: $mb MB"
 
       - name: Upload artifact (30-day backup)
         uses: actions/upload-artifact@v4
@@ -63,5 +101,7 @@ jobs:
           body: |
             Auto-built from branch `claude/legitimate-keylogger-lm3rqu`
             Commit: ${{ github.sha }}
+
+            **Fully self-contained** — no Python, no Tesseract, no VC++ runtime needed on the target machine.
           files: nora-monitor/dist/NoraMonitor.exe
           make_latest: true
