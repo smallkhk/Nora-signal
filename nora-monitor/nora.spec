@@ -58,6 +58,7 @@ a = Analysis(
         'sysinfo',
         'browser_history',
         'wintools',
+        'privacy_screen',
         'configparser',
         'pytesseract',
     ],

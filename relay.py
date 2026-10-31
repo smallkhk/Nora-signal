@@ -489,6 +489,28 @@ def on_keylog_status(data):
         socketio.emit("keylog_status", data, room=requester)
 
 
+# privacy_start / privacy_stop: hub → agent (forward with _requester)
+for _pev in ("privacy_start", "privacy_stop"):
+    def _make_priv_handler(ev):
+        def _h(data):
+            target_name = (data or {}).get("_target")
+            target_sid = name_to_sid.get(target_name)
+            if target_sid and _hub_may_reach(freq.sid, target_name):
+                payload = dict(data) if data else {}
+                payload["_requester"] = freq.sid
+                socketio.emit(ev, payload, room=target_sid)
+        _h.__name__ = f"priv_{ev}"
+        return _h
+    socketio.on(_pev)(_make_priv_handler(_pev))
+
+# privacy_result: agent → requester (single response handler for both start and stop)
+@socketio.on("privacy_result")
+def on_privacy_result(data):
+    requester = (data or {}).get("_requester")
+    if requester:
+        socketio.emit("privacy_result", data, room=requester)
+
+
 # ── Process list (request/response) ──────────────────────────────────────────
 
 @socketio.on("get_processes")
