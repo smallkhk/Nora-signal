@@ -866,6 +866,32 @@ Please do not touch the computer.</textarea>
 
 <div id="toasts"></div>
 
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" data-action="open">📂 Open / Edit</div>
+  <div class="ctx-item" data-action="rename">✏️ Rename</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy">📋 Copy</div>
+  <div class="ctx-item" data-action="cut">✂️ Cut</div>
+  <div class="ctx-item" data-action="paste" id="ctx-paste">📌 Paste here</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="download" id="ctx-dl">⬇ Download</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="delete">🗑 Delete</div>
+</div>
+
+<!-- Rename modal -->
+<div id="rename-modal">
+  <div id="rename-box">
+    <h3>Rename</h3>
+    <input id="rename-inp" type="text" placeholder="New name…">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="act-btn" id="rename-cancel">Cancel</button>
+      <button class="act-btn primary" id="rename-ok">Rename</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
 <script>
 /* ── Utils ───────────────────────────────────────────────── */
@@ -1868,32 +1894,6 @@ socket.on("privacy_result",d=>{_prvResult(d)});
   $("theme-btn").addEventListener("click",()=>{dark=!dark;apply();try{localStorage.setItem("nora_theme",dark?"dark":"light")}catch{}});
 })();
 </script>
-
-<!-- Context menu -->
-<div id="ctx-menu">
-  <div class="ctx-item" data-action="open">📂 Open / Edit</div>
-  <div class="ctx-item" data-action="rename">✏️ Rename</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="copy">📋 Copy</div>
-  <div class="ctx-item" data-action="cut">✂️ Cut</div>
-  <div class="ctx-item" data-action="paste" id="ctx-paste">📌 Paste here</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="download" id="ctx-dl">⬇ Download</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" data-action="delete">🗑 Delete</div>
-</div>
-
-<!-- Rename modal -->
-<div id="rename-modal">
-  <div id="rename-box">
-    <h3>Rename</h3>
-    <input id="rename-inp" type="text" placeholder="New name…">
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="act-btn" id="rename-cancel">Cancel</button>
-      <button class="act-btn primary" id="rename-ok">Rename</button>
-    </div>
-  </div>
-</div>
 
 </body>
 </html>
