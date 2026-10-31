@@ -66,7 +66,7 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 
 /* ── Screen ──────────────────────────────────────────────── */
 #scr-wrap{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#000;position:relative}
-#scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair;outline:none}
+#scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair;outline:none;touch-action:none}
 #scr-canvas.rc-on{cursor:none;outline:2px solid var(--accent)}
 #scr-overlay{position:absolute;top:8px;right:8px;display:flex;gap:6px}
 .scr-btn{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer}
@@ -75,9 +75,14 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 #rc-bar{background:var(--surface);border-top:1px solid var(--border);padding:5px 14px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
 #rc-status{font-size:.75rem;color:var(--text3);margin-left:auto}
 #rc-status.on{color:var(--accent2)}
-#desk-ctrl{background:var(--surface);border-top:1px solid var(--border);padding:6px 14px;display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
 .dc-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:.74rem;cursor:pointer}
 .dc-btn:hover{border-color:var(--accent);color:var(--accent)}
+/* Quick-keys toolbar (touch + desktop) */
+#qk-bar{background:var(--surface);border-top:1px solid var(--border);padding:6px 10px;display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;align-items:center}
+.qk{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:5px 9px;font-size:.75rem;cursor:pointer;user-select:none;-webkit-user-select:none;white-space:nowrap}
+.qk:active{background:var(--accent-dim);color:var(--accent2)}
+.qk.wide{min-width:52px;text-align:center}
+.qk-sep{width:1px;background:var(--border);height:20px;flex-shrink:0}
 #kb-bar{background:var(--surface);border-top:1px solid var(--border);padding:8px 14px;display:flex;gap:8px;flex-shrink:0}
 #kb-in{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:.82rem;outline:none}
 #kb-in:focus{border-color:var(--accent)}
@@ -332,6 +337,29 @@ body.light #scr-wrap{background:#e4e4e7}
     <div id="kb-bar">
       <input id="kb-in" type="text" placeholder="Type text to send to remote PC (or enable RC Mode and type on canvas)...">
       <button id="kb-send">Send</button>
+    </div>
+    <!-- Quick-keys toolbar (visible on touch/iPad, also usable on desktop) -->
+    <div id="qk-bar">
+      <button class="qk wide" data-qk-key="Escape" data-qk-code="Escape">Esc</button>
+      <button class="qk wide" data-qk-key="Tab" data-qk-code="Tab">Tab</button>
+      <div class="qk-sep"></div>
+      <button class="qk" data-qk-key="ArrowUp" data-qk-code="ArrowUp">↑</button>
+      <button class="qk" data-qk-key="ArrowDown" data-qk-code="ArrowDown">↓</button>
+      <button class="qk" data-qk-key="ArrowLeft" data-qk-code="ArrowLeft">←</button>
+      <button class="qk" data-qk-key="ArrowRight" data-qk-code="ArrowRight">→</button>
+      <div class="qk-sep"></div>
+      <button class="qk" data-qk-hotkey="ctrl+c">Ctrl+C</button>
+      <button class="qk" data-qk-hotkey="ctrl+v">Ctrl+V</button>
+      <button class="qk" data-qk-hotkey="ctrl+z">Ctrl+Z</button>
+      <button class="qk" data-qk-hotkey="ctrl+a">Ctrl+A</button>
+      <button class="qk" data-qk-hotkey="ctrl+x">Ctrl+X</button>
+      <div class="qk-sep"></div>
+      <button class="qk wide" data-qk-key="Backspace" data-qk-code="Backspace">⌫</button>
+      <button class="qk wide" data-qk-key="Enter" data-qk-code="Enter">↵</button>
+      <button class="qk" data-qk-key="Delete" data-qk-code="Delete">Del</button>
+      <div class="qk-sep"></div>
+      <button class="qk" data-qk-key="Meta" data-qk-code="MetaLeft">Win</button>
+      <button class="qk" id="qk-kbd" title="Open keyboard input">⌨</button>
     </div>
   </div>
 
@@ -989,6 +1017,141 @@ $("fs-btn").addEventListener("click",()=>{const w=$("scr-wrap");document.fullscr
 $$("[data-dc]").forEach(b=>b.addEventListener("click",()=>{if(agent)socket.emit("desktop_cmd",{cmd:b.dataset.dc,_target:agent})}));
 $("kb-send").addEventListener("click",()=>{const t=$("kb-in").value;if(!t||!agent)return;socket.emit("command",{action:"type",text:t,_target:agent});$("kb-in").value=""});
 $("kb-in").addEventListener("keydown",e=>{if(e.key==="Enter")$("kb-send").click()});
+
+/* ── Quick-keys toolbar ───────────────────────────────────── */
+function _qkPress(key,code){
+  if(!agent)return;
+  _cmd({action:"keydown",key,code});
+  setTimeout(()=>_cmd({action:"keyup",key,code}),60);
+}
+function _qkHotkey(combo){
+  if(!agent)return;
+  const parts=combo.split("+");
+  parts.forEach(k=>_cmd({action:"keydown",key:k==="ctrl"?"Control":k==="shift"?"Shift":k==="alt"?"Alt":k,code:k==="ctrl"?"ControlLeft":k==="shift"?"ShiftLeft":k==="alt"?"AltLeft":k}));
+  setTimeout(()=>{
+    [...parts].reverse().forEach(k=>_cmd({action:"keyup",key:k==="ctrl"?"Control":k==="shift"?"Shift":k==="alt"?"Alt":k,code:k==="ctrl"?"ControlLeft":k==="shift"?"ShiftLeft":k==="alt"?"AltLeft":k}));
+  },80);
+}
+$$("[data-qk-key]").forEach(b=>{
+  b.addEventListener("pointerdown",e=>{e.preventDefault();_qkPress(b.dataset.qkKey,b.dataset.qkCode||b.dataset.qkKey)});
+});
+$$("[data-qk-hotkey]").forEach(b=>{
+  b.addEventListener("pointerdown",e=>{e.preventDefault();_qkHotkey(b.dataset.qkHotkey)});
+});
+$("qk-kbd").addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  $("kb-in").focus();
+});
+
+/* ── Touch / iPad support ────────────────────────────────── */
+(function(){
+  let _tid=null,_tx0=0,_ty0=0,_tMoved=false,_tLong=false,_tLongTimer=null;
+  let _t2Start=null; // second finger info for 2-finger gestures
+  let _tLast=0;  // for double-tap detection
+  const LONG_MS=500, MOVE_THRESH=10;
+
+  function _tpos(touch){
+    const r=cvs.getBoundingClientRect();
+    return{x:(touch.clientX-r.left)/r.width, y:(touch.clientY-r.top)/r.height};
+  }
+  function _cancelLong(){clearTimeout(_tLongTimer);_tLongTimer=null}
+
+  cvs.addEventListener("touchstart",e=>{
+    e.preventDefault();
+    if(!agent)return;
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      _tid=t.identifier;
+      _tx0=t.clientX;_ty0=t.clientY;
+      _tMoved=false;_tLong=false;
+      const{x,y}=_tpos(t);
+      // Move cursor to touch point immediately
+      _cmd({action:"mousemove",x,y,sw:1,sh:1});
+      // Long-press timer → start drag
+      _tLongTimer=setTimeout(()=>{
+        if(!_tMoved){
+          _tLong=true;
+          _cmd({action:"mousedown",button:0,x,y,sw:1,sh:1});
+        }
+      },LONG_MS);
+      // Enter RC-like state on touch (no toggle needed)
+      if(!_rcOn)_rcEnable();
+    } else if(e.touches.length===2){
+      _cancelLong();
+      _t2Start={y0:(e.touches[0].clientY+e.touches[1].clientY)/2};
+    }
+  },{passive:false});
+
+  cvs.addEventListener("touchmove",e=>{
+    e.preventDefault();
+    if(!agent)return;
+    if(e.touches.length===2&&_t2Start!==null){
+      // Two-finger scroll
+      const cy=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      const dy=cy-_t2Start.y0;
+      if(Math.abs(dy)>8){
+        _cmd({action:"scroll",dy:-dy*2});
+        _t2Start.y0=cy;
+      }
+      return;
+    }
+    // Single-finger drag
+    const t=Array.from(e.changedTouches).find(x=>x.identifier===_tid);
+    if(!t)return;
+    const dx=t.clientX-_tx0,dy_=t.clientY-_ty0;
+    if(!_tMoved&&Math.sqrt(dx*dx+dy_*dy_)>MOVE_THRESH){
+      _tMoved=true;_cancelLong();
+    }
+    if(_tMoved){
+      const{x,y}=_tpos(t);
+      _cmd({action:"mousemove",x,y,sw:1,sh:1});
+    }
+  },{passive:false});
+
+  cvs.addEventListener("touchend",e=>{
+    e.preventDefault();
+    if(!agent)return;
+    _cancelLong();
+    const touch=Array.from(e.changedTouches).find(x=>x.identifier===_tid);
+    if(e.touches.length===0&&e.changedTouches.length===2){
+      // Two-finger tap → right-click at midpoint
+      const mid={clientX:(e.changedTouches[0].clientX+e.changedTouches[1].clientX)/2,clientY:(e.changedTouches[0].clientY+e.changedTouches[1].clientY)/2};
+      const{x,y}=_tpos(mid);
+      _cmd({action:"mouse_right",x,y,sw:1,sh:1});
+      _t2Start=null;return;
+    }
+    _t2Start=null;
+    if(!touch)return;
+    const{x,y}=_tpos(touch);
+    if(_tLong){
+      // End of long-press drag
+      _cmd({action:"mouseup",button:0,x,y,sw:1,sh:1});
+    } else if(!_tMoved){
+      // Tap — check double tap
+      const now=Date.now();
+      if(now-_tLast<350){
+        // Double-tap → double click
+        _cmd({action:"mouse_click",x,y,sw:1,sh:1});
+        _cmd({action:"mouse_click",x,y,sw:1,sh:1});
+        _tLast=0;
+      } else {
+        _tLast=now;
+        // Single tap → left click
+        _cmd({action:"mouse_click",x,y,sw:1,sh:1});
+      }
+    }
+    _tLong=false;_tMoved=false;
+  },{passive:false});
+
+  cvs.addEventListener("touchcancel",e=>{
+    _cancelLong();
+    if(_tLong&&agent){
+      const t=Array.from(e.changedTouches).find(x=>x.identifier===_tid);
+      if(t){const{x,y}=_tpos(t);_cmd({action:"mouseup",button:0,x,y,sw:1,sh:1})}
+    }
+    _tLong=false;_tMoved=false;_t2Start=null;
+  },{passive:false});
+})();
 
 /* ── Keylogs ─────────────────────────────────────────────── */
 let _klN=0,_klApp="",_klLn=null,_klBlk=null;
