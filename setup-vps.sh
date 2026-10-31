@@ -20,7 +20,7 @@ echo "=== 2. Clone / update repo ==="
 if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" fetch origin "$BRANCH"
   git -C "$APP_DIR" checkout "$BRANCH"
-  git -C "$APP_DIR" pull origin "$BRANCH"
+  git -C "$APP_DIR" reset --hard origin/"$BRANCH"
 else
   git clone --branch "$BRANCH" "$REPO" "$APP_DIR"
 fi
