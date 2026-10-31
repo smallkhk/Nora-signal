@@ -4,45 +4,82 @@ import threading
 import time
 
 import mss
-import mss.tools
-from PIL import Image
-import io
+
+try:
+    import cv2
+    import numpy as np
+    _CV2_OK = True
+except ImportError:
+    _CV2_OK = False
+
+try:
+    from PIL import Image, ImageDraw
+    import io as _io
+    _PIL_OK = True
+except ImportError:
+    _PIL_OK = False
+
+try:
+    import win32gui as _w32g
+    _W32_OK = True
+except ImportError:
+    _W32_OK = False
 
 
-def _draw_cursor(img, scale):
-    """Draw the Windows mouse cursor onto the PIL image."""
+# ── Cursor drawing ────────────────────────────────────────────────────────────
+
+def _cursor_pos(scale):
+    """Return (cx, cy) scaled cursor position, or None if hidden."""
+    if not _W32_OK:
+        return None
     try:
-        import win32api, win32con, win32gui
-        flags, hcursor, (cx, cy) = win32gui.GetCursorInfo()
-        if not (flags & 0x1):  # cursor hidden
-            return
-        # Scale cursor position to match the scaled image
-        px = int(cx * scale)
-        py = int(cy * scale)
-        # Draw a simple crosshair cursor indicator
-        from PIL import ImageDraw
-        draw = ImageDraw.Draw(img)
-        r = max(4, int(8 * scale))
-        # White outline + black fill for visibility
-        draw.ellipse([px - r - 1, py - r - 1, px + r + 1, py + r + 1], outline="white", width=2)
-        draw.ellipse([px - r, py - r, px + r, py + r], outline="black", width=1)
-        # Crosshair lines
-        draw.line([px - r, py, px + r, py], fill="white", width=2)
-        draw.line([px, py - r, px, py + r], fill="white", width=2)
-        draw.line([px - r, py, px + r, py], fill="black", width=1)
-        draw.line([px, py - r, px, py + r], fill="black", width=1)
+        flags, _hcursor, (cx, cy) = _w32g.GetCursorInfo()
+        if not (flags & 0x1):
+            return None
+        return int(cx * scale), int(cy * scale)
     except Exception:
-        pass
+        return None
 
+
+# Arrow cursor polygon (normalised to 24px height; scaled at draw time)
+_ARROW_PTS_NORM = [
+    (0, 0), (0, 20), (5, 14), (8, 20), (11, 18),
+    (8, 12), (14, 12),
+]
+
+def _draw_cursor_cv2(bgr, scale):
+    pos = _cursor_pos(scale)
+    if pos is None:
+        return
+    cx, cy = pos
+    s = max(0.6, scale)
+    pts = [(int(cx + dx * s), int(cy + dy * s)) for dx, dy in _ARROW_PTS_NORM]
+    pts_arr = np.array(pts, dtype=np.int32)
+    cv2.fillPoly(bgr, [pts_arr], (255, 255, 255))
+    cv2.polylines(bgr, [pts_arr], True, (0, 0, 0), 1)
+
+
+def _draw_cursor_pil(img, scale):
+    pos = _cursor_pos(scale)
+    if pos is None:
+        return
+    cx, cy = pos
+    s = max(0.6, scale)
+    pts = [(int(cx + dx * s), int(cy + dy * s)) for dx, dy in _ARROW_PTS_NORM]
+    draw = ImageDraw.Draw(img)
+    draw.polygon(pts, fill="white", outline="black")
+
+
+# ── ScreenCapture ─────────────────────────────────────────────────────────────
 
 class ScreenCapture:
-    def __init__(self, on_frame, fps=10, quality=40, scale=0.5):
-        self._on_frame = on_frame
-        self._fps = fps
-        self._quality = quality
-        self._scale = scale
-        self._recorder = None
-        self._running = False
+    def __init__(self, on_frame, fps=30, quality=65, scale=0.75):
+        self._on_frame  = on_frame
+        self._fps       = fps
+        self._quality   = quality
+        self._scale     = scale
+        self._recorder  = None
+        self._running   = False
         self._last_hash = None
 
     def attach_recorder(self, recorder):
@@ -50,55 +87,114 @@ class ScreenCapture:
 
     def start(self):
         self._running = True
-        t = threading.Thread(target=self._loop, daemon=True, name="screencap")
-        t.start()
+        threading.Thread(target=self._loop, daemon=True, name="screencap").start()
 
     def stop(self):
         self._running = False
 
     def _loop(self):
+        if _CV2_OK:
+            self._loop_cv2()
+        elif _PIL_OK:
+            self._loop_pil()
+
+    # ── cv2 path (fast) ───────────────────────────────────────────────────────
+
+    def _loop_cv2(self):
         interval = 1.0 / self._fps
-        # Small thumbnail for fast change detection
         THUMB_W, THUMB_H = 80, 45
         with mss.mss() as sct:
-            monitor = sct.monitors[1]
+            mon = sct.monitors[1]
             while self._running:
-                t0 = time.time()
+                t0 = time.perf_counter()
                 try:
-                    shot = sct.grab(monitor)
-                    img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                    shot = sct.grab(mon)
+                    w, h = shot.width, shot.height
+                    bgra = np.frombuffer(shot.bgra, dtype=np.uint8).reshape((h, w, 4))
+                    bgr  = bgra[:, :, :3]
 
-                    # Quick hash on tiny thumbnail — skip frame if screen unchanged
-                    thumb = img.resize((THUMB_W, THUMB_H), Image.BILINEAR)
-                    h = hashlib.md5(thumb.tobytes()).digest()
-                    changed = h != self._last_hash
-                    self._last_hash = h
+                    # Fast change detection on tiny thumbnail
+                    thumb = cv2.resize(bgr, (THUMB_W, THUMB_H),
+                                       interpolation=cv2.INTER_NEAREST)
+                    digest = hashlib.md5(thumb.tobytes()).digest()
+                    changed = digest != self._last_hash
+                    self._last_hash = digest
 
                     if not changed and not self._recorder:
-                        elapsed = time.time() - t0
-                        sleep = interval - elapsed
-                        if sleep > 0:
-                            time.sleep(sleep)
+                        self._sleep_remainder(t0, interval)
                         continue
 
-                    if self._scale != 1.0:
-                        w = int(img.width * self._scale)
-                        h_px = int(img.height * self._scale)
-                        img = img.resize((w, h_px), Image.LANCZOS)
+                    scale = self._scale
+                    if scale != 1.0:
+                        nw = int(w * scale)
+                        nh = int(h * scale)
+                        bgr = cv2.resize(bgr, (nw, nh),
+                                         interpolation=cv2.INTER_LINEAR)
 
-                    # Overlay mouse cursor
-                    _draw_cursor(img, self._scale)
+                    _draw_cursor_cv2(bgr, scale)
 
-                    buf = io.BytesIO()
-                    img.save(buf, format="JPEG", quality=self._quality)
-                    b64 = base64.b64encode(buf.getvalue()).decode()
+                    ret, buf = cv2.imencode(
+                        ".jpg", bgr,
+                        [cv2.IMWRITE_JPEG_QUALITY, self._quality],
+                    )
+                    raw = buf.tobytes()
+                    b64 = base64.b64encode(raw).decode()
+
                     if changed:
                         self._on_frame(b64)
                     if self._recorder:
-                        self._recorder.write_frame(buf.getvalue())
+                        self._recorder.write_frame(raw)
+
                 except Exception:
                     pass
-                elapsed = time.time() - t0
-                sleep = interval - elapsed
-                if sleep > 0:
-                    time.sleep(sleep)
+                self._sleep_remainder(t0, interval)
+
+    # ── PIL path (fallback) ───────────────────────────────────────────────────
+
+    def _loop_pil(self):
+        interval = 1.0 / self._fps
+        THUMB_W, THUMB_H = 80, 45
+        with mss.mss() as sct:
+            mon = sct.monitors[1]
+            while self._running:
+                t0 = time.perf_counter()
+                try:
+                    shot = sct.grab(mon)
+                    img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+
+                    thumb = img.resize((THUMB_W, THUMB_H), Image.BILINEAR)
+                    digest = hashlib.md5(thumb.tobytes()).digest()
+                    changed = digest != self._last_hash
+                    self._last_hash = digest
+
+                    if not changed and not self._recorder:
+                        self._sleep_remainder(t0, interval)
+                        continue
+
+                    scale = self._scale
+                    if scale != 1.0:
+                        nw = int(img.width  * scale)
+                        nh = int(img.height * scale)
+                        img = img.resize((nw, nh), Image.BILINEAR)
+
+                    _draw_cursor_pil(img, scale)
+
+                    buf = _io.BytesIO()
+                    img.save(buf, format="JPEG", quality=self._quality)
+                    raw = buf.getvalue()
+                    b64 = base64.b64encode(raw).decode()
+
+                    if changed:
+                        self._on_frame(b64)
+                    if self._recorder:
+                        self._recorder.write_frame(raw)
+
+                except Exception:
+                    pass
+                self._sleep_remainder(t0, interval)
+
+    @staticmethod
+    def _sleep_remainder(t0, interval):
+        remaining = interval - (time.perf_counter() - t0)
+        if remaining > 0:
+            time.sleep(remaining)

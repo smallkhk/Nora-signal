@@ -66,10 +66,15 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 
 /* ── Screen ──────────────────────────────────────────────── */
 #scr-wrap{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#000;position:relative}
-#scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair}
+#scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair;outline:none}
+#scr-canvas.rc-on{cursor:none;outline:2px solid var(--accent)}
 #scr-overlay{position:absolute;top:8px;right:8px;display:flex;gap:6px}
 .scr-btn{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer}
 .scr-btn:hover{background:rgba(255,255,255,.12)}
+.scr-btn.rc-active{background:rgba(99,102,241,.75);border-color:rgba(99,102,241,.9)}
+#rc-bar{background:var(--surface);border-top:1px solid var(--border);padding:5px 14px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+#rc-status{font-size:.75rem;color:var(--text3);margin-left:auto}
+#rc-status.on{color:var(--accent2)}
 #desk-ctrl{background:var(--surface);border-top:1px solid var(--border);padding:6px 14px;display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
 .dc-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:.74rem;cursor:pointer}
 .dc-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -310,18 +315,22 @@ body.light #scr-wrap{background:#e4e4e7}
   <!-- SCREEN -->
   <div class="panel on" id="scr">
     <div id="scr-wrap">
-      <canvas id="scr-canvas"></canvas>
-      <div id="scr-overlay"><button class="scr-btn" id="fs-btn">Fullscreen</button></div>
+      <canvas id="scr-canvas" tabindex="0"></canvas>
+      <div id="scr-overlay">
+        <button class="scr-btn" id="rc-btn">&#x1F5B1; Remote Control</button>
+        <button class="scr-btn" id="fs-btn">&#x26F6; Fullscreen</button>
+      </div>
     </div>
-    <div id="desk-ctrl">
-      <span style="color:var(--text3);font-size:.72rem;align-self:center">Desktop:</span>
+    <div id="rc-bar">
+      <span style="font-size:.75rem;color:var(--text3)">Desktop:</span>
       <button class="dc-btn" data-dc="new">+ New</button>
       <button class="dc-btn" data-dc="left">&larr; Left</button>
       <button class="dc-btn" data-dc="right">Right &rarr;</button>
       <button class="dc-btn" data-dc="close">&times; Close</button>
+      <span id="rc-status">RC off — click canvas to control</span>
     </div>
     <div id="kb-bar">
-      <input id="kb-in" type="text" placeholder="Type here to send keys to remote PC...">
+      <input id="kb-in" type="text" placeholder="Type text to send to remote PC (or enable RC Mode and type on canvas)...">
       <button id="kb-send">Send</button>
     </div>
   </div>
@@ -870,10 +879,112 @@ socket.on("frame",d=>{
   img.src="data:image/jpeg;base64,"+d.data;
 });
 
-function _spos(e){const r=cvs.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}
-cvs.addEventListener("click",e=>{if(!agent)return;const{x,y}=_spos(e);socket.emit("command",{action:"mouse_click",x,y,_target:agent})});
-cvs.addEventListener("contextmenu",e=>{e.preventDefault();if(!agent)return;const{x,y}=_spos(e);socket.emit("command",{action:"mouse_right",x,y,_target:agent})});
-cvs.addEventListener("wheel",e=>{e.preventDefault();if(!agent)return;socket.emit("command",{action:"scroll",dy:e.deltaY>0?3:-3,_target:agent})},{passive:false});
+/* ── Remote Control mode ─────────────────────────────────── */
+let _rcOn=false, _mmLast=0;
+
+function _cpos(e){
+  const r=cvs.getBoundingClientRect();
+  return{x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height};
+}
+
+function _cmd(payload){
+  if(!agent)return;
+  socket.emit("command",Object.assign({_target:agent},payload));
+}
+
+function _rcEnable(){
+  _rcOn=true;
+  cvs.classList.add("rc-on");
+  $("rc-btn").classList.add("rc-active");
+  $("rc-btn").textContent="🟢 Release (Esc)";
+  $("rc-status").textContent="RC on — Esc to release";
+  $("rc-status").classList.add("on");
+  cvs.focus();
+}
+function _rcDisable(){
+  _rcOn=false;
+  cvs.classList.remove("rc-on");
+  $("rc-btn").classList.remove("rc-active");
+  $("rc-btn").textContent="🖱 Remote Control";
+  $("rc-status").textContent="RC off — click canvas to control";
+  $("rc-status").classList.remove("on");
+  cvs.blur();
+}
+
+$("rc-btn").addEventListener("click",()=>_rcOn?_rcDisable():_rcEnable());
+
+// Click canvas to enter RC mode
+cvs.addEventListener("click",e=>{
+  if(!_rcOn){_rcEnable();return}
+  // In RC mode, click is handled as mousedown+mouseup; nothing extra needed
+});
+
+// Throttled mouse move (max 60/s = every ~16ms)
+cvs.addEventListener("mousemove",e=>{
+  if(!_rcOn||!agent)return;
+  const now=Date.now();
+  if(now-_mmLast<16)return;
+  _mmLast=now;
+  const{x,y}=_cpos(e);
+  _cmd({action:"mousemove",x,y,sw:1,sh:1});
+});
+
+cvs.addEventListener("mousedown",e=>{
+  if(!_rcOn||!agent)return;
+  e.preventDefault();
+  // Ensure cursor is positioned first
+  const{x,y}=_cpos(e);
+  _cmd({action:"mousemove",x,y,sw:1,sh:1});
+  _cmd({action:"mousedown",button:e.button,x,y,sw:1,sh:1});
+});
+
+cvs.addEventListener("mouseup",e=>{
+  if(!_rcOn||!agent)return;
+  const{x,y}=_cpos(e);
+  _cmd({action:"mouseup",button:e.button,x,y,sw:1,sh:1});
+});
+
+cvs.addEventListener("contextmenu",e=>{
+  e.preventDefault();
+  if(!_rcOn&&agent){
+    // RC off: simple right-click
+    const{x,y}=_cpos(e);
+    _cmd({action:"mouse_right",x,y,sw:1,sh:1});
+  }
+  // RC on: contextmenu fires after mousedown/mouseup already sent — do nothing
+});
+
+cvs.addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(!agent)return;
+  _cmd({action:"scroll",dy:e.deltaY,_target:agent});
+},{passive:false});
+
+// Keyboard — only active in RC mode
+cvs.addEventListener("keydown",e=>{
+  if(!_rcOn||!agent)return;
+  // Esc exits RC mode
+  if(e.key==="Escape"){_rcDisable();return}
+  e.preventDefault();e.stopPropagation();
+  _cmd({action:"keydown",key:e.key,code:e.code});
+});
+
+cvs.addEventListener("keyup",e=>{
+  if(!_rcOn||!agent)return;
+  if(e.key==="Escape")return;
+  e.preventDefault();e.stopPropagation();
+  _cmd({action:"keyup",key:e.key,code:e.code});
+});
+
+// Lose focus → release all held modifiers and exit RC
+cvs.addEventListener("blur",()=>{
+  if(!_rcOn)return;
+  ["Shift","Control","Alt","Meta"].forEach(k=>{
+    _cmd({action:"keyup",key:k,code:k+"Left"});
+  });
+  _rcDisable();
+});
+
 $("fs-btn").addEventListener("click",()=>{const w=$("scr-wrap");document.fullscreenElement?document.exitFullscreen():w.requestFullscreen?.()});
 $$("[data-dc]").forEach(b=>b.addEventListener("click",()=>{if(agent)socket.emit("desktop_cmd",{cmd:b.dataset.dc,_target:agent})}));
 $("kb-send").addEventListener("click",()=>{const t=$("kb-in").value;if(!t||!agent)return;socket.emit("command",{action:"type",text:t,_target:agent});$("kb-in").value=""});
