@@ -471,6 +471,7 @@ body.light #scr-wrap{background:#e4e4e7}
     <div class="ph">
       <h2>System Info</h2>
       <button class="act-btn primary" id="si-fetch">Refresh</button>
+      <button class="act-btn" id="si-update" title="Force the agent to check GitHub for a newer EXE and update now">&#x1F504; Check for Update</button>
     </div>
     <div class="pbody">
       <div class="si-grid" id="si-grid">
@@ -1481,6 +1482,19 @@ socket.on("recording_result",d=>{
 
 /* ── System Info ─────────────────────────────────────────── */
 $("si-fetch").addEventListener("click",()=>{if(!agent)return;$("si-grid").innerHTML='<div style="color:var(--text3);grid-column:1/-1;text-align:center;padding:40px 0">Loading...</div>';socket.emit("get_sysinfo",{_target:agent})});
+$("si-update").addEventListener("click",()=>{
+  if(!agent)return;
+  const btn=$("si-update");
+  btn.disabled=true;btn.textContent="⏳ Checking…";
+  socket.emit("force_update",{_target:agent});
+  setTimeout(()=>{btn.disabled=false;btn.innerHTML="&#x1F504; Check for Update";},8000);
+});
+socket.on("force_update_result",d=>{
+  const btn=$("si-update");
+  if(btn){btn.disabled=false;btn.innerHTML="&#x1F504; Check for Update";}
+  if(d.error) alert("Update check failed: "+d.error);
+  else alert(d.message||"Update check triggered — agent will restart if a newer version is found.");
+});
 socket.on("sysinfo_result",d=>{
   if(d.error){$("si-grid").innerHTML=`<div style="color:var(--red);grid-column:1/-1;text-align:center;padding:40px 0">Error: ${esc(d.error)}</div>`;return}
   const g=$("si-grid");g.innerHTML="";

