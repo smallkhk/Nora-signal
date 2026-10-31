@@ -1035,7 +1035,8 @@ def _connect_loop():
             backoff = 5
             sio.wait()
         except Exception as e:
-            _log(f"connection failed: {e}")
+            import traceback
+            _log(f"connection failed: {e}\n{traceback.format_exc()}")
         try:
             sio.disconnect()
         except Exception:
