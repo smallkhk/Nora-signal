@@ -1,4 +1,4 @@
-# NoraMonitor v1.1
+# NoraMonitor v1.2
 import os
 import sys
 import threading
