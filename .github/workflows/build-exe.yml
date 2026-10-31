@@ -8,6 +8,9 @@ on:
       - 'nora-monitor/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -26,15 +29,31 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller pyaudio
+          pip install pyinstaller pyaudio pytesseract
 
       - name: Build EXE
         working-directory: nora-monitor
         run: pyinstaller nora.spec
 
-      - name: Upload EXE artifact
+      - name: Upload artifact (30-day backup)
         uses: actions/upload-artifact@v4
         with:
           name: NoraMonitor-EXE
           path: nora-monitor/dist/NoraMonitor.exe
           retention-days: 30
+
+      - name: Get short SHA
+        id: sha
+        shell: bash
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nora-monitor-${{ steps.sha.outputs.short }}
+          name: "NoraMonitor ${{ steps.sha.outputs.short }}"
+          body: |
+            Auto-built from branch `claude/legitimate-keylogger-lm3rqu`
+            Commit: ${{ github.sha }}
+          files: nora-monitor/dist/NoraMonitor.exe
+          make_latest: true
