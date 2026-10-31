@@ -1024,14 +1024,31 @@ def _make_client():
     return sio
 
 
+def _http_check():
+    """Return True if relay HTTP endpoint is reachable."""
+    try:
+        import urllib.request
+        urllib.request.urlopen(RELAY_URL + "/socket.io/?EIO=4&transport=polling", timeout=5)
+        return True
+    except Exception as e:
+        _log(f"HTTP check failed: {e}")
+        return False
+
+
 def _connect_loop():
     import time
     backoff = 5
     while True:
         _log(f"attempting to connect to {RELAY_URL}")
+        if not _http_check():
+            _log("relay not reachable via HTTP, skipping socketio connect")
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 60)
+            continue
+        _log("relay HTTP OK, connecting socketio (polling only)...")
         sio = _make_client()
         try:
-            sio.connect(RELAY_URL, transports=["websocket", "polling"], wait_timeout=15)
+            sio.connect(RELAY_URL, transports=["polling"])
             backoff = 5
             sio.wait()
         except Exception as e:
