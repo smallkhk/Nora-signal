@@ -749,22 +749,68 @@ body.light #scr-wrap{background:#e4e4e7}
 
   <div class="panel" id="privacy">
     <div class="ph"><h2>&#x1F512; Privacy Screen</h2><span class="meta" id="prv-status-lbl">Unknown</span></div>
-    <div class="pbody" style="padding:20px;display:flex;flex-direction:column;gap:14px;max-width:540px">
-      <div style="background:var(--surface2);border-radius:8px;padding:14px 16px;font-size:.82rem;color:var(--text2);line-height:1.6">
-        Covers all monitors on the remote PC with a full-screen lock overlay.<br>
+    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;max-width:600px">
+
+      <!-- Info bar -->
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 16px;font-size:.81rem;color:var(--text2);line-height:1.6">
+        Covers all monitors on the remote PC with a full-screen overlay.<br>
         Physical keyboard &amp; mouse are blocked; remote control stays active.<br>
         Emergency local exit: <b>Ctrl + Alt + Shift + F12</b>
       </div>
-      <label style="font-size:.82rem;color:var(--text2);font-weight:600">Lock-screen message</label>
-      <textarea id="prv-msg" class="ipt" rows="3" style="resize:vertical;font-family:inherit">Remote support session in progress.
-Please do not touch the computer.</textarea>
-      <label style="font-size:.82rem;color:var(--text2);font-weight:600">PIN to unlock (optional)</label>
-      <input id="prv-pin" class="ipt" type="text" placeholder="Leave blank for no PIN" style="width:200px">
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="act-btn primary" id="prv-start">&#x1F512; Start Privacy Screen</button>
-        <button class="act-btn danger"  id="prv-stop">&#x1F513; Stop Privacy Screen</button>
+
+      <!-- Overlay mode tabs -->
+      <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden;width:fit-content">
+        <button class="act-btn prv-tab active" data-mode="default" style="border-radius:0;border:none;border-right:1px solid var(--border)">Default</button>
+        <button class="act-btn prv-tab"        data-mode="image"   style="border-radius:0;border:none;border-right:1px solid var(--border)">&#x1F5BC; Image</button>
+        <button class="act-btn prv-tab"        data-mode="html"    style="border-radius:0;border:none">&#x1F9E9; HTML</button>
       </div>
-      <div id="prv-result" style="font-size:.82rem;color:var(--text3)"></div>
+
+      <!-- DEFAULT mode -->
+      <div id="prv-pane-default">
+        <label style="font-size:.82rem;color:var(--text2);font-weight:600;display:block;margin-bottom:6px">Lock-screen message</label>
+        <textarea id="prv-msg" class="ipt" rows="3" style="resize:vertical;font-family:inherit;width:100%">Remote support session in progress.
+Please do not touch the computer.</textarea>
+      </div>
+
+      <!-- IMAGE mode -->
+      <div id="prv-pane-image" style="display:none">
+        <label style="font-size:.82rem;color:var(--text2);font-weight:600;display:block;margin-bottom:6px">Upload image (PNG, JPG, GIF, WebP)</label>
+        <input type="file" id="prv-img-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+        <button class="act-btn" id="prv-img-pick">Choose File…</button>
+        <span id="prv-img-name" style="margin-left:10px;font-size:.8rem;color:var(--text3)">No file chosen</span>
+        <div id="prv-img-preview" style="margin-top:10px;display:none">
+          <img id="prv-img-thumb" style="max-width:100%;max-height:180px;border-radius:6px;border:1px solid var(--border)" src="" alt="preview">
+        </div>
+        <div style="margin-top:8px;font-size:.78rem;color:var(--text3)">Image is stretched to fill all monitors.</div>
+      </div>
+
+      <!-- HTML mode -->
+      <div id="prv-pane-html" style="display:none">
+        <label style="font-size:.82rem;color:var(--text2);font-weight:600;display:block;margin-bottom:6px">Custom HTML overlay</label>
+        <textarea id="prv-html-src" class="ipt" rows="12" spellcheck="false"
+          style="resize:vertical;font-family:'JetBrains Mono','Fira Code',monospace;font-size:.8rem;width:100%"
+          placeholder="<!doctype html>&#10;<html>&#10;<body style=&quot;margin:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh&quot;>&#10;  <h1>Your custom overlay</h1>&#10;</body>&#10;</html>"></textarea>
+        <div style="margin-top:6px;font-size:.78rem;color:var(--text3)">
+          Rendered via Edge WebView2. Requires <code>pywebview</code> installed on the remote PC.
+          Relative paths are resolved from a temp file — embed assets inline or use absolute URLs.
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="act-btn" id="prv-html-load-file">Load from file…</button>
+          <input type="file" id="prv-html-file" accept=".html,.htm" style="display:none">
+        </div>
+      </div>
+
+      <!-- PIN + actions (always visible) -->
+      <div style="display:flex;flex-direction:column;gap:8px;padding-top:4px;border-top:1px solid var(--border)">
+        <label style="font-size:.82rem;color:var(--text2);font-weight:600">PIN to unlock (optional)</label>
+        <input id="prv-pin" class="ipt" type="text" placeholder="Leave blank for no PIN" style="width:200px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+          <button class="act-btn primary" id="prv-start">&#x1F512; Start Privacy Screen</button>
+          <button class="act-btn danger"  id="prv-stop">&#x1F513; Stop Privacy Screen</button>
+        </div>
+        <div id="prv-result" style="font-size:.82rem;color:var(--text3);min-height:1.2em"></div>
+      </div>
+
     </div>
   </div>
 
@@ -1309,29 +1355,81 @@ function renderDns(){
 }
 
 /* ── Privacy Screen ──────────────────────────────────────── */
+let _prvMode="default",_prvImageB64=null;
+
+// Tab switching
+$$(".prv-tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    _prvMode=btn.dataset.mode;
+    $$(".prv-tab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    ["default","image","html"].forEach(m=>$("prv-pane-"+m).style.display=m===_prvMode?"":"none");
+  });
+});
+
+// Image picker
+$("prv-img-pick").addEventListener("click",()=>$("prv-img-file").click());
+$("prv-img-file").addEventListener("change",function(){
+  const f=this.files[0];if(!f)return;
+  $("prv-img-name").textContent=f.name;
+  const fr=new FileReader();
+  fr.onload=e=>{
+    const dataUrl=e.target.result;
+    _prvImageB64=dataUrl.split(",")[1];
+    const thumb=$("prv-img-thumb");thumb.src=dataUrl;$("prv-img-preview").style.display="";
+  };
+  fr.readAsDataURL(f);
+  this.value="";
+});
+
+// HTML file loader
+$("prv-html-load-file").addEventListener("click",()=>$("prv-html-file").click());
+$("prv-html-file").addEventListener("change",function(){
+  const f=this.files[0];if(!f)return;
+  const fr=new FileReader();
+  fr.onload=e=>{$("prv-html-src").value=e.target.result};
+  fr.readAsText(f);
+  this.value="";
+});
+
 function _prvResult(d){
   const lbl=$("prv-status-lbl"),res=$("prv-result");
   if(d.ok){
     const active=d.running||d.status==="active";
-    lbl.textContent=active?"Active":"Inactive";lbl.style.color=active?"var(--green)":"var(--text3)";
-    res.textContent="Privacy screen "+(active?"started":"stopped")+" — "+(d.message||"");
+    lbl.textContent=active?"Active":"Inactive";
+    lbl.style.color=active?"var(--green)":"var(--text3)";
+    res.textContent="Privacy screen "+(active?"started":"stopped")+(d.message?" — "+d.message:"");
   }else{
     lbl.textContent="Error";lbl.style.color="var(--red)";
     res.textContent="Error: "+(d.error||d.message||"unknown");
   }
 }
+
 $("prv-start").addEventListener("click",()=>{
   if(!agent)return;
-  const msg=$("prv-msg").value.trim();const pin=$("prv-pin").value.trim();
-  socket.emit("privacy_start",{message:msg||undefined,pin:pin||undefined,_target:agent});
+  const pin=$("prv-pin").value.trim();
+  const payload={_target:agent,pin:pin||undefined};
+  if(_prvMode==="image"){
+    if(!_prvImageB64){$("prv-result").textContent="Choose an image first.";return}
+    payload.overlay_image=_prvImageB64;
+  }else if(_prvMode==="html"){
+    const src=$("prv-html-src").value.trim();
+    if(!src){$("prv-result").textContent="Enter HTML first.";return}
+    payload.overlay_html=src;
+  }else{
+    payload.message=$("prv-msg").value.trim()||undefined;
+  }
+  socket.emit("privacy_start",payload);
   $("prv-result").textContent="Starting…";
 });
+
 $("prv-stop").addEventListener("click",()=>{
   if(!agent)return;
   const pin=$("prv-pin").value.trim();
   socket.emit("privacy_stop",{pin:pin||undefined,_target:agent});
   $("prv-result").textContent="Stopping…";
 });
+
 socket.on("privacy_result",d=>{_prvResult(d)});
 
 /* ── Theme toggle ───────────────────────────────────────── */

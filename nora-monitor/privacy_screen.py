@@ -4,10 +4,19 @@ Privacy Screen / Display Lock for NoraMonitor.
 Covers all monitors with an always-on-top overlay and blocks physical
 keyboard/mouse input while allowing injected (remote-control) input through.
 
+Overlay modes
+  default      – dark screen with lock icon + message text (tkinter)
+  image        – base64-encoded PNG/JPG stretched fullscreen (tkinter + PIL)
+  html         – arbitrary HTML rendered via Edge WebView2 (pywebview)
+
 Emergency local exit: Ctrl + Alt + Shift + F12  (bypasses PIN).
 """
+import base64
 import ctypes
 import ctypes.wintypes
+import io
+import os
+import tempfile
 import threading
 
 try:
@@ -15,6 +24,12 @@ try:
     _TK_OK = True
 except ImportError:
     _TK_OK = False
+
+try:
+    import webview as _webview
+    _WEBVIEW_OK = True
+except ImportError:
+    _WEBVIEW_OK = False
 
 # ── Win32 constants ───────────────────────────────────────────────────────────
 WH_KEYBOARD_LL  = 13
@@ -68,12 +83,18 @@ class PrivacyScreen:
         self,
         message="Remote support session in progress.\nPlease do not touch the computer.",
         pin=None,
+        overlay_image=None,   # base64-encoded PNG/JPG bytes
+        overlay_html=None,    # raw HTML string
     ):
-        self.message  = message
-        self.pin      = str(pin) if pin else None
-        self._root    = None
-        self._active  = False
-        self._thread  = None
+        self.message        = message
+        self.pin            = str(pin) if pin else None
+        self.overlay_image  = overlay_image   # base64 str
+        self.overlay_html   = overlay_html    # HTML str
+        self._root          = None
+        self._webview_win   = None
+        self._tmp_html      = None            # path of temp HTML file
+        self._active        = False
+        self._thread        = None
         # Keep ctypes callback refs alive — GC would collect them otherwise
         self._kbd_cb  = None
         self._ms_cb   = None
@@ -115,6 +136,8 @@ class PrivacyScreen:
             global _active_screen
             if _active_screen is self:
                 _active_screen = None
+
+        # tkinter window
         root = self._root
         if root:
             try:
@@ -122,9 +145,27 @@ class PrivacyScreen:
             except Exception:
                 pass
 
+        # pywebview window
+        wv = self._webview_win
+        if wv:
+            try:
+                wv.destroy()
+            except Exception:
+                pass
+
+        # temp HTML file
+        if self._tmp_html:
+            try:
+                os.unlink(self._tmp_html)
+            except Exception:
+                pass
+            self._tmp_html = None
+
     def _run(self):
         try:
-            if _TK_OK:
+            if self.overlay_html and _WEBVIEW_OK:
+                self._run_webview()
+            elif _TK_OK:
                 self._run_tk()
             else:
                 import time
@@ -138,11 +179,12 @@ class PrivacyScreen:
                 if _active_screen is self:
                     _active_screen = None
 
+    # ── tkinter renderer (default + image modes) ──────────────────────────────
+
     def _run_tk(self):
         user32 = ctypes.windll.user32
         user32.SetProcessDPIAware()
 
-        # Virtual screen covers every connected monitor
         vx = user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
         vy = user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
         vw = user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
@@ -157,8 +199,27 @@ class PrivacyScreen:
         root.geometry(f"{vw}x{vh}+{vx}+{vy}")
         root.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        wrap_px = min(vw - 160, 900)
+        if self.overlay_image:
+            self._build_image_overlay(root, vw, vh)
+        else:
+            self._build_default_overlay(root, vw, vh)
 
+        self._install_hooks()
+
+        def _keep_top():
+            try:
+                root.wm_attributes("-topmost", True)
+                root.lift()
+                if self._active:
+                    root.after(250, _keep_top)
+            except Exception:
+                pass
+
+        root.after(50, _keep_top)
+        root.mainloop()
+
+    def _build_default_overlay(self, root, vw, vh):
+        wrap_px = min(vw - 160, 900)
         center = tk.Frame(root, bg="#090909")
         center.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -184,26 +245,60 @@ class PrivacyScreen:
             justify="center",
         ).pack()
 
-        # Install hooks before entering mainloop so they are processed by it
+    def _build_image_overlay(self, root, vw, vh):
+        try:
+            from PIL import Image, ImageTk
+            img_data = base64.b64decode(self.overlay_image)
+            img = Image.open(io.BytesIO(img_data)).resize(
+                (vw, vh), Image.LANCZOS
+            )
+            photo = ImageTk.PhotoImage(img)
+            lbl = tk.Label(root, image=photo, bd=0, bg="#090909")
+            lbl.place(x=0, y=0, width=vw, height=vh)
+            root._img_ref = photo   # prevent GC
+        except Exception:
+            # Fall back to default overlay if image load fails
+            self._build_default_overlay(root, vw, vh)
+
+    # ── pywebview renderer (HTML mode) ────────────────────────────────────────
+
+    def _run_webview(self):
+        user32 = ctypes.windll.user32
+        user32.SetProcessDPIAware()
+
+        vx = user32.GetSystemMetrics(76)
+        vy = user32.GetSystemMetrics(77)
+        vw = user32.GetSystemMetrics(78)
+        vh = user32.GetSystemMetrics(79)
+
+        # Write HTML to a temp file so pywebview can load it as a URL
+        # (inline html= works too but file:// preserves relative asset paths)
+        fd, path = tempfile.mkstemp(suffix=".html", prefix="nora_prv_")
+        self._tmp_html = path
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(self.overlay_html)
+
         self._install_hooks()
 
-        # Re-assert always-on-top every 250 ms
-        def _keep_top():
-            try:
-                root.wm_attributes("-topmost", True)
-                root.lift()
-                if self._active:
-                    root.after(250, _keep_top)
-            except Exception:
-                pass
+        win = _webview.create_window(
+            title="",
+            url=f"file:///{path.replace(os.sep, '/')}",
+            x=vx, y=vy, width=vw, height=vh,
+            frameless=True,
+            on_top=True,
+            background_color="#090909",
+        )
+        self._webview_win = win
 
-        root.after(50, _keep_top)
-        root.mainloop()
+        # _webview.start() blocks until all windows are destroyed
+        _webview.start()
+
+    # ── Win32 hooks ──────────────────────────────────────────────────────────
 
     def _install_hooks(self):
         user32   = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
-        screen   = self   # capture for closures
+        screen   = self
 
         def _kbd_hook(nCode, wParam, lParam):
             if nCode >= 0:
@@ -212,7 +307,6 @@ class PrivacyScreen:
                 ).contents
                 injected = bool(kb.flags & LLKHF_INJECTED)
                 if not injected:
-                    # Emergency exit: Ctrl + Alt + Shift + F12
                     if (
                         kb.vkCode == VK_F12
                         and user32.GetAsyncKeyState(VK_CONTROL) & 0x8000
@@ -221,7 +315,7 @@ class PrivacyScreen:
                     ):
                         screen.force_stop()
                         return 1
-                    return 1   # swallow all other physical keystrokes
+                    return 1
             return user32.CallNextHookEx(screen._h_kbd, nCode, wParam, lParam)
 
         def _ms_hook(nCode, wParam, lParam):
@@ -231,7 +325,7 @@ class PrivacyScreen:
                 ).contents
                 injected = bool(ms.flags & LLMHF_INJECTED)
                 if not injected:
-                    return 1   # swallow all physical mouse events
+                    return 1
             return user32.CallNextHookEx(screen._h_ms, nCode, wParam, lParam)
 
         self._kbd_cb = LLKBDPROC(_kbd_hook)
@@ -259,7 +353,7 @@ class PrivacyScreen:
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
-def start_privacy_screen(message=None, pin=None):
+def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_html=None):
     global _active_screen
     with _state_lock:
         if _active_screen and _active_screen.active:
@@ -267,6 +361,8 @@ def start_privacy_screen(message=None, pin=None):
     ps = PrivacyScreen(
         message=message or "Remote support session in progress.\nPlease wait.",
         pin=pin,
+        overlay_image=overlay_image,
+        overlay_html=overlay_html,
     )
     with _state_lock:
         _active_screen = ps

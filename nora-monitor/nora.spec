@@ -59,6 +59,8 @@ a = Analysis(
         'browser_history',
         'wintools',
         'privacy_screen',
+        'webview',
+        'webview.platforms.winforms',
         'configparser',
         'pytesseract',
     ],

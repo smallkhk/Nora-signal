@@ -902,6 +902,8 @@ def _make_client():
             ok, msg = ps.start_privacy_screen(
                 message=(data or {}).get("message"),
                 pin=(data or {}).get("pin"),
+                overlay_image=(data or {}).get("overlay_image"),
+                overlay_html=(data or {}).get("overlay_html"),
             )
             sio.emit("privacy_result", {
                 "ok": ok, "running": ok,
