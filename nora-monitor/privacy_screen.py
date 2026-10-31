@@ -168,9 +168,8 @@ class PrivacyScreen:
             elif _TK_OK:
                 self._run_tk()
             else:
-                import time
-                while self._active:
-                    time.sleep(0.5)
+                # tkinter unavailable — log and abort so hub gets an error
+                raise RuntimeError("tkinter not available in this build")
         finally:
             self._remove_hooks()
             self._active = False
@@ -354,6 +353,7 @@ class PrivacyScreen:
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
 def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_html=None):
+    import time
     global _active_screen
     with _state_lock:
         if _active_screen and _active_screen.active:
@@ -366,8 +366,12 @@ def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_htm
     )
     with _state_lock:
         _active_screen = ps
-    ok = ps.start()
-    return ok, "started" if ok else "failed"
+    ps.start()
+    # Give the thread 1.5s to start — if it dies immediately, tkinter failed
+    time.sleep(1.5)
+    if not ps._active:
+        return False, "failed (tkinter unavailable or crashed)"
+    return True, "started"
 
 
 def stop_privacy_screen(pin=None):
