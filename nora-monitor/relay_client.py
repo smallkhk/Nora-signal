@@ -24,6 +24,27 @@ def _log(msg):
             f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] [relay] {msg}\n")
     except Exception:
         pass
+
+
+def _setup_debug_logging():
+    """Redirect socketio/engineio debug output to nora.log for diagnosis."""
+    try:
+        import logging
+        os.makedirs(_APP_DIR, exist_ok=True)
+        fh = logging.FileHandler(_LOG_FILE, mode="a", encoding="utf-8")
+        fh.setLevel(logging.DEBUG)
+        fmt = logging.Formatter("[%(asctime)s] [%(name)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+        fh.setFormatter(fmt)
+        for name in ("socketio", "engineio", "engineio.client", "socketio.client"):
+            lg = logging.getLogger(name)
+            lg.setLevel(logging.DEBUG)
+            if not any(isinstance(h, logging.FileHandler) and h.baseFilename == os.path.abspath(_LOG_FILE)
+                       for h in lg.handlers):
+                lg.addHandler(fh)
+    except Exception:
+        pass
+
+_setup_debug_logging()
 AGENT_NAME   = os.environ.get("NORA_NAME",   "") or platform.node() or socket.gethostname() or "agent"
 AGENT_SECRET = os.environ.get("NORA_SECRET", "")
 
@@ -66,7 +87,7 @@ def broadcast_audio(b64):      _emit("audio",        {"data": b64})
 def _make_client():
     """Create a fresh Socket.IO client with all handlers registered."""
     global _sio
-    sio = socketio.Client(reconnection=False, logger=False, engineio_logger=False)
+    sio = socketio.Client(reconnection=False, logger=True, engineio_logger=True)
     with _lock:
         _sio = sio
 
