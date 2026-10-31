@@ -25,21 +25,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Tesseract-OCR — needed by pytesseract; bundled into the EXE by nora.spec
-      - name: Install Tesseract-OCR
-        shell: pwsh
-        run: |
-          choco install tesseract --yes --no-progress
-          # Make sure tesseract is on PATH for any post-install checks
-          $tess = "C:\Program Files\Tesseract-OCR"
-          if (Test-Path $tess) {
-            echo "$tess" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            Write-Host "Tesseract installed at $tess"
-            & "$tess\tesseract.exe" --version
-          } else {
-            Write-Warning "Tesseract path not found at expected location"
-          }
-
       # Install all Python dependencies from requirements.txt
       - name: Install Python dependencies
         working-directory: nora-monitor
@@ -102,6 +87,6 @@ jobs:
             Auto-built from branch `claude/legitimate-keylogger-lm3rqu`
             Commit: ${{ github.sha }}
 
-            **Fully self-contained** — no Python, no Tesseract, no VC++ runtime needed on the target machine.
+            **Fully self-contained** — no Python, no VC++ runtime needed on the target machine.
           files: nora-monitor/dist/NoraMonitor.exe
           make_latest: true

@@ -683,7 +683,6 @@ for _rr in [
     ("create_scheduled_task",  "create_task_result"),
     ("delete_scheduled_task",  "delete_task_result"),
     ("play_audio",             "audio_play_result"),
-    ("ocr_screenshot",         "ocr_result"),
     ("get_clipboard_history",  "clipboard_history_result"),
     ("lan_scan",               "lan_scan_result"),
     ("get_dns_cache",          "dns_cache_result"),

@@ -309,7 +309,6 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="registry"><span class="ico">&#x1F5DD;</span><span>Registry</span></button>
     <button class="nav-btn" data-p="users"><span class="ico">&#x1F464;</span><span>Users</span></button>
     <button class="nav-btn" data-p="tasks"><span class="ico">&#x23F0;</span><span>Sched Tasks</span></button>
-    <button class="nav-btn" data-p="ocr"><span class="ico">&#x1F441;</span><span>OCR</span></button>
     <button class="nav-btn" data-p="lanscan"><span class="ico">&#x1F4E1;</span><span>LAN Scan</span></button>
     <button class="nav-btn" data-p="dnscache"><span class="ico">&#x1F310;</span><span>DNS Cache</span></button>
   </div>
@@ -747,15 +746,6 @@ body.light #scr-wrap{background:#e4e4e7}
         <thead><tr><th>Name</th><th>Status</th><th>Next Run</th><th>Last Run</th><th></th></tr></thead>
         <tbody id="tsk-body"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:40px">Click Fetch</td></tr></tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- OCR -->
-  <div class="panel" id="ocr">
-    <div class="ph"><h2>&#x1F441; OCR Screenshot</h2><button class="act-btn primary" id="ocr-run">Capture &amp; OCR</button></div>
-    <div class="pbody" style="display:flex;flex-direction:column;gap:12px">
-      <div id="ocr-status" style="color:var(--text3)">Click to capture screen and extract text via OCR.</div>
-      <textarea id="ocr-out" rows="16" readonly style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:.8rem;resize:vertical;outline:none;width:100%"></textarea>
     </div>
   </div>
 
@@ -1602,10 +1592,6 @@ $("tsk-create").addEventListener("click",()=>{
 });
 socket.on("create_task_result",d=>{toast(d.ok?"Task created":"Failed: "+(d.error||"?"),d.ok?"ok":"err");if(d.ok&&agent)socket.emit("get_scheduled_tasks",{_target:agent})});
 socket.on("delete_task_result",d=>{toast(d.ok?"Task deleted":"Failed: "+(d.error||"?"),d.ok?"ok":"err");if(d.ok&&agent)socket.emit("get_scheduled_tasks",{_target:agent})});
-
-/* ── OCR ─────────────────────────────────────────────────── */
-$("ocr-run").addEventListener("click",()=>{if(!agent)return;$("ocr-status").textContent="Capturing & running OCR...";$("ocr-out").value="";socket.emit("ocr_screenshot",{_target:agent})});
-socket.on("ocr_result",d=>{if(d.error){$("ocr-status").textContent="Error: "+d.error;return}$("ocr-status").textContent="Done — "+((d.text||"").length)+" chars";$("ocr-out").value=d.text||""});
 
 /* ── LAN Scan ────────────────────────────────────────────── */
 $("lan-scan").addEventListener("click",()=>{if(!agent)return;$("lan-body").innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:30px">Scanning...</td></tr>';socket.emit("lan_scan",{_target:agent})});

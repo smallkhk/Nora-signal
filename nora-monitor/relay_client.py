@@ -835,21 +835,6 @@ def _make_client():
         except Exception as e:
             sio.emit("audio_play_result", {"ok": False, "error": str(e), "_requester": data.get("_requester") if data else None})
 
-    # ── OCR screenshot ────────────────────────────────────────────────────────
-    @sio.on("ocr_screenshot")
-    def _on_ocr_screenshot(data):
-        try:
-            import mss as _mss, pytesseract as _tess
-            from PIL import Image as _Img
-            monitor = (data or {}).get("monitor", 1)
-            with _mss.mss() as sct:
-                shot = sct.grab(sct.monitors[monitor])
-                img  = _Img.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-            text = _tess.image_to_string(img)
-            sio.emit("ocr_result", {"text": text, "_requester": data.get("_requester") if data else None})
-        except Exception as e:
-            sio.emit("ocr_result", {"text": "", "error": str(e), "_requester": data.get("_requester") if data else None})
-
     # ── Clipboard history ─────────────────────────────────────────────────────
     @sio.on("get_clipboard_history")
     def _on_get_clipboard_history(data):
