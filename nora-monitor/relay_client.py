@@ -12,6 +12,18 @@ import threading
 import socketio
 
 RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
+
+_APP_DIR  = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_LOG_FILE = os.path.join(_APP_DIR, "nora.log")
+
+def _log(msg):
+    try:
+        os.makedirs(_APP_DIR, exist_ok=True)
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            import datetime
+            f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] [relay] {msg}\n")
+    except Exception:
+        pass
 AGENT_NAME   = os.environ.get("NORA_NAME",   "") or platform.node() or socket.gethostname() or "agent"
 AGENT_SECRET = os.environ.get("NORA_SECRET", "")
 
@@ -60,7 +72,7 @@ def _make_client():
 
     @sio.on("connect")
     def _on_connect():
-        print(f"[relay] connected to {RELAY_URL} as {AGENT_NAME}", flush=True)
+        _log(f"connected to {RELAY_URL} as {AGENT_NAME}")
         sio.emit("register", {"name": AGENT_NAME, "secret": AGENT_SECRET})
 
     @sio.on("command")
@@ -1014,18 +1026,19 @@ def _connect_loop():
     import time
     backoff = 5
     while True:
+        _log(f"attempting to connect to {RELAY_URL}")
         sio = _make_client()
         try:
             sio.connect(RELAY_URL, transports=["websocket", "polling"])
             backoff = 5
             sio.wait()
         except Exception as e:
-            print(f"[relay] connection failed: {e}", flush=True)
+            _log(f"connection failed: {e}")
         try:
             sio.disconnect()
         except Exception:
             pass
-        print(f"[relay] reconnecting in {backoff}s...", flush=True)
+        _log(f"reconnecting in {backoff}s...")
         time.sleep(backoff)
         backoff = min(backoff * 2, 60)
 
