@@ -546,7 +546,9 @@ def _fm_request(event, data):
         data["_requester"] = freq.sid
         socketio.emit(event, data, room=target_sid)
 
-for _fmev in ("list_dir", "read_file", "write_file", "delete_path"):
+for _fmev in ("list_dir", "read_file", "write_file", "delete_path",
+               "rename_path", "copy_path", "move_path",
+               "upload_start", "upload_chunk"):
     def _make_fm_handler(ev):
         def _h(data):
             _fm_request(ev, data)
@@ -560,7 +562,9 @@ def _fm_response(event, data):
     if requester:
         socketio.emit(event, data, room=requester)
 
-for _rsev in ("dir_result", "file_data", "write_result", "delete_result"):
+for _rsev in ("dir_result", "file_data", "write_result", "delete_result",
+               "rename_result", "copy_result", "move_result",
+               "upload_ready", "upload_progress"):
     def _make_rs_handler(ev):
         def _h(data):
             _fm_response(ev, data)

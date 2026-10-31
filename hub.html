@@ -143,6 +143,21 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 #fm-editpath{font-size:.72rem;color:var(--text3);font-family:monospace}
 #fm-ta{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:.82rem;resize:vertical;min-height:130px;outline:none}
 #fm-ta:focus{border-color:var(--accent)}
+#fm-progress{padding:6px 20px;background:var(--surface2);border-bottom:1px solid var(--border);display:none}
+#fm-prog-label{font-size:.72rem;color:var(--text3);margin-bottom:3px}
+#fm-prog-track{height:4px;background:var(--border);border-radius:2px}
+#fm-prog-bar{height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .15s}
+#ctx-menu{display:none;position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.2);min-width:160px;padding:4px 0;font-size:.82rem}
+.ctx-item{padding:7px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.ctx-item:hover{background:var(--surface2)}
+.ctx-item.danger{color:var(--red)}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0}
+#rename-modal{display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
+#rename-modal.show{display:flex}
+#rename-box{background:var(--surface);border-radius:14px;padding:24px;min-width:300px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+#rename-box h3{margin-bottom:14px;font-size:.92rem}
+#rename-inp{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:.85rem;outline:none;margin-bottom:16px;box-sizing:border-box}
+#rename-inp:focus{border-color:var(--accent)}
 
 /* ── Processes ───────────────────────────────────────────── */
 #proc-bar{padding:8px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
@@ -431,8 +446,12 @@ body.light #scr-wrap{background:#e4e4e7}
   <div class="panel" id="fm">
     <div class="ph">
       <h2>File Manager</h2>
-      <label class="act-btn primary" id="fm-ul-btn" style="margin-left:auto;cursor:pointer">Upload</label>
-      <input id="fm-ul-in" type="file" style="display:none">
+      <label class="act-btn primary" id="fm-ul-btn" style="margin-left:auto;cursor:pointer">⬆ Upload</label>
+      <input id="fm-ul-in" type="file" multiple style="display:none">
+    </div>
+    <div id="fm-progress">
+      <div id="fm-prog-label">Uploading…</div>
+      <div id="fm-prog-track"><div id="fm-prog-bar"></div></div>
     </div>
     <div id="fm-pathbar"><input id="fm-path" type="text" placeholder="Remote path..."><button id="fm-go">Go</button></div>
     <div id="fm-list"></div>
@@ -440,7 +459,8 @@ body.light #scr-wrap{background:#e4e4e7}
       <div id="fm-editpath"></div>
       <textarea id="fm-ta"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="act-btn" id="fm-dl">Download</button>
+        <button class="act-btn" id="fm-edit-close">✕ Close</button>
+        <button class="act-btn" id="fm-dl">⬇ Download</button>
         <button class="act-btn primary" id="fm-save">Save</button>
       </div>
     </div>
@@ -1227,32 +1247,180 @@ function renderProcs(){
 }
 
 /* ── File Manager ────────────────────────────────────────── */
-let _ePath="",_eB64="";
-$("fm-go").addEventListener("click",()=>{if(agent)socket.emit("list_dir",{path:$("fm-path").value,_target:agent})});
-$("fm-path").addEventListener("keydown",e=>{if(e.key==="Enter")$("fm-go").click()});
+let _ePath="",_eB64="",_fmClip=null,_ctxItem=null,_fmDlSet=new Set();
+const _UL_CHUNK=512*1024;
+
+function _fmRefresh(){if(agent)socket.emit("list_dir",{path:$("fm-path").value||"",_target:agent})}
+
+$("fm-go").addEventListener("click",_fmRefresh);
+$("fm-path").addEventListener("keydown",e=>{if(e.key==="Enter")_fmRefresh()});
+
+// ── Context menu ──────────────────────────────────────────
+document.addEventListener("click",()=>{$("ctx-menu").style.display="none"},true);
+function _showCtx(e,item){
+  e.preventDefault();e.stopPropagation();
+  _ctxItem=item;
+  const m=$("ctx-menu");
+  m.style.display="block";
+  m.style.left=e.clientX+"px";m.style.top=e.clientY+"px";
+  requestAnimationFrame(()=>{
+    const r=m.getBoundingClientRect();
+    if(r.right>window.innerWidth)m.style.left=(e.clientX-r.width)+"px";
+    if(r.bottom>window.innerHeight)m.style.top=(e.clientY-r.height)+"px";
+  });
+  $("ctx-paste").style.opacity=_fmClip?"1":"0.4";
+  $("ctx-paste").style.pointerEvents=_fmClip?"auto":"none";
+  $("ctx-dl").style.display=item&&item.type==="file"?"flex":"none";
+}
+$("ctx-menu").addEventListener("click",e=>{
+  e.stopPropagation();
+  const el=e.target.closest("[data-action]");
+  if(!el||!_ctxItem)return;
+  const action=el.dataset.action, item=_ctxItem;
+  $("ctx-menu").style.display="none";
+  if(action==="open"){
+    if(item.type==="dir")socket.emit("list_dir",{path:item.path,_target:agent});
+    else socket.emit("read_file",{path:item.path,_target:agent});
+  } else if(action==="rename"){
+    $("rename-inp").value=item.name;
+    $("rename-modal").classList.add("show");
+    setTimeout(()=>$("rename-inp").select(),50);
+    $("rename-ok").onclick=()=>{
+      const nn=$("rename-inp").value.trim();
+      if(!nn)return;
+      $("rename-modal").classList.remove("show");
+      socket.emit("rename_path",{path:item.path,new_name:nn,_target:agent});
+    };
+  } else if(action==="copy"){
+    _fmClip={op:"copy",path:item.path,name:item.name};
+    toast("Copied: "+item.name);
+  } else if(action==="cut"){
+    _fmClip={op:"cut",path:item.path,name:item.name};
+    toast("Cut: "+item.name);
+  } else if(action==="paste"){
+    if(!_fmClip)return;
+    const dir=($("fm-path").value||"").replace(/[\\/]$/,"");
+    const dst=dir+"\\"+_fmClip.name;
+    if(_fmClip.op==="copy")socket.emit("copy_path",{src:_fmClip.path,dst,_target:agent});
+    else{socket.emit("move_path",{src:_fmClip.path,dst,_target:agent});_fmClip=null;}
+  } else if(action==="download"){
+    _fmDlSet.add(item.path);
+    socket.emit("read_file",{path:item.path,_target:agent});
+  } else if(action==="delete"){
+    if(!confirm("Delete "+item.name+"?"))return;
+    socket.emit("delete_path",{path:item.path,_target:agent});
+  }
+});
+$("rename-cancel").addEventListener("click",()=>$("rename-modal").classList.remove("show"));
+$("rename-inp").addEventListener("keydown",e=>{
+  if(e.key==="Enter")$("rename-ok").click();
+  if(e.key==="Escape")$("rename-modal").classList.remove("show");
+});
+
+// ── Dir listing ───────────────────────────────────────────
 socket.on("dir_result",d=>{
-  if(!d)return;$("fm-path").value=d.path||"";$("fm-list").innerHTML="";$("fm-edit").classList.remove("show");
-  if(d.parent){const r=document.createElement("div");r.className="fm-r";r.innerHTML=`<div class="ic">⬆</div><div class="nm">..</div>`;r.addEventListener("click",()=>socket.emit("list_dir",{path:d.parent,_target:agent}));$("fm-list").appendChild(r)}
+  if(!d)return;
+  $("fm-path").value=d.path||"";
+  $("fm-list").innerHTML="";
+  $("fm-edit").classList.remove("show");
+  if(d.error){$("fm-list").innerHTML=`<div style="padding:20px;color:var(--red);font-size:.8rem">${esc(d.error)}</div>`;return}
+  if(d.parent){
+    const r=document.createElement("div");r.className="fm-r";
+    r.innerHTML=`<div class="ic">⬆</div><div class="nm">..</div>`;
+    r.addEventListener("click",()=>socket.emit("list_dir",{path:d.parent,_target:agent}));
+    $("fm-list").appendChild(r);
+  }
   (d.items||[]).forEach(item=>{
     const r=document.createElement("div");r.className="fm-r";
-    r.innerHTML=`<div class="ic">${item.type==="dir"?"📁":"📄"}</div><div class="nm">${esc(item.name)}</div><div class="sz">${item.type==="file"?fmtB(item.size||0):""}</div><button class="del">🗑</button>`;
-    r.addEventListener("click",e=>{if(e.target.classList.contains("del"))return;if(item.type==="dir")socket.emit("list_dir",{path:item.path,_target:agent});else socket.emit("read_file",{path:item.path,_target:agent})});
-    r.querySelector(".del").addEventListener("click",e=>{e.stopPropagation();if(!confirm("Delete "+item.name+"?"))return;socket.emit("delete_path",{path:item.path,_target:agent})});
+    if(_fmClip&&_fmClip.op==="cut"&&_fmClip.path===item.path)r.style.opacity="0.4";
+    r.innerHTML=`<div class="ic">${item.type==="dir"?"📁":"📄"}</div><div class="nm">${esc(item.name)}</div><div class="sz">${item.type==="file"?fmtB(item.size||0):""}</div>`;
+    r.addEventListener("click",()=>{
+      if(item.type==="dir")socket.emit("list_dir",{path:item.path,_target:agent});
+      else socket.emit("read_file",{path:item.path,_target:agent});
+    });
+    r.addEventListener("contextmenu",e=>_showCtx(e,item));
     $("fm-list").appendChild(r);
   });
 });
+
+// ── File read / edit ──────────────────────────────────────
 socket.on("file_data",d=>{
   if(d.error){toast("Cannot read: "+d.error,"err");return}
-  _ePath=d.path||"";_eB64=d.data||"";$("fm-editpath").textContent=_ePath;
-  try{const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));$("fm-ta").value=new TextDecoder("utf-8",{fatal:true}).decode(bytes)}catch{$("fm-ta").value="[binary file — use Download to save]"}
+  if(_fmDlSet.has(d.path)){
+    _fmDlSet.delete(d.path);
+    const bytes=Uint8Array.from(atob(d.data||""),c=>c.charCodeAt(0));
+    const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([bytes])),download:(d.path||"file").split(/[\\/]/).pop()});
+    a.click();URL.revokeObjectURL(a.href);
+    return;
+  }
+  _ePath=d.path||"";_eB64=d.data||"";
+  $("fm-editpath").textContent=_ePath;
+  try{const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));$("fm-ta").value=new TextDecoder("utf-8",{fatal:true}).decode(bytes)}
+  catch{$("fm-ta").value="[binary — use ⬇ Download to save]"}
   $("fm-edit").classList.add("show");
 });
-$("fm-save").addEventListener("click",()=>{if(!_ePath||!agent)return;const b=btoa(unescape(encodeURIComponent($("fm-ta").value)));socket.emit("write_file",{path:_ePath,data:b,_target:agent})});
-$("fm-dl").addEventListener("click",()=>{if(!_eB64||!_ePath)return;const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));const blob=new Blob([bytes]);const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:_ePath.split(/[\\/]/).pop()});a.click();URL.revokeObjectURL(a.href)});
-$("fm-ul-btn").addEventListener("click",()=>$("fm-ul-in").click());
-$("fm-ul-in").addEventListener("change",function(){const f=this.files[0];if(!f||!agent)return;const rp=($("fm-path").value||"").replace(/[\\/]$/,"")+"\\"+f.name;const fr=new FileReader();fr.onload=e=>{socket.emit("write_file",{path:rp,data:e.target.result.split(",")[1],_target:agent});toast("Uploading "+f.name+"...")};fr.readAsDataURL(f);this.value=""});
+$("fm-edit-close").addEventListener("click",()=>$("fm-edit").classList.remove("show"));
+$("fm-save").addEventListener("click",()=>{
+  if(!_ePath||!agent)return;
+  const b=btoa(unescape(encodeURIComponent($("fm-ta").value)));
+  socket.emit("write_file",{path:_ePath,data:b,_target:agent});
+});
+$("fm-dl").addEventListener("click",()=>{
+  if(!_eB64||!_ePath)return;
+  const bytes=Uint8Array.from(atob(_eB64),c=>c.charCodeAt(0));
+  const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([bytes])),download:_ePath.split(/[\\/]/).pop()});
+  a.click();URL.revokeObjectURL(a.href);
+});
+
 socket.on("write_result",d=>toast(d.ok?"Saved.":"Save failed: "+d.error,d.ok?"ok":"err"));
-socket.on("delete_result",d=>{toast(d.ok?"Deleted.":"Delete failed.",d.ok?"ok":"err");if(d.ok)socket.emit("list_dir",{path:$("fm-path").value,_target:agent})});
+socket.on("delete_result",d=>{toast(d.ok?"Deleted.":"Delete failed: "+d.error,d.ok?"ok":"err");if(d.ok)_fmRefresh()});
+socket.on("rename_result",d=>{toast(d.ok?"Renamed.":"Rename failed: "+d.error,d.ok?"ok":"err");_fmRefresh()});
+socket.on("copy_result",d=>{toast(d.ok?"Copied.":"Copy failed: "+d.error,d.ok?"ok":"err");_fmRefresh()});
+socket.on("move_result",d=>{toast(d.ok?"Moved.":"Move failed: "+d.error,d.ok?"ok":"err");_fmClip=null;_fmRefresh()});
+
+// ── Chunked upload ────────────────────────────────────────
+$("fm-ul-btn").addEventListener("click",()=>$("fm-ul-in").click());
+$("fm-ul-in").addEventListener("change",async function(){
+  if(!agent)return;
+  const files=[...this.files];this.value="";
+  for(const f of files)await _chunkedUpload(f,($("fm-path").value||"").replace(/[\\/]$/,"")+"\\"+f.name);
+});
+async function _chunkedUpload(file,remotePath){
+  return new Promise(resolve=>{
+    $("fm-progress").style.display="block";
+    $("fm-prog-label").textContent="Uploading "+file.name+"…";
+    $("fm-prog-bar").style.width="0%";
+    socket.emit("upload_start",{path:remotePath,size:file.size,_target:agent});
+    socket.once("upload_ready",res=>{
+      const sid=res.session_id;
+      let offset=0;
+      function sendChunk(){
+        const slice=file.slice(offset,offset+_UL_CHUNK);
+        const fr=new FileReader();
+        fr.onload=ev=>{
+          const b64=ev.target.result.split(",")[1];
+          const last=offset+slice.size>=file.size;
+          socket.emit("upload_chunk",{session_id:sid,data:b64,last,_target:agent});
+          if(last){
+            socket.once("upload_result",r=>{
+              $("fm-progress").style.display="none";
+              toast(r.ok?"Uploaded: "+file.name:"Upload failed: "+(r.error||"?"),r.ok?"ok":"err");
+              _fmRefresh();resolve();
+            });
+          }
+          socket.once("upload_progress",p=>{
+            const pct=file.size>0?Math.round(p.received/file.size*100):100;
+            $("fm-prog-bar").style.width=pct+"%";
+            $("fm-prog-label").textContent="Uploading "+file.name+"… "+pct+"%";
+            if(!last){offset+=slice.size;sendChunk();}
+          });
+        };
+        fr.readAsDataURL(slice);
+      }
+      sendChunk();
+    });
+  });
+}
 
 /* ── Cookies ─────────────────────────────────────────────── */
 $("btn-exp-ck").addEventListener("click",()=>{if(!agent)return;$("cookie-status").textContent="Exporting cookies...";socket.emit("export_cookies",{_target:agent})});
@@ -1700,5 +1868,32 @@ socket.on("privacy_result",d=>{_prvResult(d)});
   $("theme-btn").addEventListener("click",()=>{dark=!dark;apply();try{localStorage.setItem("nora_theme",dark?"dark":"light")}catch{}});
 })();
 </script>
+
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" data-action="open">📂 Open / Edit</div>
+  <div class="ctx-item" data-action="rename">✏️ Rename</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy">📋 Copy</div>
+  <div class="ctx-item" data-action="cut">✂️ Cut</div>
+  <div class="ctx-item" data-action="paste" id="ctx-paste">📌 Paste here</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="download" id="ctx-dl">⬇ Download</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="delete">🗑 Delete</div>
+</div>
+
+<!-- Rename modal -->
+<div id="rename-modal">
+  <div id="rename-box">
+    <h3>Rename</h3>
+    <input id="rename-inp" type="text" placeholder="New name…">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="act-btn" id="rename-cancel">Cancel</button>
+      <button class="act-btn primary" id="rename-ok">Rename</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

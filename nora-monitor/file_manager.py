@@ -59,5 +59,36 @@ def delete_path(path):
         return {"ok": False, "error": str(e)}
 
 
+def rename_path(path, new_name):
+    try:
+        parent = os.path.dirname(os.path.abspath(path))
+        new_path = os.path.join(parent, new_name)
+        os.rename(path, new_path)
+        return {"ok": True, "old_path": path, "new_path": new_path}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def copy_path(src, dst):
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(dst)) or ".", exist_ok=True)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+        return {"ok": True, "dst": dst}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def move_path(src, dst):
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(dst)) or ".", exist_ok=True)
+        shutil.move(src, dst)
+        return {"ok": True, "src": src, "dst": dst}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def home_dir():
     return os.path.expanduser("~")
