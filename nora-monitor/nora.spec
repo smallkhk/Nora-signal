@@ -16,6 +16,7 @@ for _pkg in [
     'webview', 'pywebview',
     'Cryptodome',
     'mss',
+    'tkinter',   # must be in collect_all, not just hiddenimports, for TCL/TK DLLs
 ]:
     try:
         d, b, h = collect_all(_pkg)
