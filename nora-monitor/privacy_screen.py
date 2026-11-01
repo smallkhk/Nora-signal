@@ -17,11 +17,6 @@ import os
 import tempfile
 import threading
 
-try:
-    import webview as _webview
-    _WEBVIEW_OK = True
-except ImportError:
-    _WEBVIEW_OK = False
 
 # ── Win32 DLL handles ────────────────────────────────────────────────────────
 _user32   = ctypes.WinDLL("user32",   use_last_error=True)
@@ -232,10 +227,10 @@ class PrivacyScreen:
         self.pin           = str(pin) if pin else None
         self.overlay_image = overlay_image
         self.overlay_html  = overlay_html
-        self._last_error   = None
-        self._hwnd         = H(None)
-        self._webview_win  = None
-        self._tmp_html     = None
+        self._last_error    = None
+        self._hwnd          = H(None)
+        self._webview_proc  = None
+        self._tmp_html      = None
         self._active       = False
         self._thread       = None
         # Keep callback objects alive (GC protection)
@@ -291,10 +286,10 @@ class PrivacyScreen:
                 _PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
             except Exception:
                 pass
-        wv = self._webview_win
-        if wv:
+        proc = self._webview_proc
+        if proc:
             try:
-                wv.destroy()
+                proc.terminate()
             except Exception:
                 pass
         if self._tmp_html:
@@ -306,7 +301,7 @@ class PrivacyScreen:
 
     def _run(self):
         try:
-            if self.overlay_html and _WEBVIEW_OK:
+            if self.overlay_html:
                 self._run_webview()
             else:
                 self._run_win32()
@@ -504,31 +499,104 @@ class PrivacyScreen:
         except Exception:
             pass
 
-    # ── pywebview renderer ────────────────────────────────────────────────────
+    # ── HTML renderer (Edge kiosk) ────────────────────────────────────────────
 
     def _run_webview(self):
+        import subprocess
         self._set_dpi_aware()
-        vx = _GetSystemMetrics(76)
-        vy = _GetSystemMetrics(77)
-        vw = _GetSystemMetrics(78)
-        vh = _GetSystemMetrics(79)
+        self._read_virtual_screen()
 
         fd, path = tempfile.mkstemp(suffix=".html", prefix="nora_prv_")
         self._tmp_html = path
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(self.overlay_html)
 
-        hinst = H(_GetModuleHandleW(None))
+        url = "file:///" + path.replace("\\", "/")
+
+        edge_exe = self._find_edge()
+        if not edge_exe:
+            self._run_win32()
+            return
+
+        proc = subprocess.Popen([
+            edge_exe, "--kiosk", url,
+            "--edge-kiosk-type=fullscreen",
+            "--no-first-run",
+            "--disable-extensions",
+        ])
+        self._webview_proc = proc
+
+        # Hidden window — provides the message loop LL hooks require
+        hinst    = H(_GetModuleHandleW(None))
+        cls_name = f"NoraPrivacyMsg_{id(self)}"
+        screen   = self
+
+        def wnd_proc(hwnd, msg, wparam, lparam):
+            hwnd = H(hwnd)
+            try:
+                if msg == WM_TIMER:
+                    if not screen._active:
+                        _PostMessageW(hwnd, WM_CLOSE, 0, 0)
+                    return 0
+                if msg == WM_CLOSE:
+                    _DestroyWindow(hwnd)
+                    return 0
+                if msg == WM_DESTROY:
+                    _KillTimer(hwnd, TIMER_ID)
+                    _PostQuitMessage(0)
+                    return 0
+            except Exception:
+                pass
+            return _DefWindowProcW(hwnd, msg, wparam, lparam)
+
+        self._wnd_proc_cb = WNDPROC(wnd_proc)
+
+        wc = _WNDCLASSEXW()
+        wc.cbSize        = ctypes.sizeof(_WNDCLASSEXW)
+        wc.lpfnWndProc   = self._wnd_proc_cb
+        wc.hInstance     = hinst
+        wc.lpszClassName = cls_name
+        _RegisterClassExW(ctypes.byref(wc))
+
+        msg_hwnd = H(_CreateWindowExW(
+            0, cls_name, "", 0,
+            0, 0, 0, 0, None, None, hinst, None,
+        ))
+        self._hwnd = msg_hwnd
+        _SetTimer(msg_hwnd, TIMER_ID, 250, None)
         self._install_hooks(hinst)
 
-        win = _webview.create_window(
-            title="",
-            url=f"file:///{path.replace(os.sep, '/')}",
-            x=vx, y=vy, width=vw, height=vh,
-            frameless=True, on_top=True, background_color="#101010",
-        )
-        self._webview_win = win
-        _webview.start()
+        try:
+            msg_obj = _MSG()
+            while True:
+                r = _GetMessageW(ctypes.byref(msg_obj), None, 0, 0)
+                if r == 0 or r == -1:
+                    break
+                _TranslateMessage(ctypes.byref(msg_obj))
+                _DispatchMessageW(ctypes.byref(msg_obj))
+        finally:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            _UnregisterClassW(cls_name, hinst)
+
+    def _find_edge(self):
+        candidates = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ]
+        for p in candidates:
+            if os.path.isfile(p):
+                return p
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe") as k:
+                return winreg.QueryValue(k, None)
+        except Exception:
+            pass
+        return None
 
     # ── Win32 hooks ───────────────────────────────────────────────────────────
 
