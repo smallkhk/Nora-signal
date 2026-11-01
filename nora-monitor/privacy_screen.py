@@ -1,8 +1,6 @@
 """
 Privacy Screen / Display Lock for NoraMonitor.
-
 Pure Win32 implementation — no tkinter / TCL/TK dependency.
-Uses user32 + gdi32 (always present on Windows) for the overlay window.
 
 Overlay modes
   default  – dark screen with message text (Win32 GDI)
@@ -13,7 +11,7 @@ Emergency local exit: Ctrl + Alt + Shift + F12  (bypasses PIN).
 """
 import base64
 import ctypes
-import ctypes.wintypes
+import ctypes.wintypes as wt
 import io
 import os
 import tempfile
@@ -25,86 +23,79 @@ try:
 except ImportError:
     _WEBVIEW_OK = False
 
-# ── Win32 constants ───────────────────────────────────────────────────────────
-WH_KEYBOARD_LL  = 13
-WH_MOUSE_LL     = 14
-LLKHF_INJECTED  = 0x10
-LLMHF_INJECTED  = 0x01
+# ── Win32 DLL handles ────────────────────────────────────────────────────────
+_user32   = ctypes.WinDLL("user32",   use_last_error=True)
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_gdi32    = ctypes.WinDLL("gdi32",    use_last_error=True)
 
-VK_F12     = 0x7B
-VK_CONTROL = 0x11
-VK_MENU    = 0x12
-VK_SHIFT   = 0x10
-
-WM_PAINT      = 0x000F
-WM_ERASEBKGND = 0x0014
-WM_CLOSE      = 0x0010
-WM_DESTROY    = 0x0002
-WM_TIMER      = 0x0113
-WM_APP_QUIT   = 0x8001   # private message used by _shutdown()
-
-WS_POPUP      = 0x80000000
-WS_VISIBLE    = 0x10000000
-WS_EX_TOPMOST = 0x00000008
-SWP_NOSIZE    = 0x0001
-SWP_NOMOVE    = 0x0002
-SW_SHOW       = 5
-PM_REMOVE     = 0x0001
-DT_CENTER     = 0x00000001
-DT_WORDBREAK  = 0x00000010
-SRCCOPY       = 0x00CC0020
-TRANSPARENT   = 1
+# ── Primitive types ──────────────────────────────────────────────────────────
+HANDLE  = ctypes.c_void_p
+WPARAM  = ctypes.c_size_t
+LPARAM  = ctypes.c_ssize_t
+LRESULT = ctypes.c_ssize_t
+UINT    = ctypes.c_uint
+INT     = ctypes.c_int
 
 
-# ── ctypes types ──────────────────────────────────────────────────────────────
-LLKBDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
-LLMSPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
-WNDPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.wintypes.HWND, ctypes.c_uint,
-    ctypes.wintypes.WPARAM, ctypes.wintypes.LPARAM)
+def H(v):
+    """Wrap a handle value as c_void_p — prevents 64-bit truncation."""
+    return v if isinstance(v, ctypes.c_void_p) else ctypes.c_void_p(v)
 
 
-class _KBDLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [("vkCode", ctypes.c_uint32), ("scanCode", ctypes.c_uint32),
-                 ("flags",  ctypes.c_uint32), ("time",     ctypes.c_uint32),
-                 ("dwExtraInfo", ctypes.c_size_t)]
+# ── Callback types ────────────────────────────────────────────────────────────
+WNDPROC  = ctypes.WINFUNCTYPE(LRESULT, HANDLE, UINT, WPARAM, LPARAM)
+HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, INT, WPARAM, LPARAM)
 
 
-class _MSLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [("pt_x", ctypes.c_long), ("pt_y", ctypes.c_long),
-                 ("mouseData", ctypes.c_uint32), ("flags", ctypes.c_uint32),
-                 ("time", ctypes.c_uint32), ("dwExtraInfo", ctypes.c_size_t)]
-
-
-class _WNDCLASSEX(ctypes.Structure):
+# ── Structures ────────────────────────────────────────────────────────────────
+class _WNDCLASSEXW(ctypes.Structure):
     _fields_ = [
-        ("cbSize",        ctypes.c_uint),
-        ("style",         ctypes.c_uint),
+        ("cbSize",        UINT),
+        ("style",         UINT),
         ("lpfnWndProc",   WNDPROC),
-        ("cbClsExtra",    ctypes.c_int),
-        ("cbWndExtra",    ctypes.c_int),
-        ("hInstance",     ctypes.wintypes.HANDLE),
-        ("hIcon",         ctypes.wintypes.HANDLE),
-        ("hCursor",       ctypes.wintypes.HANDLE),
-        ("hbrBackground", ctypes.wintypes.HANDLE),
-        ("lpszMenuName",  ctypes.c_wchar_p),
-        ("lpszClassName", ctypes.c_wchar_p),
-        ("hIconSm",       ctypes.wintypes.HANDLE),
+        ("cbClsExtra",    INT),
+        ("cbWndExtra",    INT),
+        ("hInstance",     HANDLE),
+        ("hIcon",         HANDLE),
+        ("hCursor",       HANDLE),
+        ("hbrBackground", HANDLE),
+        ("lpszMenuName",  wt.LPCWSTR),
+        ("lpszClassName", wt.LPCWSTR),
+        ("hIconSm",       HANDLE),
+    ]
+
+
+class _MSG(ctypes.Structure):
+    _fields_ = [
+        ("hwnd",     HANDLE),
+        ("message",  UINT),
+        ("wParam",   WPARAM),
+        ("lParam",   LPARAM),
+        ("time",     wt.DWORD),
+        ("pt",       wt.POINT),
+        ("lPrivate", wt.DWORD),
     ]
 
 
 class _PAINTSTRUCT(ctypes.Structure):
-    _fields_ = [("hdc", ctypes.wintypes.HANDLE), ("fErase", ctypes.wintypes.BOOL),
-                 ("rcPaint", ctypes.wintypes.RECT), ("fRestore", ctypes.wintypes.BOOL),
-                 ("fIncUpdate", ctypes.wintypes.BOOL), ("rgbReserved", ctypes.c_byte * 32)]
+    _fields_ = [
+        ("hdc",        HANDLE),
+        ("fErase",     wt.BOOL),
+        ("rcPaint",    wt.RECT),
+        ("fRestore",   wt.BOOL),
+        ("fIncUpdate", wt.BOOL),
+        ("rgbReserved", ctypes.c_byte * 32),
+    ]
 
 
-class _MSG(ctypes.Structure):
-    _fields_ = [("hwnd", ctypes.wintypes.HWND), ("message", ctypes.c_uint),
-                 ("wParam", ctypes.wintypes.WPARAM), ("lParam", ctypes.wintypes.LPARAM),
-                 ("time", ctypes.c_uint), ("pt_x", ctypes.c_long), ("pt_y", ctypes.c_long)]
+class _KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("vkCode",      wt.DWORD),
+        ("scanCode",    wt.DWORD),
+        ("flags",       wt.DWORD),
+        ("time",        wt.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
 
 
 class _BITMAPINFOHEADER(ctypes.Structure):
@@ -123,41 +114,146 @@ class _BITMAPINFOHEADER(ctypes.Structure):
     ]
 
 
+# ── Win32 function declarations ───────────────────────────────────────────────
+def _proto(dll, name, restype, *argtypes):
+    f = getattr(dll, name)
+    f.restype   = restype
+    f.argtypes  = list(argtypes)
+    return f
+
+
+_PRECT = ctypes.POINTER(wt.RECT)
+_PPAINTSTRUCT = ctypes.POINTER(_PAINTSTRUCT)
+_PMSG = ctypes.POINTER(_MSG)
+
+_GetModuleHandleW   = _proto(_kernel32, "GetModuleHandleW",   HANDLE, wt.LPCWSTR)
+_GetSystemMetrics   = _proto(_user32,   "GetSystemMetrics",   INT,    INT)
+_SetProcessDPIAware = _proto(_user32,   "SetProcessDPIAware", wt.BOOL)
+_RegisterClassExW   = _proto(_user32,   "RegisterClassExW",   wt.ATOM, ctypes.POINTER(_WNDCLASSEXW))
+_CreateWindowExW    = _proto(_user32,   "CreateWindowExW",    HANDLE,
+                              wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD,
+                              INT, INT, INT, INT, HANDLE, HANDLE, HANDLE, ctypes.c_void_p)
+_DefWindowProcW     = _proto(_user32,   "DefWindowProcW",     LRESULT, HANDLE, UINT, WPARAM, LPARAM)
+_ShowWindow         = _proto(_user32,   "ShowWindow",         wt.BOOL, HANDLE, INT)
+_UpdateWindow       = _proto(_user32,   "UpdateWindow",       wt.BOOL, HANDLE)
+_SetForegroundWindow= _proto(_user32,   "SetForegroundWindow",wt.BOOL, HANDLE)
+_SetWindowPos       = _proto(_user32,   "SetWindowPos",       wt.BOOL, HANDLE, HANDLE, INT, INT, INT, INT, UINT)
+_DestroyWindow      = _proto(_user32,   "DestroyWindow",      wt.BOOL, HANDLE)
+_PostMessageW       = _proto(_user32,   "PostMessageW",       wt.BOOL, HANDLE, UINT, WPARAM, LPARAM)
+_PostQuitMessage    = _proto(_user32,   "PostQuitMessage",    None,    INT)
+_SetTimer           = _proto(_user32,   "SetTimer",           ctypes.c_size_t, HANDLE, ctypes.c_size_t, UINT, ctypes.c_void_p)
+_KillTimer          = _proto(_user32,   "KillTimer",          wt.BOOL, HANDLE, ctypes.c_size_t)
+_GetMessageW        = _proto(_user32,   "GetMessageW",        wt.BOOL, _PMSG, HANDLE, UINT, UINT)
+_TranslateMessage   = _proto(_user32,   "TranslateMessage",   wt.BOOL, _PMSG)
+_DispatchMessageW   = _proto(_user32,   "DispatchMessageW",   LRESULT, _PMSG)
+_BeginPaint         = _proto(_user32,   "BeginPaint",         HANDLE,  HANDLE, _PPAINTSTRUCT)
+_EndPaint           = _proto(_user32,   "EndPaint",           wt.BOOL, HANDLE, _PPAINTSTRUCT)
+_GetClientRect      = _proto(_user32,   "GetClientRect",      wt.BOOL, HANDLE, _PRECT)
+_FillRect           = _proto(_user32,   "FillRect",           INT,     HANDLE, _PRECT, HANDLE)
+_DrawTextW          = _proto(_user32,   "DrawTextW",          INT,     HANDLE, wt.LPCWSTR, INT, _PRECT, UINT)
+_InvalidateRect     = _proto(_user32,   "InvalidateRect",     wt.BOOL, HANDLE, _PRECT, wt.BOOL)
+_SetWindowsHookExW  = _proto(_user32,   "SetWindowsHookExW",  HANDLE,  INT, HOOKPROC, HANDLE, wt.DWORD)
+_UnhookWindowsHookEx= _proto(_user32,   "UnhookWindowsHookEx",wt.BOOL, HANDLE)
+_CallNextHookEx     = _proto(_user32,   "CallNextHookEx",     LRESULT, HANDLE, INT, WPARAM, LPARAM)
+_ShowCursor         = _proto(_user32,   "ShowCursor",         INT,     wt.BOOL)
+_GetAsyncKeyState   = _proto(_user32,   "GetAsyncKeyState",   ctypes.c_short, INT)
+
+_CreateSolidBrush   = _proto(_gdi32,    "CreateSolidBrush",   HANDLE,  wt.DWORD)
+_CreateFontW        = _proto(_gdi32,    "CreateFontW",        HANDLE,
+                              INT, INT, INT, INT, INT,
+                              wt.DWORD, wt.DWORD, wt.DWORD, wt.DWORD,
+                              wt.DWORD, wt.DWORD, wt.DWORD, wt.DWORD, wt.LPCWSTR)
+_SelectObject       = _proto(_gdi32,    "SelectObject",       HANDLE,  HANDLE, HANDLE)
+_DeleteObject       = _proto(_gdi32,    "DeleteObject",       wt.BOOL, HANDLE)
+_SetTextColor       = _proto(_gdi32,    "SetTextColor",       wt.DWORD,HANDLE, wt.DWORD)
+_SetBkMode          = _proto(_gdi32,    "SetBkMode",          INT,     HANDLE, INT)
+_StretchDIBits      = _proto(_gdi32,    "StretchDIBits",      INT,
+                              HANDLE, INT, INT, INT, INT, INT, INT, INT, INT,
+                              ctypes.c_void_p, ctypes.POINTER(_BITMAPINFOHEADER),
+                              UINT, wt.DWORD)
+_UnregisterClassW   = _proto(_user32,   "UnregisterClassW",   wt.BOOL, wt.LPCWSTR, HANDLE)
+
+# ── Win32 constants ───────────────────────────────────────────────────────────
+WS_POPUP        = 0x80000000
+WS_VISIBLE      = 0x10000000
+WS_EX_TOPMOST   = 0x00000008
+WS_EX_TOOLWINDOW= 0x00000080
+CS_VREDRAW, CS_HREDRAW = 0x0001, 0x0002
+
+WM_DESTROY      = 0x0002
+WM_PAINT        = 0x000F
+WM_CLOSE        = 0x0010
+WM_ERASEBKGND   = 0x0014
+WM_DISPLAYCHANGE= 0x007E
+WM_TIMER        = 0x0113
+WM_KEYDOWN      = 0x0100
+WM_KEYUP        = 0x0101
+WM_SYSKEYDOWN   = 0x0104
+WM_SYSKEYUP     = 0x0105
+
+WH_KEYBOARD_LL  = 13
+WH_MOUSE_LL     = 14
+HC_ACTION       = 0
+
+HWND_TOPMOST    = -1
+SWP_NOSIZE      = 0x0001
+SWP_NOMOVE      = 0x0002
+SWP_NOACTIVATE  = 0x0010
+SWP_SHOWWINDOW  = 0x0040
+
+SW_SHOW         = 5
+TRANSPARENT     = 1
+SRCCOPY         = 0x00CC0020
+DT_CENTER       = 0x0001
+DT_VCENTER      = 0x0004
+DT_SINGLELINE   = 0x0020
+DT_WORDBREAK    = 0x0010
+
+VK_F12          = 0x7B
+VK_SHIFT        = 0x10
+VK_CONTROL      = 0x11
+VK_MENU         = 0x12
+VK_LSHIFT, VK_RSHIFT   = 0xA0, 0xA1
+VK_LCONTROL, VK_RCONTROL = 0xA2, 0xA3
+VK_LMENU, VK_RMENU     = 0xA4, 0xA5
+
+TIMER_ID        = 1
+
 # ── Global state ──────────────────────────────────────────────────────────────
 _active_screen = None
 _state_lock    = threading.Lock()
 
 
 class PrivacyScreen:
-    """Full-screen lock overlay. No tkinter dependency — pure Win32 GDI."""
+    """Full-screen lock overlay. Pure Win32 GDI — no tkinter dependency."""
 
-    def __init__(
-        self,
-        message="Remote support session in progress.\nPlease do not touch the computer.",
-        pin=None,
-        overlay_image=None,
-        overlay_html=None,
-    ):
-        self.message       = message
+    def __init__(self, message=None, pin=None, overlay_image=None, overlay_html=None):
+        self.message       = message or "Remote support session in progress.\nPlease wait."
         self.pin           = str(pin) if pin else None
         self.overlay_image = overlay_image
         self.overlay_html  = overlay_html
         self._last_error   = None
-        self._hwnd         = None
+        self._hwnd         = H(None)
         self._webview_win  = None
         self._tmp_html     = None
         self._active       = False
         self._thread       = None
-        self._wndproc_ref  = None   # keep WNDPROC alive (GC protection)
-        self._kbd_cb       = None
-        self._ms_cb        = None
-        self._h_kbd        = None
-        self._h_ms         = None
-        # image pixel data stored for WM_PAINT
+        # Keep callback objects alive (GC protection)
+        self._wnd_proc_cb  = None
+        self._kb_proc_cb   = None
+        self._ms_proc_cb   = None
+        self._kb_hook      = H(None)
+        self._ms_hook      = H(None)
+        self._brush        = H(None)
+        # image pixel data
         self._img_pixels   = None
         self._img_bih      = None
         self._img_w        = 0
         self._img_h        = 0
+        # keyboard state
+        self._pressed      = set()
+        # virtual screen geometry (updated on WM_DISPLAYCHANGE)
+        self._vx = self._vy = self._vw = self._vh = 0
 
     @property
     def active(self):
@@ -190,10 +286,9 @@ class PrivacyScreen:
             global _active_screen
             if _active_screen is self:
                 _active_screen = None
-        hwnd = self._hwnd
-        if hwnd:
+        if self._hwnd.value:
             try:
-                ctypes.windll.user32.PostMessageW(hwnd, WM_APP_QUIT, 0, 0)
+                _PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
             except Exception:
                 pass
         wv = self._webview_win
@@ -220,253 +315,273 @@ class PrivacyScreen:
         finally:
             self._remove_hooks()
             self._active = False
+            if self._brush.value:
+                _DeleteObject(self._brush)
+                self._brush = H(None)
             with _state_lock:
                 global _active_screen
                 if _active_screen is self:
                     _active_screen = None
 
+    # ── DPI + screen geometry ─────────────────────────────────────────────────
+
+    def _set_dpi_aware(self):
+        try:
+            f = _proto(_user32, "SetProcessDpiAwarenessContext", wt.BOOL, HANDLE)
+            if f(H(-4)):
+                return
+        except (AttributeError, OSError):
+            pass
+        try:
+            ctypes.WinDLL("shcore").SetProcessDpiAwareness(2)
+            return
+        except (AttributeError, OSError):
+            pass
+        try:
+            _SetProcessDPIAware()
+        except (AttributeError, OSError):
+            pass
+
+    def _read_virtual_screen(self):
+        self._vx = _GetSystemMetrics(76)
+        self._vy = _GetSystemMetrics(77)
+        self._vw = _GetSystemMetrics(78)
+        self._vh = _GetSystemMetrics(79)
+        if self._vw <= 0 or self._vh <= 0:
+            self._vx, self._vy = 0, 0
+            self._vw = _GetSystemMetrics(0)
+            self._vh = _GetSystemMetrics(1)
+
     # ── Win32 GDI renderer ────────────────────────────────────────────────────
 
     def _run_win32(self):
-        user32   = ctypes.windll.user32
-        gdi32    = ctypes.windll.gdi32
-        kernel32 = ctypes.windll.kernel32
+        self._set_dpi_aware()
+        self._read_virtual_screen()
 
-        # All GDI/User32 functions that return pointer-sized handles must have
-        # restype set explicitly — ctypes defaults to c_int (32-bit) which
-        # silently truncates 64-bit handles and causes WM_PAINT to crash.
-        kernel32.GetModuleHandleW.restype  = ctypes.c_void_p
-        user32.CreateWindowExW.restype     = ctypes.wintypes.HWND
-        user32.BeginPaint.restype          = ctypes.c_void_p
-        user32.GetDC.restype               = ctypes.c_void_p
-        gdi32.GetStockObject.restype       = ctypes.c_void_p
-        gdi32.CreateSolidBrush.restype     = ctypes.c_void_p
-        user32.DefWindowProcW.restype      = ctypes.c_long
-
-        user32.SetProcessDPIAware()
-        vx = user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
-        vy = user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
-        vw = user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
-        vh = user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
-
-        # Fallback: if virtual screen metrics are zero use primary monitor
-        if vw <= 0 or vh <= 0:
-            vx, vy = 0, 0
-            vw = user32.GetSystemMetrics(0)   # SM_CXSCREEN
-            vh = user32.GetSystemMetrics(1)   # SM_CYSCREEN
-
-        hinst    = ctypes.c_void_p(kernel32.GetModuleHandleW(None))
-        cls_name = f"NoraPrivacy_{id(self)}"
-
-        # Pre-decode image (if any) so WM_PAINT stays fast
         if self.overlay_image:
-            self._prepare_image(vw, vh)
+            self._prepare_image(self._vw, self._vh)
+
+        hinst        = H(_GetModuleHandleW(None))
+        cls_name     = f"NoraPrivacy_{id(self)}"
+        self._brush  = H(_CreateSolidBrush(0x00101010))
 
         screen = self
 
         def wnd_proc(hwnd, msg, wparam, lparam):
-            if msg == WM_PAINT:
-                ps = _PAINTSTRUCT()
-                # Wrap hdc as c_void_p — BeginPaint returns pointer-sized HDC;
-                # passing a raw Python int to GDI calls overflows on 64-bit.
-                hdc = ctypes.c_void_p(user32.BeginPaint(hwnd, ctypes.byref(ps)))
-                if hdc.value:
-                    if screen._img_pixels and screen._img_bih:
-                        gdi32.StretchDIBits(
-                            hdc,
-                            0, 0, vw, vh,
-                            0, 0, screen._img_w, screen._img_h,
-                            screen._img_pixels,
-                            ctypes.byref(screen._img_bih),
-                            0,        # DIB_RGB_COLORS
-                            SRCCOPY,
-                        )
-                    else:
-                        rect = ctypes.wintypes.RECT(0, 0, vw, vh)
-                        bg = ctypes.c_void_p(gdi32.CreateSolidBrush(0x00090909))
-                        user32.FillRect(hdc, ctypes.byref(rect), bg)
-                        gdi32.DeleteObject(bg)
-                        gdi32.SetBkMode(hdc, TRANSPARENT)
-                        gdi32.SetTextColor(hdc, 0x00F4F4F5)
-                        txt_rect = ctypes.wintypes.RECT(vw // 6, vh // 3, 5 * vw // 6, 2 * vh // 3)
-                        user32.DrawTextW(hdc, screen.message, -1,
-                                         ctypes.byref(txt_rect), DT_CENTER | DT_WORDBREAK)
-                    user32.EndPaint(hwnd, ctypes.byref(ps))
-                return 0
+            hwnd = H(hwnd)
+            try:
+                if msg == WM_TIMER:
+                    _SetWindowPos(hwnd, H(HWND_TOPMOST), 0, 0, 0, 0,
+                                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW)
+                    return 0
+                if msg == WM_ERASEBKGND:
+                    return 1
+                if msg == WM_PAINT:
+                    screen._paint(hwnd)
+                    return 0
+                if msg == WM_DISPLAYCHANGE:
+                    screen._read_virtual_screen()
+                    _SetWindowPos(hwnd, H(HWND_TOPMOST),
+                                  screen._vx, screen._vy, screen._vw, screen._vh,
+                                  SWP_NOACTIVATE | SWP_SHOWWINDOW)
+                    _InvalidateRect(hwnd, None, True)
+                    return 0
+                if msg == WM_CLOSE:
+                    _DestroyWindow(hwnd)
+                    return 0
+                if msg == WM_DESTROY:
+                    _KillTimer(hwnd, TIMER_ID)
+                    screen._remove_hooks()
+                    _PostQuitMessage(0)
+                    return 0
+            except Exception:
+                pass
+            return _DefWindowProcW(hwnd, msg, wparam, lparam)
 
-            elif msg == WM_ERASEBKGND:
-                return 1
+        self._wnd_proc_cb = WNDPROC(wnd_proc)
 
-            elif msg == WM_TIMER:
-                if not screen._active:
-                    user32.PostQuitMessage(0)
-                else:
-                    user32.SetWindowPos(
-                        ctypes.wintypes.HWND(hwnd),
-                        ctypes.wintypes.HWND(-1),   # HWND_TOPMOST
-                        0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE,
-                    )
-                return 0
-
-            elif msg == WM_APP_QUIT:
-                user32.PostQuitMessage(0)
-                return 0
-
-            elif msg == WM_CLOSE:
-                return 0   # ignore — only _shutdown() can close us
-
-            elif msg == WM_DESTROY:
-                user32.PostQuitMessage(0)   # exit message loop cleanly
-                return 0
-
-            return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
-
-        proc = WNDPROC(wnd_proc)
-        self._wndproc_ref = proc   # prevent GC
-
-        wc = _WNDCLASSEX()
-        wc.cbSize        = ctypes.sizeof(_WNDCLASSEX)
-        wc.lpfnWndProc   = proc
+        wc = _WNDCLASSEXW()
+        wc.cbSize        = ctypes.sizeof(_WNDCLASSEXW)
+        wc.style         = CS_HREDRAW | CS_VREDRAW
+        wc.lpfnWndProc   = self._wnd_proc_cb
         wc.hInstance     = hinst
-        wc.hbrBackground = gdi32.GetStockObject(4)   # BLACK_BRUSH
+        wc.hCursor       = H(None)
+        wc.hbrBackground = self._brush
         wc.lpszClassName = cls_name
-        if not user32.RegisterClassExW(ctypes.byref(wc)):
-            err = kernel32.GetLastError()
-            if err != 1410:   # 1410 = ERROR_CLASS_ALREADY_EXISTS (safe to ignore)
+
+        atom = _RegisterClassExW(ctypes.byref(wc))
+        if not atom:
+            err = ctypes.get_last_error()
+            if err != 1410:
                 raise RuntimeError(f"RegisterClassExW failed err={err}")
 
-        hwnd = user32.CreateWindowExW(
-            WS_EX_TOPMOST, cls_name, "",
+        self._hwnd = H(_CreateWindowExW(
+            WS_EX_TOPMOST | WS_EX_TOOLWINDOW, cls_name, "",
             WS_POPUP | WS_VISIBLE,
-            vx, vy, vw, vh,
+            self._vx, self._vy, self._vw, self._vh,
             None, None, hinst, None,
-        )
-        if not hwnd:
-            user32.UnregisterClassW(cls_name, hinst)
-            raise RuntimeError(f"CreateWindowExW failed err={kernel32.GetLastError()}")
+        ))
+        if not self._hwnd.value:
+            _UnregisterClassW(cls_name, hinst)
+            raise RuntimeError(f"CreateWindowExW failed err={ctypes.get_last_error()}")
 
-        self._hwnd = hwnd
-        user32.SetWindowPos(
-            ctypes.wintypes.HWND(hwnd), ctypes.wintypes.HWND(-1),
-            0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE,
-        )
-        user32.ShowWindow(hwnd, SW_SHOW)
-        user32.UpdateWindow(hwnd)
+        _ShowWindow(self._hwnd, SW_SHOW)
+        _UpdateWindow(self._hwnd)
+        _SetForegroundWindow(self._hwnd)
+        _SetTimer(self._hwnd, TIMER_ID, 250, None)
 
-        self._install_hooks()
-        user32.SetTimer(hwnd, 1, 250, None)   # keep-on-top + alive check
+        self._install_hooks(hinst)
 
-        msg_obj = _MSG()
-        while True:
-            r = user32.GetMessageW(ctypes.byref(msg_obj), None, 0, 0)
-            if r <= 0:
+        for _ in range(50):
+            if _ShowCursor(False) < 0:
                 break
-            user32.TranslateMessage(ctypes.byref(msg_obj))
-            user32.DispatchMessageW(ctypes.byref(msg_obj))
 
-        user32.KillTimer(hwnd, 1)
         try:
-            user32.DestroyWindow(hwnd)
-        except Exception:
-            pass
-        user32.UnregisterClassW(cls_name, hinst)
+            msg_obj = _MSG()
+            while True:
+                r = _GetMessageW(ctypes.byref(msg_obj), None, 0, 0)
+                if r == 0 or r == -1:
+                    break
+                _TranslateMessage(ctypes.byref(msg_obj))
+                _DispatchMessageW(ctypes.byref(msg_obj))
+        finally:
+            for _ in range(50):
+                if _ShowCursor(True) >= 0:
+                    break
+            _UnregisterClassW(cls_name, hinst)
+
+    def _paint(self, hwnd):
+        ps  = _PAINTSTRUCT()
+        hdc = H(_BeginPaint(hwnd, ctypes.byref(ps)))
+        try:
+            if not hdc.value:
+                return
+            rc = wt.RECT()
+            _GetClientRect(hwnd, ctypes.byref(rc))
+
+            if self._img_pixels and self._img_bih:
+                _StretchDIBits(hdc,
+                               0, 0, self._vw, self._vh,
+                               0, 0, self._img_w, self._img_h,
+                               self._img_pixels,
+                               ctypes.byref(self._img_bih),
+                               0, SRCCOPY)
+            else:
+                _FillRect(hdc, ctypes.byref(rc), self._brush)
+                _SetBkMode(hdc, TRANSPARENT)
+                _SetTextColor(hdc, 0x00F4F4F5)
+                height = max(24, self._vh // 20)
+                font = H(_CreateFontW(-height, 0, 0, 0, 400, 0, 0, 0,
+                                      1, 0, 0, 5, 0, "Segoe UI"))
+                old = H(_SelectObject(hdc, font))
+                txt_rc = wt.RECT(self._vw // 6, self._vh // 3,
+                                 5 * self._vw // 6, 2 * self._vh // 3)
+                _DrawTextW(hdc, self.message, -1,
+                           ctypes.byref(txt_rc), DT_CENTER | DT_WORDBREAK)
+                _SelectObject(hdc, old)
+                _DeleteObject(font)
+        finally:
+            _EndPaint(hwnd, ctypes.byref(ps))
 
     def _prepare_image(self, vw, vh):
-        """Decode base64 image and store BGR pixel bytes for StretchDIBits."""
         try:
             from PIL import Image
-            raw   = base64.b64decode(self.overlay_image)
-            img   = Image.open(io.BytesIO(raw)).convert("RGB").resize((vw, vh), Image.LANCZOS)
+            raw     = base64.b64decode(self.overlay_image)
+            img     = Image.open(io.BytesIO(raw)).convert("RGB").resize((vw, vh), Image.LANCZOS)
             r, g, b = img.split()
-            bgr_img = Image.merge("RGB", (b, g, r))   # GDI expects BGR
+            bgr_img = Image.merge("RGB", (b, g, r))
             self._img_pixels = bgr_img.tobytes()
             self._img_w = vw
             self._img_h = vh
             bih = _BITMAPINFOHEADER()
             bih.biSize      = ctypes.sizeof(_BITMAPINFOHEADER)
             bih.biWidth     = vw
-            bih.biHeight    = -vh   # negative = top-down scanlines
+            bih.biHeight    = -vh
             bih.biPlanes    = 1
             bih.biBitCount  = 24
-            bih.biCompression = 0   # BI_RGB
+            bih.biCompression = 0
             self._img_bih = bih
         except Exception:
-            pass   # fall back to text overlay
+            pass
 
-    # ── pywebview renderer (HTML mode) ────────────────────────────────────────
+    # ── pywebview renderer ────────────────────────────────────────────────────
 
     def _run_webview(self):
-        user32 = ctypes.windll.user32
-        user32.SetProcessDPIAware()
-        vx = user32.GetSystemMetrics(76)
-        vy = user32.GetSystemMetrics(77)
-        vw = user32.GetSystemMetrics(78)
-        vh = user32.GetSystemMetrics(79)
+        self._set_dpi_aware()
+        vx = _GetSystemMetrics(76)
+        vy = _GetSystemMetrics(77)
+        vw = _GetSystemMetrics(78)
+        vh = _GetSystemMetrics(79)
 
         fd, path = tempfile.mkstemp(suffix=".html", prefix="nora_prv_")
         self._tmp_html = path
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(self.overlay_html)
 
-        self._install_hooks()
+        hinst = H(_GetModuleHandleW(None))
+        self._install_hooks(hinst)
 
         win = _webview.create_window(
             title="",
             url=f"file:///{path.replace(os.sep, '/')}",
             x=vx, y=vy, width=vw, height=vh,
-            frameless=True, on_top=True, background_color="#090909",
+            frameless=True, on_top=True, background_color="#101010",
         )
         self._webview_win = win
         _webview.start()
 
     # ── Win32 hooks ───────────────────────────────────────────────────────────
 
-    def _install_hooks(self):
-        user32   = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        kernel32.GetModuleHandleW.restype   = ctypes.c_void_p
-        user32.SetWindowsHookExW.restype    = ctypes.c_void_p
-        screen   = self
+    def _install_hooks(self, hinst):
+        screen = self
 
-        def _kbd_hook(nCode, wParam, lParam):
-            if nCode >= 0:
-                kb = ctypes.cast(lParam, ctypes.POINTER(_KBDLLHOOKSTRUCT)).contents
-                if not (kb.flags & LLKHF_INJECTED):
-                    if (kb.vkCode == VK_F12
-                            and user32.GetAsyncKeyState(VK_CONTROL) & 0x8000
-                            and user32.GetAsyncKeyState(VK_MENU)    & 0x8000
-                            and user32.GetAsyncKeyState(VK_SHIFT)   & 0x8000):
+        def _kb_hook(nCode, wParam, lParam):
+            if nCode == HC_ACTION:
+                try:
+                    kb = _KBDLLHOOKSTRUCT.from_address(lParam)
+                    vk       = kb.vkCode
+                    is_down  = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
+                    if is_down:
+                        screen._pressed.add(vk)
+                    else:
+                        screen._pressed.discard(vk)
+
+                    def _dn(*vks):
+                        return any(v in screen._pressed for v in vks)
+
+                    if (is_down and vk == VK_F12
+                            and _dn(VK_LCONTROL, VK_RCONTROL, VK_CONTROL)
+                            and _dn(VK_LMENU, VK_RMENU, VK_MENU)
+                            and _dn(VK_LSHIFT, VK_RSHIFT, VK_SHIFT)):
                         screen.force_stop()
                         return 1
-                    return 1
-            return user32.CallNextHookEx(screen._h_kbd, nCode, wParam, lParam)
-
-        def _ms_hook(nCode, wParam, lParam):
-            if nCode >= 0:
-                ms = ctypes.cast(lParam, ctypes.POINTER(_MSLLHOOKSTRUCT)).contents
-                if not (ms.flags & LLMHF_INJECTED):
-                    return 1
-            return user32.CallNextHookEx(screen._h_ms, nCode, wParam, lParam)
-
-        self._kbd_cb = LLKBDPROC(_kbd_hook)
-        self._ms_cb  = LLMSPROC(_ms_hook)
-        hmod = ctypes.c_void_p(kernel32.GetModuleHandleW(None))
-        self._h_kbd = ctypes.c_void_p(user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kbd_cb, hmod, 0))
-        self._h_ms  = ctypes.c_void_p(user32.SetWindowsHookExW(WH_MOUSE_LL,    self._ms_cb,  hmod, 0))
-
-    def _remove_hooks(self):
-        user32 = ctypes.windll.user32
-        for h in (self._h_kbd, self._h_ms):
-            if h:
-                try:
-                    user32.UnhookWindowsHookEx(h)
                 except Exception:
                     pass
-        self._h_kbd = None
-        self._h_ms  = None
+                return 1   # swallow every key
+            return _CallNextHookEx(screen._kb_hook, nCode, wParam, lParam)
+
+        def _ms_hook(nCode, wParam, lParam):
+            if nCode == HC_ACTION:
+                return 1   # swallow all mouse input
+            return _CallNextHookEx(screen._ms_hook, nCode, wParam, lParam)
+
+        self._kb_proc_cb = HOOKPROC(_kb_hook)
+        self._ms_proc_cb = HOOKPROC(_ms_hook)
+        self._kb_hook = H(_SetWindowsHookExW(WH_KEYBOARD_LL, self._kb_proc_cb, hinst, 0))
+        self._ms_hook = H(_SetWindowsHookExW(WH_MOUSE_LL,    self._ms_proc_cb, hinst, 0))
+
+    def _remove_hooks(self):
+        for attr in ("_kb_hook", "_ms_hook"):
+            h = getattr(self, attr)
+            if h and h.value:
+                try:
+                    _UnhookWindowsHookEx(h)
+                except Exception:
+                    pass
+                setattr(self, attr, H(None))
 
 
-# ── Module-level helpers ──────────────────────────────────────────────────────
+# ── Module-level API ──────────────────────────────────────────────────────────
 
 def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_html=None):
     import time
@@ -475,7 +590,7 @@ def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_htm
         if _active_screen and _active_screen.active:
             return False, "already_active"
     ps = PrivacyScreen(
-        message=message or "Remote support session in progress.\nPlease wait.",
+        message=message,
         pin=pin,
         overlay_image=overlay_image,
         overlay_html=overlay_html,
@@ -483,9 +598,9 @@ def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_htm
     with _state_lock:
         _active_screen = ps
     ps.start()
-    time.sleep(2.0)   # wait for Win32 window to appear
+    time.sleep(2.0)
     if not ps._active:
-        err = getattr(ps, '_last_error', None) or "Win32 window creation error"
+        err = ps._last_error or "Win32 window creation error"
         return False, f"failed ({err})"
     return True, "started"
 
