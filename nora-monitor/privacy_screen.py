@@ -267,8 +267,10 @@ class PrivacyScreen:
         def wnd_proc(hwnd, msg, wparam, lparam):
             if msg == WM_PAINT:
                 ps = _PAINTSTRUCT()
-                hdc = user32.BeginPaint(hwnd, ctypes.byref(ps))
-                if hdc:
+                # Wrap hdc as c_void_p — BeginPaint returns pointer-sized HDC;
+                # passing a raw Python int to GDI calls overflows on 64-bit.
+                hdc = ctypes.c_void_p(user32.BeginPaint(hwnd, ctypes.byref(ps)))
+                if hdc.value:
                     if screen._img_pixels and screen._img_bih:
                         gdi32.StretchDIBits(
                             hdc,
@@ -281,7 +283,7 @@ class PrivacyScreen:
                         )
                     else:
                         rect = ctypes.wintypes.RECT(0, 0, vw, vh)
-                        bg = gdi32.CreateSolidBrush(0x00090909)
+                        bg = ctypes.c_void_p(gdi32.CreateSolidBrush(0x00090909))
                         user32.FillRect(hdc, ctypes.byref(rect), bg)
                         gdi32.DeleteObject(bg)
                         gdi32.SetBkMode(hdc, TRANSPARENT)
@@ -310,7 +312,11 @@ class PrivacyScreen:
                 user32.PostQuitMessage(0)
                 return 0
 
-            elif msg in (WM_CLOSE, WM_DESTROY):
+            elif msg == WM_CLOSE:
+                return 0   # ignore — only _shutdown() can close us
+
+            elif msg == WM_DESTROY:
+                user32.PostQuitMessage(0)   # exit message loop cleanly
                 return 0
 
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -418,6 +424,8 @@ class PrivacyScreen:
     def _install_hooks(self):
         user32   = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
+        kernel32.GetModuleHandleW.restype   = ctypes.c_void_p
+        user32.SetWindowsHookExW.restype    = ctypes.c_void_p
         screen   = self
 
         def _kbd_hook(nCode, wParam, lParam):
@@ -443,8 +451,8 @@ class PrivacyScreen:
         self._kbd_cb = LLKBDPROC(_kbd_hook)
         self._ms_cb  = LLMSPROC(_ms_hook)
         hmod = ctypes.c_void_p(kernel32.GetModuleHandleW(None))
-        self._h_kbd = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kbd_cb, hmod, 0)
-        self._h_ms  = user32.SetWindowsHookExW(WH_MOUSE_LL,    self._ms_cb,  hmod, 0)
+        self._h_kbd = ctypes.c_void_p(user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kbd_cb, hmod, 0))
+        self._h_ms  = ctypes.c_void_p(user32.SetWindowsHookExW(WH_MOUSE_LL,    self._ms_cb,  hmod, 0))
 
     def _remove_hooks(self):
         user32 = ctypes.windll.user32
