@@ -255,7 +255,7 @@ class PrivacyScreen:
             vw = user32.GetSystemMetrics(0)   # SM_CXSCREEN
             vh = user32.GetSystemMetrics(1)   # SM_CYSCREEN
 
-        hinst    = kernel32.GetModuleHandleW(None)
+        hinst    = ctypes.c_void_p(kernel32.GetModuleHandleW(None))
         cls_name = f"NoraPrivacy_{id(self)}"
 
         # Pre-decode image (if any) so WM_PAINT stays fast
@@ -442,7 +442,7 @@ class PrivacyScreen:
 
         self._kbd_cb = LLKBDPROC(_kbd_hook)
         self._ms_cb  = LLMSPROC(_ms_hook)
-        hmod = kernel32.GetModuleHandleW(None)
+        hmod = ctypes.c_void_p(kernel32.GetModuleHandleW(None))
         self._h_kbd = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._kbd_cb, hmod, 0)
         self._h_ms  = user32.SetWindowsHookExW(WH_MOUSE_LL,    self._ms_cb,  hmod, 0)
 
