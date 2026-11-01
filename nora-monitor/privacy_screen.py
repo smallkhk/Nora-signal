@@ -93,6 +93,16 @@ class _KBDLLHOOKSTRUCT(ctypes.Structure):
     ]
 
 
+class _MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt",          wt.POINT),
+        ("mouseData",   wt.DWORD),
+        ("flags",       wt.DWORD),
+        ("time",        wt.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
 class _BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
         ("biSize",          ctypes.c_uint32),
@@ -213,6 +223,9 @@ VK_LCONTROL, VK_RCONTROL = 0xA2, 0xA3
 VK_LMENU, VK_RMENU     = 0xA4, 0xA5
 
 TIMER_ID        = 1
+SW_HIDE         = 0
+
+INJECT_TAG      = 0x1EADBEEF  # dwExtraInfo marker: injected remote-control input
 
 # ── Global state ──────────────────────────────────────────────────────────────
 _active_screen = None
@@ -607,6 +620,8 @@ class PrivacyScreen:
             if nCode == HC_ACTION:
                 try:
                     kb = _KBDLLHOOKSTRUCT.from_address(lParam)
+                    if kb.dwExtraInfo == INJECT_TAG:
+                        return _CallNextHookEx(screen._kb_hook, nCode, wParam, lParam)
                     vk       = kb.vkCode
                     is_down  = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
                     if is_down:
@@ -630,7 +645,13 @@ class PrivacyScreen:
 
         def _ms_hook(nCode, wParam, lParam):
             if nCode == HC_ACTION:
-                return 1   # swallow all mouse input
+                try:
+                    ms = _MSLLHOOKSTRUCT.from_address(lParam)
+                    if ms.dwExtraInfo == INJECT_TAG:
+                        return _CallNextHookEx(screen._ms_hook, nCode, wParam, lParam)
+                except Exception:
+                    pass
+                return 1   # swallow all local mouse input
             return _CallNextHookEx(screen._ms_hook, nCode, wParam, lParam)
 
         self._kb_proc_cb = HOOKPROC(_kb_hook)
@@ -685,3 +706,44 @@ def get_status():
     with _state_lock:
         ps = _active_screen
     return ps is not None and ps.active
+
+
+def get_overlay_hwnd():
+    """Return the integer HWND of the active overlay, or None."""
+    with _state_lock:
+        ps = _active_screen
+    if ps is None or not ps.active:
+        return None
+    return ps._hwnd.value
+
+
+def hide_overlay():
+    """
+    Temporarily hide the overlay (call before a desktop screenshot).
+    Returns the HWND integer so the caller can pass it to show_overlay().
+    Returns None if no overlay is active.
+    """
+    with _state_lock:
+        ps = _active_screen
+    if ps is None or not ps.active or not ps._hwnd.value:
+        return None
+    hwnd = ctypes.c_void_p(ps._hwnd.value)
+    _ShowWindow(hwnd, SW_HIDE)
+    return ps._hwnd.value
+
+
+def show_overlay(hwnd_val=None):
+    """
+    Restore the overlay after hide_overlay().
+    Pass the value returned by hide_overlay(), or leave None to auto-detect.
+    """
+    if hwnd_val is None:
+        with _state_lock:
+            ps = _active_screen
+        if ps is None or not ps._hwnd.value:
+            return
+        hwnd_val = ps._hwnd.value
+    hwnd = ctypes.c_void_p(hwnd_val)
+    _ShowWindow(hwnd, SW_SHOW)
+    _SetWindowPos(hwnd, ctypes.c_void_p(HWND_TOPMOST), 0, 0, 0, 0,
+                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW)
