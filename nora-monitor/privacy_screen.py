@@ -142,6 +142,7 @@ class PrivacyScreen:
         self.pin           = str(pin) if pin else None
         self.overlay_image = overlay_image
         self.overlay_html  = overlay_html
+        self._last_error   = None
         self._hwnd         = None
         self._webview_win  = None
         self._tmp_html     = None
@@ -214,8 +215,8 @@ class PrivacyScreen:
                 self._run_webview()
             else:
                 self._run_win32()
-        except Exception:
-            pass
+        except Exception as e:
+            self._last_error = str(e)
         finally:
             self._remove_hooks()
             self._active = False
@@ -231,14 +232,31 @@ class PrivacyScreen:
         gdi32    = ctypes.windll.gdi32
         kernel32 = ctypes.windll.kernel32
 
+        # All GDI/User32 functions that return pointer-sized handles must have
+        # restype set explicitly — ctypes defaults to c_int (32-bit) which
+        # silently truncates 64-bit handles and causes WM_PAINT to crash.
+        kernel32.GetModuleHandleW.restype  = ctypes.c_void_p
+        user32.CreateWindowExW.restype     = ctypes.wintypes.HWND
+        user32.BeginPaint.restype          = ctypes.c_void_p
+        user32.GetDC.restype               = ctypes.c_void_p
+        gdi32.GetStockObject.restype       = ctypes.c_void_p
+        gdi32.CreateSolidBrush.restype     = ctypes.c_void_p
+        user32.DefWindowProcW.restype      = ctypes.c_long
+
         user32.SetProcessDPIAware()
         vx = user32.GetSystemMetrics(76)   # SM_XVIRTUALSCREEN
         vy = user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
         vw = user32.GetSystemMetrics(78)   # SM_CXVIRTUALSCREEN
         vh = user32.GetSystemMetrics(79)   # SM_CYVIRTUALSCREEN
 
-        hinst     = kernel32.GetModuleHandleW(None)
-        cls_name  = f"NoraPrivacy_{id(self)}"
+        # Fallback: if virtual screen metrics are zero use primary monitor
+        if vw <= 0 or vh <= 0:
+            vx, vy = 0, 0
+            vw = user32.GetSystemMetrics(0)   # SM_CXSCREEN
+            vh = user32.GetSystemMetrics(1)   # SM_CYSCREEN
+
+        hinst    = kernel32.GetModuleHandleW(None)
+        cls_name = f"NoraPrivacy_{id(self)}"
 
         # Pre-decode image (if any) so WM_PAINT stays fast
         if self.overlay_image:
@@ -250,39 +268,37 @@ class PrivacyScreen:
             if msg == WM_PAINT:
                 ps = _PAINTSTRUCT()
                 hdc = user32.BeginPaint(hwnd, ctypes.byref(ps))
-                if screen._img_pixels and screen._img_bih:
-                    # Stretch image to fill screen via StretchDIBits
-                    gdi32.StretchDIBits(
-                        hdc,
-                        0, 0, vw, vh,
-                        0, 0, screen._img_w, screen._img_h,
-                        screen._img_pixels,
-                        ctypes.byref(screen._img_bih),
-                        0,        # DIB_RGB_COLORS
-                        SRCCOPY,
-                    )
-                else:
-                    # Dark background + message
-                    rect = ctypes.wintypes.RECT(0, 0, vw, vh)
-                    bg = gdi32.CreateSolidBrush(0x00090909)
-                    user32.FillRect(hdc, ctypes.byref(rect), bg)
-                    gdi32.DeleteObject(bg)
-                    gdi32.SetBkMode(hdc, TRANSPARENT)
-                    gdi32.SetTextColor(hdc, 0x00F4F4F5)
-                    txt_rect = ctypes.wintypes.RECT(vw // 6, vh // 3, 5 * vw // 6, 2 * vh // 3)
-                    user32.DrawTextW(hdc, screen.message, -1,
-                                     ctypes.byref(txt_rect), DT_CENTER | DT_WORDBREAK)
-                user32.EndPaint(hwnd, ctypes.byref(ps))
+                if hdc:
+                    if screen._img_pixels and screen._img_bih:
+                        gdi32.StretchDIBits(
+                            hdc,
+                            0, 0, vw, vh,
+                            0, 0, screen._img_w, screen._img_h,
+                            screen._img_pixels,
+                            ctypes.byref(screen._img_bih),
+                            0,        # DIB_RGB_COLORS
+                            SRCCOPY,
+                        )
+                    else:
+                        rect = ctypes.wintypes.RECT(0, 0, vw, vh)
+                        bg = gdi32.CreateSolidBrush(0x00090909)
+                        user32.FillRect(hdc, ctypes.byref(rect), bg)
+                        gdi32.DeleteObject(bg)
+                        gdi32.SetBkMode(hdc, TRANSPARENT)
+                        gdi32.SetTextColor(hdc, 0x00F4F4F5)
+                        txt_rect = ctypes.wintypes.RECT(vw // 6, vh // 3, 5 * vw // 6, 2 * vh // 3)
+                        user32.DrawTextW(hdc, screen.message, -1,
+                                         ctypes.byref(txt_rect), DT_CENTER | DT_WORDBREAK)
+                    user32.EndPaint(hwnd, ctypes.byref(ps))
                 return 0
 
             elif msg == WM_ERASEBKGND:
-                return 1   # we handle background in WM_PAINT
+                return 1
 
             elif msg == WM_TIMER:
                 if not screen._active:
                     user32.PostQuitMessage(0)
                 else:
-                    # Keep window strictly on top
                     user32.SetWindowPos(
                         ctypes.wintypes.HWND(hwnd),
                         ctypes.wintypes.HWND(-1),   # HWND_TOPMOST
@@ -295,14 +311,13 @@ class PrivacyScreen:
                 return 0
 
             elif msg in (WM_CLOSE, WM_DESTROY):
-                return 0   # ignore — only _shutdown() can close us
+                return 0
 
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
         proc = WNDPROC(wnd_proc)
         self._wndproc_ref = proc   # prevent GC
 
-        # Register window class
         wc = _WNDCLASSEX()
         wc.cbSize        = ctypes.sizeof(_WNDCLASSEX)
         wc.lpfnWndProc   = proc
@@ -310,9 +325,10 @@ class PrivacyScreen:
         wc.hbrBackground = gdi32.GetStockObject(4)   # BLACK_BRUSH
         wc.lpszClassName = cls_name
         if not user32.RegisterClassExW(ctypes.byref(wc)):
-            raise RuntimeError(f"RegisterClassExW failed: {kernel32.GetLastError()}")
+            err = kernel32.GetLastError()
+            if err != 1410:   # 1410 = ERROR_CLASS_ALREADY_EXISTS (safe to ignore)
+                raise RuntimeError(f"RegisterClassExW failed err={err}")
 
-        user32.CreateWindowExW.restype = ctypes.wintypes.HWND
         hwnd = user32.CreateWindowExW(
             WS_EX_TOPMOST, cls_name, "",
             WS_POPUP | WS_VISIBLE,
@@ -321,7 +337,7 @@ class PrivacyScreen:
         )
         if not hwnd:
             user32.UnregisterClassW(cls_name, hinst)
-            raise RuntimeError(f"CreateWindowExW failed: {kernel32.GetLastError()}")
+            raise RuntimeError(f"CreateWindowExW failed err={kernel32.GetLastError()}")
 
         self._hwnd = hwnd
         user32.SetWindowPos(
@@ -461,7 +477,8 @@ def start_privacy_screen(message=None, pin=None, overlay_image=None, overlay_htm
     ps.start()
     time.sleep(2.0)   # wait for Win32 window to appear
     if not ps._active:
-        return False, "failed (Win32 window creation error)"
+        err = getattr(ps, '_last_error', None) or "Win32 window creation error"
+        return False, f"failed ({err})"
     return True, "started"
 
 
