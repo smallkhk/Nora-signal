@@ -49,28 +49,34 @@ _frame_latest  = None   # latest screen frame waiting to be sent
 _camera_latest = None   # latest camera frame waiting to be sent
 _media_lock    = threading.Lock()
 _media_event   = threading.Event()
+_relay_busy    = False  # True while _media_sender is blocked in sio.emit
+
+
+def relay_busy():
+    """Return True if the relay sender is still transmitting the last frame."""
+    return _relay_busy
 
 
 def _media_sender():
+    global _relay_busy, _frame_latest, _camera_latest
     while True:
         _media_event.wait()
         _media_event.clear()
         with _media_lock:
             f = _frame_latest
             c = _camera_latest
+        _relay_busy = True
         if f is not None:
             _emit("frame",        {"data": f})
             with _media_lock:
-                global _frame_latest
-                # only clear if it hasn't been replaced while we were sending
                 if _frame_latest is f:
                     _frame_latest = None
         if c is not None:
             _emit("camera_frame", {"data": c})
             with _media_lock:
-                global _camera_latest
                 if _camera_latest is c:
                     _camera_latest = None
+        _relay_busy = False
 
 
 threading.Thread(target=_media_sender, daemon=True, name="relay-media").start()

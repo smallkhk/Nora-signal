@@ -12,6 +12,12 @@ except (ImportError, OSError, AttributeError):
     _PRV_OK = False
 
 try:
+    import relay_client as _relay
+    _RELAY_OK = True
+except (ImportError, OSError):
+    _RELAY_OK = False
+
+try:
     import cv2
     import numpy as np
     _CV2_OK = True
@@ -135,6 +141,11 @@ class ScreenCapture:
                         self._sleep_remainder(t0, interval)
                         continue
 
+                    # Skip encode+send if relay hasn't finished the last frame
+                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
+                        self._sleep_remainder(t0, interval)
+                        continue
+
                     scale = self._scale
                     if scale != 1.0:
                         nw = int(w * scale)
@@ -184,6 +195,10 @@ class ScreenCapture:
                     self._last_hash = digest
 
                     if not changed and not self._recorder:
+                        self._sleep_remainder(t0, interval)
+                        continue
+
+                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
                         self._sleep_remainder(t0, interval)
                         continue
 
