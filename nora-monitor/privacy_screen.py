@@ -184,6 +184,12 @@ try:
                                         HANDLE, wt.DWORD)
 except AttributeError:
     _SetWindowDisplayAffinity = None
+_CreateCursor          = _proto(_user32, "CreateCursor",           HANDLE,
+                                 HANDLE, INT, INT, INT, INT,
+                                 ctypes.c_void_p, ctypes.c_void_p)
+_SetSystemCursor       = _proto(_user32, "SetSystemCursor",        wt.BOOL, HANDLE, wt.DWORD)
+_SystemParametersInfoW = _proto(_user32, "SystemParametersInfoW",  wt.BOOL,
+                                 UINT, UINT, ctypes.c_void_p, UINT)
 
 # ── Win32 constants ───────────────────────────────────────────────────────────
 CLASS_NAME      = "PrivacyScreenOverlay"  # fixed name — lets FindWindowW locate the overlay
@@ -239,6 +245,9 @@ SW_HIDE         = 0
 SW_SHOWNA       = 8                   # show without activating (keeps focus on controlled app)
 LWA_ALPHA       = 0x00000002          # SetLayeredWindowAttributes: use bAlpha channel
 WDA_EXCLUDEFROMCAPTURE = 0x00000011   # overlay invisible to ALL screen-capture APIs (Win10 2004+)
+OCR_NORMAL      = 32512               # arrow cursor id for SetSystemCursor
+SPI_SETCURSORS  = 0x0057              # SystemParametersInfo: restore all system cursors to defaults
+SPIF_SENDCHANGE = 0x0002
 
 INJECT_TAG      = 0x1EADBEEF  # dwExtraInfo marker: injected remote-control input
 
@@ -458,9 +467,14 @@ class PrivacyScreen:
 
         self._install_hooks(hinst)
 
-        for _ in range(50):
-            if _ShowCursor(False) < 0:
-                break
+        # Replace system cursor with an invisible bitmap so the locked user
+        # cannot see the cursor moving on the physical display.
+        # SPI_SETCURSORS in the finally block restores all cursors to defaults.
+        _and_buf = (ctypes.c_ubyte * 128)(*([0xFF] * 128))  # all 1s → transparent
+        _xor_buf = (ctypes.c_ubyte * 128)(*([0x00] * 128))  # all 0s
+        _blank_cur = H(_CreateCursor(H(None), 0, 0, 32, 32, _and_buf, _xor_buf))
+        if _blank_cur.value:
+            _SetSystemCursor(_blank_cur, OCR_NORMAL)
 
         try:
             msg_obj = _MSG()
@@ -471,9 +485,7 @@ class PrivacyScreen:
                 _TranslateMessage(ctypes.byref(msg_obj))
                 _DispatchMessageW(ctypes.byref(msg_obj))
         finally:
-            for _ in range(50):
-                if _ShowCursor(True) >= 0:
-                    break
+            _SystemParametersInfoW(SPI_SETCURSORS, 0, None, SPIF_SENDCHANGE)
             _UnregisterClassW(cls_name, hinst)
 
     def _paint(self, hwnd):

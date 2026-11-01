@@ -1136,12 +1136,12 @@ $("qk-kbd").addEventListener("pointerdown",e=>{
     const t=Array.from(e.changedTouches).find(x=>x.identifier===_tid);
     if(!t)return;
     const dx=t.clientX-_tx0,dy_=t.clientY-_ty0;
+    // Send move immediately — don't wait for threshold so cursor tracks finger from the start
+    const{x,y}=_tpos(t);
+    const _tnow=Date.now();
+    if(_tnow-_mmLast>=16){_mmLast=_tnow;_cmd({action:"mousemove",x,y,sw:1,sh:1});}
     if(!_tMoved&&Math.sqrt(dx*dx+dy_*dy_)>MOVE_THRESH){
       _tMoved=true;_cancelLong();
-    }
-    if(_tMoved){
-      const{x,y}=_tpos(t);
-      _cmd({action:"mousemove",x,y,sw:1,sh:1});
     }
   },{passive:false});
 
