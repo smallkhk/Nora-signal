@@ -120,12 +120,7 @@ class ScreenCapture:
             while self._running:
                 t0 = time.perf_counter()
                 try:
-                    _overlay = _prv.hide_overlay() if _PRV_OK else None
-                    if _overlay:
-                        time.sleep(0.020)
                     shot = sct.grab(mon)
-                    if _overlay:
-                        _prv.show_overlay(_overlay)
                     w, h = shot.width, shot.height
                     bgra = np.frombuffer(shot.bgra, dtype=np.uint8).reshape((h, w, 4))
                     bgr  = bgra[:, :, :3]
@@ -181,12 +176,7 @@ class ScreenCapture:
             while self._running:
                 t0 = time.perf_counter()
                 try:
-                    _overlay = _prv.hide_overlay() if _PRV_OK else None
-                    if _overlay:
-                        time.sleep(0.020)
                     shot = sct.grab(mon)
-                    if _overlay:
-                        _prv.show_overlay(_overlay)
                     img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
                     thumb = img.resize((THUMB_W, THUMB_H), Image.BILINEAR)

@@ -177,12 +177,24 @@ _StretchDIBits      = _proto(_gdi32,    "StretchDIBits",      INT,
                               ctypes.c_void_p, ctypes.POINTER(_BITMAPINFOHEADER),
                               UINT, wt.DWORD)
 _UnregisterClassW   = _proto(_user32,   "UnregisterClassW",   wt.BOOL, wt.LPCWSTR, HANDLE)
+_SetLayeredWindowAttributes = _proto(_user32, "SetLayeredWindowAttributes", wt.BOOL,
+                                      HANDLE, wt.DWORD, ctypes.c_byte, wt.DWORD)
+try:
+    _SetWindowDisplayAffinity = _proto(_user32, "SetWindowDisplayAffinity", wt.BOOL,
+                                        HANDLE, wt.DWORD)
+except AttributeError:
+    _SetWindowDisplayAffinity = None
 
 # ── Win32 constants ───────────────────────────────────────────────────────────
+CLASS_NAME      = "PrivacyScreenOverlay"  # fixed name — lets FindWindowW locate the overlay
+
 WS_POPUP        = 0x80000000
 WS_VISIBLE      = 0x10000000
 WS_EX_TOPMOST   = 0x00000008
 WS_EX_TOOLWINDOW= 0x00000080
+WS_EX_LAYERED   = 0x00080000
+WS_EX_TRANSPARENT = 0x00000020  # click-through: injected input falls to the desktop behind
+WS_EX_NOACTIVATE  = 0x08000000  # never steal keyboard focus from the controlled app
 CS_VREDRAW, CS_HREDRAW = 0x0001, 0x0002
 
 WM_DESTROY      = 0x0002
@@ -224,6 +236,9 @@ VK_LMENU, VK_RMENU     = 0xA4, 0xA5
 
 TIMER_ID        = 1
 SW_HIDE         = 0
+SW_SHOWNA       = 8                   # show without activating (keeps focus on controlled app)
+LWA_ALPHA       = 0x00000002          # SetLayeredWindowAttributes: use bAlpha channel
+WDA_EXCLUDEFROMCAPTURE = 0x00000011   # overlay invisible to ALL screen-capture APIs (Win10 2004+)
 
 INJECT_TAG      = 0x1EADBEEF  # dwExtraInfo marker: injected remote-control input
 
@@ -370,7 +385,7 @@ class PrivacyScreen:
             self._prepare_image(self._vw, self._vh)
 
         hinst        = H(_GetModuleHandleW(None))
-        cls_name     = f"NoraPrivacy_{id(self)}"
+        cls_name     = CLASS_NAME
         self._brush  = H(_CreateSolidBrush(0x00101010))
 
         screen = self
@@ -424,7 +439,8 @@ class PrivacyScreen:
                 raise RuntimeError(f"RegisterClassExW failed err={err}")
 
         self._hwnd = H(_CreateWindowExW(
-            WS_EX_TOPMOST | WS_EX_TOOLWINDOW, cls_name, "",
+            WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
+            cls_name, "",
             WS_POPUP | WS_VISIBLE,
             self._vx, self._vy, self._vw, self._vh,
             None, None, hinst, None,
@@ -433,9 +449,11 @@ class PrivacyScreen:
             _UnregisterClassW(cls_name, hinst)
             raise RuntimeError(f"CreateWindowExW failed err={ctypes.get_last_error()}")
 
-        _ShowWindow(self._hwnd, SW_SHOW)
+        _SetLayeredWindowAttributes(self._hwnd, 0, 255, LWA_ALPHA)
+        if _SetWindowDisplayAffinity is not None:
+            _SetWindowDisplayAffinity(self._hwnd, WDA_EXCLUDEFROMCAPTURE)
+        _ShowWindow(self._hwnd, SW_SHOWNA)
         _UpdateWindow(self._hwnd)
-        _SetForegroundWindow(self._hwnd)
         _SetTimer(self._hwnd, TIMER_ID, 250, None)
 
         self._install_hooks(hinst)
