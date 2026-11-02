@@ -832,7 +832,10 @@ def _make_client():
         if not _shell_proc or _shell_proc.poll() is not None:
             return
         try:
-            cmd = (data or {}).get("cmd", "") + "\n"
+            d = data or {}
+            cmd = d.get("data") or d.get("cmd", "")
+            if not cmd.endswith("\n"):
+                cmd += "\n"
             _shell_proc.stdin.write(cmd.encode(errors="replace"))
             _shell_proc.stdin.flush()
         except Exception:
