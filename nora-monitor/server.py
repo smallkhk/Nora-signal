@@ -38,6 +38,8 @@ def init(controller_fn, recorder, camera, mic=None):
     _recorder   = recorder
     _camera     = camera
     _mic        = mic
+    if _WRT_OK:
+        _wrt.init(controller_fn)
 
 
 @app.route("/")

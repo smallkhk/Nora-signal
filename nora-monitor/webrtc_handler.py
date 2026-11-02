@@ -10,6 +10,7 @@ import threading
 import time
 
 _log = logging.getLogger("webrtc")
+import json as _json
 
 try:
     import av
@@ -87,6 +88,17 @@ class ScreenVideoTrack(MediaStreamTrack):
         return out
 
 
+# ── RC handler (set via init()) ───────────────────────────────────────────────
+
+_rc_handler = None
+
+
+def init(rc_handler):
+    """Register the RC command handler called when data channel messages arrive."""
+    global _rc_handler
+    _rc_handler = rc_handler
+
+
 # ── Peer connection pool ──────────────────────────────────────────────────────
 
 _peers: dict = {}   # sid -> RTCPeerConnection
@@ -102,6 +114,17 @@ async def _do_create_offer(sid: str) -> RTCSessionDescription:
     _peers[sid] = pc
 
     pc.addTrack(ScreenVideoTrack())
+
+    dc = pc.createDataChannel("rc", ordered=False, maxRetransmits=0)
+
+    @dc.on("message")
+    def _on_dc_msg(message):
+        if _rc_handler is None:
+            return
+        try:
+            _rc_handler(_json.loads(message))
+        except Exception:
+            pass
 
     @pc.on("connectionstatechange")
     async def _on_conn_state():

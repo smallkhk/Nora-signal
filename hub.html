@@ -949,7 +949,7 @@ socket.on("frame",d=>{
 
 /* ── WebRTC ──────────────────────────────────────────────── */
 const wrtcVideo=$("scr-video"),wrtcBtn=$("wrtc-btn");
-let _wrtcPc=null,_wrtcOn=false;
+let _wrtcPc=null,_wrtcOn=false,_dcRc=null;
 
 function _wrtcStart(){
   if(!agent)return;
@@ -979,10 +979,15 @@ function _wrtcStart(){
       },12000);
     }
   };
+  _wrtcPc.ondatachannel=e=>{
+    _dcRc=e.channel;
+    _dcRc.onclose=()=>{_dcRc=null;};
+  };
   socket.emit("webrtc_request",{_target:agent});
 }
 
 function _wrtcStop(){
+  _dcRc=null;
   if(_wrtcPc){try{_wrtcPc.close()}catch(e){}; _wrtcPc=null;}
   wrtcVideo.srcObject=null;
   wrtcVideo.style.display="none";
@@ -1043,6 +1048,10 @@ function _cpos(e){
 
 function _cmd(payload){
   if(!agent)return;
+  if(_dcRc&&_dcRc.readyState==="open"){
+    _dcRc.send(JSON.stringify(payload));
+    return;
+  }
   socket.emit("command",Object.assign({_target:agent},payload));
 }
 
