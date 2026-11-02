@@ -21,6 +21,10 @@ for _pkg in [
     'aiortc',
     'aioice',
     'pyee',
+    'cryptography',
+    'OpenSSL',
+    'cffi',
+    'google',
 ]:
     try:
         d, b, h = collect_all(_pkg)
@@ -119,6 +123,15 @@ a = Analysis(
         'aioice', 'aioice.stun', 'pyee', 'pyee.asyncio',
         'av', 'av.video', 'av.video.frame', 'av.video.reformatter',
         'fractions',
+        # aiortc deps (DTLS/crypto)
+        'cryptography', 'cryptography.hazmat', 'cryptography.hazmat.bindings',
+        'cryptography.hazmat.bindings._rust',
+        'cryptography.hazmat.primitives',
+        'cryptography.hazmat.primitives.asymmetric',
+        'cryptography.hazmat.backends',
+        'OpenSSL', 'OpenSSL.SSL', 'OpenSSL.crypto',
+        'cffi', '_cffi_backend',
+        'google.crc32c',
     ],
     hookspath=[],
     runtime_hooks=[],
