@@ -17,6 +17,10 @@ for _pkg in [
     'webview', 'pywebview',
     'Cryptodome',
     'mss',
+    'av',
+    'aiortc',
+    'aioice',
+    'pyee',
 ]:
     try:
         d, b, h = collect_all(_pkg)
@@ -107,6 +111,14 @@ a = Analysis(
         'windows_control', 'wintools', 'sysinfo',
         'privacy_screen', 'webview', 'webview.platforms.winforms',
         'updater',
+        # WebRTC
+        'webrtc_handler',
+        'aiortc', 'aiortc.codecs', 'aiortc.codecs.h264', 'aiortc.codecs.vpx',
+        'aiortc.codecs.opus', 'aiortc.mediastreams', 'aiortc.rtcdtlstransport',
+        'aiortc.rtcicetransport', 'aiortc.rtcpeerconnection',
+        'aioice', 'aioice.stun', 'pyee', 'pyee.asyncio',
+        'av', 'av.video', 'av.video.frame', 'av.video.reformatter',
+        'fractions',
     ],
     hookspath=[],
     runtime_hooks=[],
