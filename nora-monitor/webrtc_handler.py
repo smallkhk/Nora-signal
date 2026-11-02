@@ -7,6 +7,7 @@ import asyncio
 import fractions
 import logging
 import threading
+import time
 
 _log = logging.getLogger("webrtc")
 
@@ -23,15 +24,13 @@ except ImportError:
 # ── Asyncio event loop in a dedicated daemon thread ───────────────────────────
 
 _loop: asyncio.AbstractEventLoop = None
-_frame_cond: asyncio.Condition = None
 _ready = threading.Event()
 
 
 def _run_loop():
-    global _loop, _frame_cond
+    global _loop
     _loop = asyncio.new_event_loop()
     asyncio.set_event_loop(_loop)
-    _frame_cond = asyncio.Condition()
     _ready.set()
     _loop.run_forever()
 
@@ -45,9 +44,11 @@ def _submit(coro):
     return asyncio.run_coroutine_threadsafe(coro, _loop)
 
 
-# ── Shared frame state ────────────────────────────────────────────────────────
+# ── Per-track queues and shared last frame ────────────────────────────────────
 
-_current_frame = None   # av.VideoFrame in yuv420p
+_track_queues: dict = {}   # id(track) -> asyncio.Queue
+_current_frame = None      # most recent av.VideoFrame in yuv420p
+_track_queues_lock = threading.Lock()
 
 
 # ── Per-connection video track ────────────────────────────────────────────────
@@ -57,30 +58,39 @@ class ScreenVideoTrack(MediaStreamTrack):
 
     def __init__(self):
         super().__init__()
-        self._pts = 0
-        self._time_base = fractions.Fraction(1, 90000)
-        self._ticks = 3000          # 90 000 / 30 fps
+        self._queue = asyncio.Queue(maxsize=3)
+        self._start_ts: float = None
+        with _track_queues_lock:
+            _track_queues[id(self)] = self._queue
+
+    def stop(self):
+        with _track_queues_lock:
+            _track_queues.pop(id(self), None)
+        super().stop()
 
     async def recv(self):
         global _current_frame
-        async with _frame_cond:
-            try:
-                await asyncio.wait_for(_frame_cond.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                pass
+        try:
+            f = await asyncio.wait_for(self._queue.get(), timeout=2.0)
+        except asyncio.TimeoutError:
+            # Return last frame (or blank) on static screen
             f = _current_frame
-        if f is None:
-            f = av.VideoFrame(width=1280, height=720, format="yuv420p")
-        self._pts += self._ticks
+            if f is None:
+                f = av.VideoFrame(width=1280, height=720, format="yuv420p")
+
+        if self._start_ts is None:
+            self._start_ts = time.monotonic()
+
+        elapsed = time.monotonic() - self._start_ts
         out = f.copy()
-        out.pts = self._pts
-        out.time_base = self._time_base
+        out.pts = int(elapsed * 90000)
+        out.time_base = fractions.Fraction(1, 90000)
         return out
 
 
 # ── Peer connection pool ──────────────────────────────────────────────────────
 
-_peers: dict = {}
+_peers: dict = {}   # sid -> RTCPeerConnection
 
 _STUN_CFG = RTCConfiguration(iceServers=[
     RTCIceServer(urls=["stun:stun.l.google.com:19302",
@@ -133,7 +143,7 @@ async def _do_close(sid: str) -> None:
 
 def push_bgr(bgr_ndarray):
     """Push a BGR numpy frame. No-op when no peers are connected."""
-    if not _OK or not _peers or _frame_cond is None:
+    if not _OK or not _peers or _loop is None:
         return
     try:
         rgb = bgr_ndarray[:, :, ::-1]
@@ -141,30 +151,40 @@ def push_bgr(bgr_ndarray):
         f = f.reformat(format="yuv420p")
     except Exception:
         return
-    _set_and_notify(f)
+    _distribute_frame(f)
 
 
 def push_rgb(rgb_ndarray):
     """Push an RGB numpy frame. No-op when no peers are connected."""
-    if not _OK or not _peers or _frame_cond is None:
+    if not _OK or not _peers or _loop is None:
         return
     try:
         f = av.VideoFrame.from_ndarray(rgb_ndarray, format="rgb24")
         f = f.reformat(format="yuv420p")
     except Exception:
         return
-    _set_and_notify(f)
+    _distribute_frame(f)
 
 
-def _set_and_notify(av_frame):
+def _distribute_frame(av_frame):
     global _current_frame
     _current_frame = av_frame
 
-    async def _notify():
-        async with _frame_cond:
-            _frame_cond.notify_all()
+    async def _put():
+        with _track_queues_lock:
+            queues = list(_track_queues.values())
+        for q in queues:
+            if q.full():
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            try:
+                q.put_nowait(av_frame)
+            except asyncio.QueueFull:
+                pass
 
-    asyncio.run_coroutine_threadsafe(_notify(), _loop)
+    asyncio.run_coroutine_threadsafe(_put(), _loop)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -174,10 +194,6 @@ def available() -> bool:
 
 
 def create_offer(sid: str, callback) -> None:
-    """
-    Async-create a WebRTC offer for browser session `sid`.
-    `callback(sdp, type_)` is invoked from the asyncio thread once ready.
-    """
     if not _OK:
         callback(None, None)
         return
