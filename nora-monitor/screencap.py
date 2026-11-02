@@ -25,6 +25,12 @@ except ImportError:
     _CV2_OK = False
 
 try:
+    import webrtc_handler as _wrt
+    _WRT_OK = True
+except ImportError:
+    _WRT_OK = False
+
+try:
     from PIL import Image, ImageDraw
     import io as _io
     _PIL_OK = True
@@ -132,23 +138,27 @@ class ScreenCapture:
                     changed = digest != self._last_hash
                     self._last_hash = digest
 
-                    if not changed and not self._recorder:
-                        self._sleep_remainder(t0, interval)
-                        continue
-
-                    # Skip encode+send if relay hasn't finished the last frame
-                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
-                        self._sleep_remainder(t0, interval)
-                        continue
-
+                    # Resize + cursor — always needed for WebRTC smooth video
                     scale = self._scale
                     if scale != 1.0:
                         nw = int(w * scale)
                         nh = int(h * scale)
                         bgr = cv2.resize(bgr, (nw, nh),
                                          interpolation=cv2.INTER_LINEAR)
-
                     _draw_cursor_cv2(bgr, scale)
+
+                    # Push to WebRTC every frame (codec handles static efficiently)
+                    if _WRT_OK:
+                        _wrt.push_bgr(bgr)
+
+                    if not changed and not self._recorder:
+                        self._sleep_remainder(t0, interval)
+                        continue
+
+                    # Skip Socket.IO send if relay hasn't finished the last frame
+                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
+                        self._sleep_remainder(t0, interval)
+                        continue
 
                     ret, buf = cv2.imencode(
                         ".jpg", bgr,
@@ -184,6 +194,18 @@ class ScreenCapture:
                     changed = digest != self._last_hash
                     self._last_hash = digest
 
+                    scale = self._scale
+                    if scale != 1.0:
+                        nw = int(img.width  * scale)
+                        nh = int(img.height * scale)
+                        img = img.resize((nw, nh), Image.BILINEAR)
+                    _draw_cursor_pil(img, scale)
+
+                    # Push to WebRTC every frame
+                    if _WRT_OK:
+                        import numpy as _np
+                        _wrt.push_rgb(_np.array(img))
+
                     if not changed and not self._recorder:
                         self._sleep_remainder(t0, interval)
                         continue
@@ -191,14 +213,6 @@ class ScreenCapture:
                     if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
                         self._sleep_remainder(t0, interval)
                         continue
-
-                    scale = self._scale
-                    if scale != 1.0:
-                        nw = int(img.width  * scale)
-                        nh = int(img.height * scale)
-                        img = img.resize((nw, nh), Image.BILINEAR)
-
-                    _draw_cursor_pil(img, scale)
 
                     buf = _io.BytesIO()
                     img.save(buf, format="JPEG", quality=self._quality)

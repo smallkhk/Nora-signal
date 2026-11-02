@@ -1,0 +1,203 @@
+"""
+WebRTC screen streaming via aiortc.
+An asyncio event loop runs in a background daemon thread.
+All public functions are thread-safe and called from Socket.IO handlers.
+"""
+import asyncio
+import fractions
+import logging
+import threading
+
+_log = logging.getLogger("webrtc")
+
+try:
+    import av
+    import numpy as np
+    from aiortc import RTCPeerConnection, RTCSessionDescription
+    from aiortc import RTCConfiguration, RTCIceServer
+    from aiortc.mediastreams import MediaStreamTrack
+    _OK = True
+except ImportError:
+    _OK = False
+
+# ── Asyncio event loop in a dedicated daemon thread ───────────────────────────
+
+_loop: asyncio.AbstractEventLoop = None
+_frame_cond: asyncio.Condition = None
+_ready = threading.Event()
+
+
+def _run_loop():
+    global _loop, _frame_cond
+    _loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_loop)
+    _frame_cond = asyncio.Condition()
+    _ready.set()
+    _loop.run_forever()
+
+
+_loop_thread = threading.Thread(target=_run_loop, daemon=True, name="webrtc-loop")
+_loop_thread.start()
+_ready.wait(timeout=5)
+
+
+def _submit(coro):
+    return asyncio.run_coroutine_threadsafe(coro, _loop)
+
+
+# ── Shared frame state ────────────────────────────────────────────────────────
+
+_current_frame = None   # av.VideoFrame in yuv420p
+
+
+# ── Per-connection video track ────────────────────────────────────────────────
+
+class ScreenVideoTrack(MediaStreamTrack):
+    kind = "video"
+
+    def __init__(self):
+        super().__init__()
+        self._pts = 0
+        self._time_base = fractions.Fraction(1, 90000)
+        self._ticks = 3000          # 90 000 / 30 fps
+
+    async def recv(self):
+        global _current_frame
+        async with _frame_cond:
+            try:
+                await asyncio.wait_for(_frame_cond.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
+            f = _current_frame
+        if f is None:
+            f = av.VideoFrame(width=1280, height=720, format="yuv420p")
+        self._pts += self._ticks
+        out = f.copy()
+        out.pts = self._pts
+        out.time_base = self._time_base
+        return out
+
+
+# ── Peer connection pool ──────────────────────────────────────────────────────
+
+_peers: dict = {}
+
+_STUN_CFG = RTCConfiguration(iceServers=[
+    RTCIceServer(urls=["stun:stun.l.google.com:19302",
+                       "stun:stun1.l.google.com:19302"]),
+])
+
+
+async def _do_create_offer(sid: str) -> RTCSessionDescription:
+    pc = RTCPeerConnection(configuration=_STUN_CFG)
+    _peers[sid] = pc
+
+    pc.addTrack(ScreenVideoTrack())
+
+    offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+
+    # Vanilla ICE: wait until all candidates are gathered (max 5 s)
+    if pc.iceGatheringState != "complete":
+        done = asyncio.Event()
+
+        @pc.on("icegatheringstatechange")
+        def _on_ice_state():
+            if pc.iceGatheringState == "complete":
+                done.set()
+
+        try:
+            await asyncio.wait_for(done.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass
+
+    return pc.localDescription
+
+
+async def _do_set_answer(sid: str, sdp: str, type_: str) -> None:
+    pc = _peers.get(sid)
+    if pc:
+        await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type=type_))
+
+
+async def _do_close(sid: str) -> None:
+    pc = _peers.pop(sid, None)
+    if pc:
+        try:
+            await pc.close()
+        except Exception:
+            pass
+
+
+# ── Frame push (called from capture thread) ───────────────────────────────────
+
+def push_bgr(bgr_ndarray):
+    """Push a BGR numpy frame. No-op when no peers are connected."""
+    if not _OK or not _peers or _frame_cond is None:
+        return
+    try:
+        rgb = bgr_ndarray[:, :, ::-1]
+        f = av.VideoFrame.from_ndarray(rgb, format="rgb24")
+        f = f.reformat(format="yuv420p")
+    except Exception:
+        return
+    _set_and_notify(f)
+
+
+def push_rgb(rgb_ndarray):
+    """Push an RGB numpy frame. No-op when no peers are connected."""
+    if not _OK or not _peers or _frame_cond is None:
+        return
+    try:
+        f = av.VideoFrame.from_ndarray(rgb_ndarray, format="rgb24")
+        f = f.reformat(format="yuv420p")
+    except Exception:
+        return
+    _set_and_notify(f)
+
+
+def _set_and_notify(av_frame):
+    global _current_frame
+    _current_frame = av_frame
+
+    async def _notify():
+        async with _frame_cond:
+            _frame_cond.notify_all()
+
+    asyncio.run_coroutine_threadsafe(_notify(), _loop)
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def available() -> bool:
+    return _OK
+
+
+def create_offer(sid: str, callback) -> None:
+    """
+    Async-create a WebRTC offer for browser session `sid`.
+    `callback(sdp, type_)` is invoked from the asyncio thread once ready.
+    """
+    if not _OK:
+        callback(None, None)
+        return
+
+    async def _do():
+        try:
+            desc = await _do_create_offer(sid)
+            callback(desc.sdp, desc.type)
+        except Exception as exc:
+            _log.error("create_offer: %s", exc)
+            callback(None, None)
+
+    _submit(_do())
+
+
+def set_answer(sid: str, sdp: str, type_: str = "answer") -> None:
+    if _OK:
+        _submit(_do_set_answer(sid, sdp, type_))
+
+
+def close(sid: str) -> None:
+    if _OK:
+        _submit(_do_close(sid))

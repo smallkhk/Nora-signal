@@ -335,9 +335,11 @@ body.light #scr-wrap{background:#e4e4e7}
   <div class="panel on" id="scr">
     <div id="scr-wrap">
       <canvas id="scr-canvas" tabindex="0"></canvas>
+      <video id="scr-video" autoplay playsinline muted style="display:none;max-width:100%;max-height:100%;object-fit:contain;background:#000;cursor:crosshair"></video>
       <div id="scr-overlay">
         <button class="scr-btn" id="rc-btn">&#x1F5B1; Remote Control</button>
         <button class="scr-btn" id="fs-btn">&#x26F6; Fullscreen</button>
+        <button class="scr-btn" id="wrtc-btn" title="Switch to WebRTC UDP stream for lower latency">&#x26A1; WebRTC HD</button>
       </div>
     </div>
     <div id="rc-bar">
@@ -940,9 +942,87 @@ let _pf=null,_raf=false;
 function _draw(){_raf=false;if(!_pf)return;const img=_pf;_pf=null;if(cvs.width!==img.naturalWidth)cvs.width=img.naturalWidth;if(cvs.height!==img.naturalHeight)cvs.height=img.naturalHeight;ctx.drawImage(img,0,0)}
 socket.on("frame",d=>{
   if(d._agent!==agent)return;tickFps();
+  if(_wrtcOn)return; // WebRTC active — don't draw JPEG frames
   const img=new Image();img.onload=()=>{_pf=img;if(!_raf){_raf=true;requestAnimationFrame(_draw)}};
   img.src="data:image/jpeg;base64,"+d.data;
 });
+
+/* ── WebRTC ──────────────────────────────────────────────── */
+const wrtcVideo=$("scr-video"),wrtcBtn=$("wrtc-btn");
+let _wrtcPc=null,_wrtcOn=false;
+
+function _wrtcStart(){
+  if(!agent)return;
+  if(_wrtcPc)_wrtcStop();
+  _wrtcPc=new RTCPeerConnection({iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}]});
+  _wrtcPc.ontrack=e=>{
+    wrtcVideo.srcObject=e.streams[0];
+    wrtcVideo.style.display="block";
+    cvs.style.display="none";
+    _wrtcOn=true;
+    wrtcBtn.textContent="⚡ Stop WebRTC";
+    wrtcBtn.classList.add("rc-active");
+    toast("WebRTC connected","ok");
+  };
+  _wrtcPc.oniceconnectionstatechange=()=>{
+    if(_wrtcPc&&["failed","disconnected","closed"].includes(_wrtcPc.iceConnectionState)){
+      toast("WebRTC disconnected","err");
+      _wrtcStop();
+    }
+  };
+  socket.emit("webrtc_request",{_target:agent});
+}
+
+function _wrtcStop(){
+  if(_wrtcPc){try{_wrtcPc.close()}catch(e){}; _wrtcPc=null;}
+  wrtcVideo.srcObject=null;
+  wrtcVideo.style.display="none";
+  cvs.style.display="block";
+  _wrtcOn=false;
+  wrtcBtn.textContent="⚡ WebRTC HD";
+  wrtcBtn.classList.remove("rc-active");
+  socket.emit("webrtc_stop",{_target:agent});
+}
+
+socket.on("webrtc_offer",async d=>{
+  if(!_wrtcPc||(d._agent&&d._agent!==agent))return;
+  if(d.error){toast("WebRTC: "+d.error,"err");_wrtcStop();return;}
+  await _wrtcPc.setRemoteDescription({type:d.type,sdp:d.sdp});
+  const ans=await _wrtcPc.createAnswer();
+  await _wrtcPc.setLocalDescription(ans);
+  // Vanilla ICE — wait for gathering before sending answer
+  if(_wrtcPc.iceGatheringState!=="complete"){
+    await new Promise(res=>{
+      const t=setTimeout(()=>res(),5000);
+      _wrtcPc.onicegatheringstatechange=()=>{
+        if(_wrtcPc&&_wrtcPc.iceGatheringState==="complete"){clearTimeout(t);res();}
+      };
+    });
+  }
+  if(_wrtcPc)socket.emit("webrtc_answer",{sdp:_wrtcPc.localDescription.sdp,type:_wrtcPc.localDescription.type,_target:agent});
+});
+
+wrtcBtn.addEventListener("click",()=>{ if(_wrtcOn)_wrtcStop(); else _wrtcStart(); });
+
+// RC mode over the video element too
+wrtcVideo.addEventListener("click",e=>{if(!_wrtcOn)return;if(!_rcOn)_rcEnable();});
+wrtcVideo.addEventListener("mousemove",e=>{
+  if(!_rcOn||!_wrtcOn)return;
+  const r=wrtcVideo.getBoundingClientRect();
+  _cmd({action:"mousemove",x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,sw:1,sh:1});
+});
+wrtcVideo.addEventListener("mousedown",e=>{
+  if(!_rcOn||!_wrtcOn)return;
+  const r=wrtcVideo.getBoundingClientRect();
+  if(e.button===2)_cmd({action:"mouse_right",x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,sw:1,sh:1});
+  else _cmd({action:"mousedown",button:e.button,x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,sw:1,sh:1});
+});
+wrtcVideo.addEventListener("mouseup",e=>{
+  if(!_rcOn||!_wrtcOn)return;
+  const r=wrtcVideo.getBoundingClientRect();
+  _cmd({action:"mouseup",button:e.button,x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,sw:1,sh:1});
+});
+wrtcVideo.addEventListener("contextmenu",e=>e.preventDefault());
 
 /* ── Remote Control mode ─────────────────────────────────── */
 let _rcOn=false, _mmLast=0;
