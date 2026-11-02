@@ -154,7 +154,9 @@ def push_bgr(bgr_ndarray):
     if not _OK or not _peers or _loop is None:
         return
     try:
-        rgb = bgr_ndarray[:, :, ::-1]
+        # np.ascontiguousarray is required: the [::-1] slice produces a
+        # negative-stride view that av / memoryview reject with ValueError.
+        rgb = np.ascontiguousarray(bgr_ndarray[:, :, ::-1])
         f = av.VideoFrame.from_ndarray(rgb, format="rgb24")
         f = f.reformat(format="yuv420p")
     except Exception:
@@ -167,7 +169,8 @@ def push_rgb(rgb_ndarray):
     if not _OK or not _peers or _loop is None:
         return
     try:
-        f = av.VideoFrame.from_ndarray(rgb_ndarray, format="rgb24")
+        rgb = np.ascontiguousarray(rgb_ndarray)
+        f = av.VideoFrame.from_ndarray(rgb, format="rgb24")
         f = f.reformat(format="yuv420p")
     except Exception:
         return
