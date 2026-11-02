@@ -29,8 +29,8 @@ def list_dir(path):
 def read_file(path):
     try:
         size = os.path.getsize(path)
-        if size > 20 * 1024 * 1024:
-            return {"path": path, "name": os.path.basename(path), "data": None, "error": "File too large (>20 MB)"}
+        if size > 200 * 1024 * 1024:
+            return {"path": path, "name": os.path.basename(path), "data": None, "error": "File too large (>200 MB)"}
         with open(path, "rb") as f:
             data = f.read()
         return {"path": path, "name": os.path.basename(path), "data": base64.b64encode(data).decode(), "error": None}
