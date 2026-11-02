@@ -45,10 +45,11 @@ def _submit(coro):
 
 
 # ── Per-track queues and shared last frame ────────────────────────────────────
+# All accesses to _track_queues happen inside the asyncio event loop thread
+# (ScreenVideoTrack.__init__, stop(), and _put()) so no lock is needed.
 
 _track_queues: dict = {}   # id(track) -> asyncio.Queue
 _current_frame = None      # most recent av.VideoFrame in yuv420p
-_track_queues_lock = threading.Lock()
 
 
 # ── Per-connection video track ────────────────────────────────────────────────
@@ -60,12 +61,10 @@ class ScreenVideoTrack(MediaStreamTrack):
         super().__init__()
         self._queue = asyncio.Queue(maxsize=3)
         self._start_ts: float = None
-        with _track_queues_lock:
-            _track_queues[id(self)] = self._queue
+        _track_queues[id(self)] = self._queue
 
     def stop(self):
-        with _track_queues_lock:
-            _track_queues.pop(id(self), None)
+        _track_queues.pop(id(self), None)
         super().stop()
 
     async def recv(self):
@@ -103,6 +102,15 @@ async def _do_create_offer(sid: str) -> RTCSessionDescription:
     _peers[sid] = pc
 
     pc.addTrack(ScreenVideoTrack())
+
+    @pc.on("connectionstatechange")
+    async def _on_conn_state():
+        if pc.connectionState in ("failed", "closed"):
+            _peers.pop(sid, None)
+            try:
+                await pc.close()
+            except Exception:
+                pass
 
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
@@ -171,17 +179,15 @@ def _distribute_frame(av_frame):
     _current_frame = av_frame
 
     async def _put():
-        with _track_queues_lock:
-            queues = list(_track_queues.values())
-        for q in queues:
+        for q in list(_track_queues.values()):
             if q.full():
                 try:
                     q.get_nowait()
-                except asyncio.QueueEmpty:
+                except Exception:
                     pass
             try:
                 q.put_nowait(av_frame)
-            except asyncio.QueueFull:
+            except Exception:
                 pass
 
     asyncio.run_coroutine_threadsafe(_put(), _loop)

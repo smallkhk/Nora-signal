@@ -965,9 +965,18 @@ function _wrtcStart(){
     toast("WebRTC connected","ok");
   };
   _wrtcPc.oniceconnectionstatechange=()=>{
-    if(_wrtcPc&&["failed","disconnected","closed"].includes(_wrtcPc.iceConnectionState)){
+    const s=_wrtcPc&&_wrtcPc.iceConnectionState;
+    if(s==="failed"||s==="closed"){
       toast("WebRTC disconnected","err");
       _wrtcStop();
+    }else if(s==="disconnected"){
+      // transient — give it 12 s to recover before giving up
+      setTimeout(()=>{
+        if(_wrtcPc&&["disconnected","failed"].includes(_wrtcPc.iceConnectionState)){
+          toast("WebRTC disconnected","err");
+          _wrtcStop();
+        }
+      },12000);
     }
   };
   socket.emit("webrtc_request",{_target:agent});
