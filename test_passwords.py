@@ -26,7 +26,10 @@ def _decrypt(blob, key):
     if not blob:
         return ""
     b = bytes(blob)
-    if b[:3] in (b"v10", b"v11"):
+    prefix = b[:3]
+    print(f"      [blob prefix={prefix!r} len={len(b)}]")
+
+    if prefix in (b"v10", b"v11"):
         from Crypto.Cipher import AES
         iv  = b[3:15]
         enc = b[15:-16]
@@ -35,11 +38,23 @@ def _decrypt(blob, key):
             return AES.new(key, AES.MODE_GCM, iv).decrypt_and_verify(enc, tag).decode("utf-8", errors="replace")
         except Exception as e:
             return f"[AES-GCM failed: {e}]"
+
+    if prefix == b"v20":
+        # Chrome 127+ App-Bound Encryption: extra 32-byte header before nonce
+        from Crypto.Cipher import AES
+        iv  = b[35:47]
+        enc = b[47:-16]
+        tag = b[-16:]
+        try:
+            return AES.new(key, AES.MODE_GCM, iv).decrypt_and_verify(enc, tag).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"[v20 AES-GCM failed: {e}]"
+
     try:
         import win32crypt
         return win32crypt.CryptUnprotectData(b, None, None, None, 0)[1].decode("utf-8", errors="replace")
     except Exception as e:
-        return f"[DPAPI failed: {e}]"
+        return f"[DPAPI failed: {e}  | first8={b[:8].hex()}]"
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
