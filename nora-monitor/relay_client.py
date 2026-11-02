@@ -846,6 +846,43 @@ def _make_client():
             except Exception: pass
             _shell_proc = None
 
+    # ── WebRTC signaling ──────────────────────────────────────────────────────
+    @sio.on("webrtc_request")
+    def _on_webrtc_request(data):
+        try:
+            import webrtc_handler as _wrt
+        except ImportError:
+            sio.emit("webrtc_offer", {"error": "aiortc not installed", "_requester": (data or {}).get("_requester")})
+            return
+        requester = (data or {}).get("_requester")
+        if not _wrt.available():
+            sio.emit("webrtc_offer", {"error": "aiortc not available", "_requester": requester})
+            return
+        def _cb(sdp, type_):
+            if sdp:
+                sio.emit("webrtc_offer", {"sdp": sdp, "type": type_, "_requester": requester})
+            else:
+                sio.emit("webrtc_offer", {"error": "offer failed", "_requester": requester})
+        _wrt.create_offer(requester, _cb)
+
+    @sio.on("webrtc_answer")
+    def _on_webrtc_answer(data):
+        try:
+            import webrtc_handler as _wrt
+            requester = (data or {}).get("_requester")
+            _wrt.set_answer(requester, (data or {}).get("sdp"), (data or {}).get("type", "answer"))
+        except Exception:
+            pass
+
+    @sio.on("webrtc_stop")
+    def _on_webrtc_stop(data):
+        try:
+            import webrtc_handler as _wrt
+            requester = (data or {}).get("_requester")
+            _wrt.close(requester)
+        except Exception:
+            pass
+
     # ── Drive list ────────────────────────────────────────────────────────────
     @sio.on("get_drives")
     def _on_get_drives(data):

