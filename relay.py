@@ -50,6 +50,7 @@ socketio = SocketIO(
 agents = {}       # sid -> {"name": str, "secret": str}
 name_to_sid = {}  # name -> sid
 hub_secrets = {}  # hub_sid -> secret
+_fastcap_cache = {}  # agent_name -> last fastcap_info dict
 HUB_ROOM = "hubs"
 
 
@@ -424,6 +425,11 @@ def on_hub_join(data=None):
     hub_secrets[freq.sid] = secret
     join_room(_hub_room(secret))
     emit("agent_list", _agent_list(secret))
+    # Re-deliver cached fastcap_info for any connected agent visible to this hub
+    for ag_name, fc_info in list(_fastcap_cache.items()):
+        ag_secret = _agent_secret(ag_name)
+        if ag_secret is not None and ag_secret == secret:
+            emit("fastcap_info", fc_info)
 
 
 # ── Disconnect ────────────────────────────────────────────────────────────────
@@ -436,6 +442,7 @@ def on_disconnect():
     if info:
         if name_to_sid.get(info["name"]) == sid:
             del name_to_sid[info["name"]]
+        _fastcap_cache.pop(info["name"], None)
         secret = info.get("secret", "")
         socketio.emit("agent_list", _agent_list(secret), room=_hub_room(secret))
 
@@ -453,6 +460,8 @@ def _make_fwd(event):
         data["_agent"] = agent_name
         if event == "key":
             _append_keylog(agent_name, dict(data))
+        if event == "fastcap_info":
+            _fastcap_cache[agent_name] = dict(data)
         socketio.emit(event, data, room=_hub_room(secret))
     _handler.__name__ = f"fwd_{event}"
     return _handler
