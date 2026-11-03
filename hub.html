@@ -67,7 +67,7 @@ body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;o
 /* ── Screen ──────────────────────────────────────────────── */
 #scr-wrap{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#000;position:relative}
 #scr-canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair;outline:none;touch-action:none}
-#scr-canvas.rc-on{cursor:none;outline:2px solid var(--accent)}
+#scr-canvas.rc-on{cursor:crosshair;outline:2px solid var(--accent)}
 #scr-overlay{position:absolute;top:8px;right:8px;display:flex;gap:6px}
 .scr-btn{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer}
 .scr-btn:hover{background:rgba(255,255,255,.12)}
@@ -927,10 +927,10 @@ socket.on("agent_list",list=>{
   const sel=$("agent-sel"),prev=sel.value;
   sel.innerHTML='<option value="">Select agent</option>';
   list.forEach(a=>{const o=document.createElement("option");o.value=o.textContent=a.name;sel.appendChild(o)});
-  if(prev&&list.find(a=>a.name===prev))sel.value=prev;
-  else if(list.length===1){sel.value=list[0].name;agent=list[0].name;updExport()}
+  if(prev&&list.find(a=>a.name===prev)){sel.value=prev;agent=prev;updExport();_rcEnable();}
+  else if(list.length===1){sel.value=list[0].name;agent=list[0].name;updExport();_rcEnable();}
 });
-$("agent-sel").addEventListener("change",()=>{agent=$("agent-sel").value;updExport()});
+$("agent-sel").addEventListener("change",()=>{agent=$("agent-sel").value;updExport();if(agent)_rcEnable();});
 
 /* ── FPS ─────────────────────────────────────────────────── */
 let _fn=0,_ft=Date.now();
