@@ -974,7 +974,6 @@ class SysInfoPanel(QWidget):
             cl.addWidget(_lbl(label,"#71717a",10)); cl.addWidget(_lbl(str(val),"#f4f4f5",15,True))
             if sub: cl.addWidget(_lbl(sub,"#a1a1aa",11))
             return w
-        nonlocal col, row
         items = [
             ("Hostname", d.get("hostname","?"), d.get("username","")),
             ("OS", d.get("os","?"), d.get("os_version","")),
