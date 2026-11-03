@@ -376,15 +376,25 @@ def on_shell_start(data):
             stderr=subprocess.STDOUT, creationflags=0x08000000, bufsize=0,
         )
         _shell_proc = proc_obj
+        if "powershell" in shell.lower():
+            proc_obj.stdin.write(b'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8\r\n')
+            proc_obj.stdin.flush()
         def _read():
             global _shell_proc
+            buf = b""
             while proc_obj.poll() is None:
                 try:
-                    line = proc_obj.stdout.readline()
-                    if line:
-                        socketio.emit("shell_output", {"data": line.decode(errors="replace")})
+                    ch = proc_obj.stdout.read(1)
+                    if not ch:
+                        break
+                    buf += ch
+                    if b'\n' in buf or len(buf) >= 2048:
+                        socketio.emit("shell_output", {"data": buf.decode("utf-8", errors="replace")})
+                        buf = b""
                 except Exception:
                     break
+            if buf:
+                socketio.emit("shell_output", {"data": buf.decode("utf-8", errors="replace")})
             socketio.emit("shell_output", {"data": "", "closed": True})
             _shell_proc = None
         threading.Thread(target=_read, daemon=True, name="shell-out-local").start()

@@ -811,14 +811,24 @@ def _make_client():
                 creationflags=0x08000000, bufsize=0,
             )
             _shell_proc = proc
+            if "powershell" in shell.lower():
+                proc.stdin.write(b'[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8\r\n')
+                proc.stdin.flush()
             def _read():
+                buf = b""
                 while proc.poll() is None:
                     try:
-                        line = proc.stdout.readline()
-                        if line:
-                            sio.emit("shell_output", {"data": line.decode(errors="replace")})
+                        ch = proc.stdout.read(1)
+                        if not ch:
+                            break
+                        buf += ch
+                        if b'\n' in buf or len(buf) >= 2048:
+                            sio.emit("shell_output", {"data": buf.decode("utf-8", errors="replace")})
+                            buf = b""
                     except Exception:
                         break
+                if buf:
+                    sio.emit("shell_output", {"data": buf.decode("utf-8", errors="replace")})
                 sio.emit("shell_output", {"data": "", "closed": True})
                 global _shell_proc
                 _shell_proc = None
