@@ -26,7 +26,7 @@ _lock     = threading.Lock()
 
 def _make_session():
     name = platform.node() or "host"
-    return hashlib.sha256(name.encode()).hexdigest()[:8]
+    return hashlib.sha256(name.encode()).hexdigest()[:16]
 
 
 def _load_password():
