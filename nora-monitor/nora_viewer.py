@@ -26,9 +26,11 @@ class FcUdpClient:
     """Pure-UDP fastcap viewer — zero TCP/WebSocket on the video path."""
 
     def __init__(self, session_hex: str, password: str, frame_cb):
-        self._sid      = bytes.fromhex(session_hex)
-        self._sid_hex  = session_hex
-        self._token    = hashlib.sha256(password.encode() + session_hex.encode()).digest()[:8]
+        # fastcap.Host() encodes the session string as raw ASCII bytes (first 8 chars).
+        # We must mirror that so our wire SID matches the host's session slot on the relay.
+        self._sid     = session_hex[:8].encode('ascii')   # b"99cfdbfb" — 8 ASCII bytes
+        self._sid_hex = self._sid.hex()                   # "3939636664626662" — used for token
+        self._token   = hashlib.sha256(password.encode() + self._sid_hex.encode()).digest()[:8]
         self._frame_cb = frame_cb   # callable(annex_b: bytes, is_keyframe: bool)
         self._relay    = (_FC_UDP_HOST, _FC_UDP_PORT)
         self._sock     = _rawsock.socket(_rawsock.AF_INET, _rawsock.SOCK_DGRAM)

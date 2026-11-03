@@ -895,7 +895,12 @@ def _fc_udp_thread():
                 ag_name = _fc_sid_to_agent.get(sid_hex)
                 if not ag_name:
                     for name, info in list(_fastcap_cache.items()):
-                        if info.get("session") == sid_hex:
+                        stored = info.get("session", "")
+                        # fastcap.Host() encodes session as ASCII bytes (first 8 chars),
+                        # so the wire SID hex is hex(session[:8].encode('ascii')), not the
+                        # raw session string. Accept both forms for forward-compatibility.
+                        wire_sid = stored[:8].encode("ascii", "replace").hex()
+                        if wire_sid == sid_hex or stored == sid_hex:
                             _fc_sid_to_agent[sid_hex] = name
                             ag_name = name
                             break
