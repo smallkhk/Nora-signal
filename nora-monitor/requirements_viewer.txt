@@ -1,0 +1,4 @@
+PyQt5>=5.15
+python-socketio[client]>=5.0
+av>=10.0
+requests>=2.28
