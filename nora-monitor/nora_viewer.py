@@ -2,6 +2,8 @@
 """Nora Viewer — PyQt5 desktop controller for nora-monitor agents."""
 import sys, os, struct, threading, base64, json, time, hashlib
 import queue as _queue
+import socket as _rawsock
+import urllib.parse as _urlparse
 from typing import Optional
 
 from PyQt5.QtCore import *
@@ -11,6 +13,113 @@ import socketio as _sio
 
 RELAY_URL  = os.environ.get("NORA_RELAY",  "http://162.35.37.67:5000")
 HUB_SECRET = os.environ.get("NORA_SECRET", "")
+
+# Derive relay UDP address from RELAY_URL
+_parsed      = _urlparse.urlparse(RELAY_URL)
+_FC_UDP_HOST = _parsed.hostname or "162.35.37.67"
+_FC_UDP_PORT = int(os.environ.get("NORA_UDP_PORT", _parsed.port or 5000))
+
+_T_HELLO_HOST, _T_HELLO_VIEW, _T_VIDEO, _T_INPUT, _T_KEYREQ, _T_PING = 1, 2, 3, 4, 5, 6
+
+
+class FcUdpClient:
+    """Pure-UDP fastcap viewer — zero TCP/WebSocket on the video path."""
+
+    def __init__(self, session_hex: str, password: str, frame_cb):
+        self._sid      = bytes.fromhex(session_hex)
+        self._sid_hex  = session_hex
+        self._token    = hashlib.sha256(password.encode() + session_hex.encode()).digest()[:8]
+        self._frame_cb = frame_cb   # callable(annex_b: bytes, is_keyframe: bool)
+        self._relay    = (_FC_UDP_HOST, _FC_UDP_PORT)
+        self._sock     = _rawsock.socket(_rawsock.AF_INET, _rawsock.SOCK_DGRAM)
+        self._sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_RCVBUF, 4 * 1024 * 1024)
+        self._sock.settimeout(1.0)
+        self._frames   = {}    # frame_id -> [cnt, {idx: bytes}]
+        self._next_id  = None
+        self._running  = False
+
+    def start(self):
+        self._running = True
+        self._send_hello()
+        threading.Thread(target=self._recv_loop,  daemon=True, name="fc-udp-rx").start()
+        threading.Thread(target=self._keepalive,  daemon=True, name="fc-udp-ka").start()
+
+    def stop(self):
+        self._running = False
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def send_input(self, payload: bytes):
+        try:
+            self._sock.sendto(bytes([_T_INPUT]) + self._sid + self._token + payload, self._relay)
+        except Exception:
+            pass
+
+    def send_keyreq(self):
+        try:
+            self._sock.sendto(bytes([_T_KEYREQ]) + self._sid + self._token, self._relay)
+        except Exception:
+            pass
+
+    def _send_hello(self):
+        try:
+            self._sock.sendto(bytes([_T_HELLO_VIEW]) + self._sid + self._token, self._relay)
+        except Exception:
+            pass
+
+    def _keepalive(self):
+        while self._running:
+            time.sleep(5)
+            if not self._running:
+                break
+            self._send_hello()   # refreshes NAT mapping + relay keepalive
+            try:
+                self._sock.sendto(bytes([_T_PING]) + self._sid + self._token, self._relay)
+            except Exception:
+                pass
+
+    def _recv_loop(self):
+        while self._running:
+            try:
+                data, _ = self._sock.recvfrom(65536)
+            except _rawsock.timeout:
+                continue
+            except Exception:
+                break
+            # relay→viewer: [T_VIDEO(1)][session(8)][kf(1)][fid(4BE)][idx(2BE)][cnt(2BE)][data]
+            if len(data) < 18 or data[0] != _T_VIDEO:
+                continue
+            kf  = bool(data[9])
+            fid, idx, cnt = struct.unpack_from(">IHH", data, 10)
+            frag = data[18:]
+
+            if self._next_id is not None and fid < self._next_id and self._next_id - fid < 1000:
+                continue   # stale fragment
+
+            entry = self._frames.setdefault(fid, [cnt, {}])
+            entry[1][idx] = frag
+
+            if len(entry[1]) != cnt:
+                if len(self._frames) > 60:
+                    self._frames.clear()
+                continue
+
+            frame_data = b"".join(entry[1][i] for i in range(cnt))
+            lost = self._next_id is not None and fid > self._next_id
+            for old in [k for k in list(self._frames) if k <= fid]:
+                del self._frames[old]
+            self._next_id = fid + 1
+
+            if lost:
+                self.send_keyreq()
+                continue
+
+            try:
+                self._frame_cb(frame_data, kf)
+            except Exception:
+                pass
 
 # ── fastcap input payload builders ───────────────────────────────────────────
 def _fc_move(nx: float, ny: float) -> bytes:
@@ -200,7 +309,8 @@ class FastViewWidget(QWidget):
         self.relay = relay
         self.session = ""
         self.decoder = H264Decoder()
-        self._frame : Optional[QImage] = None
+        self._frame   : Optional[QImage] = None
+        self._fc_udp  : Optional[FcUdpClient] = None
         self._fw = self._fh = 1
         self._mm_last = 0.0
         self._open = False
@@ -235,26 +345,41 @@ class FastViewWidget(QWidget):
         self.session = session
         self._frame = None; self._fw = self._fh = 1
         self._open = True
+        # Stop any previous UDP client
+        if self._fc_udp:
+            self._fc_udp.stop()
+        self._fc_udp = FcUdpClient(session, password, self._on_udp_frame)
+        self._fc_udp.start()
         self.showFullScreen()
         self.activateWindow(); self.setFocus()
-        self.relay.emit("fastcap_join", {"session": session, "password": password})
-        self._st.setText("⚡ Connecting…")
+        self._st.setText("⚡ UDP connecting…")
         self._fps_timer.start()
         self._draw_timer.start()
 
     def close_view(self):
         self._open = False
         self._draw_timer.stop(); self._fps_timer.stop()
+        if self._fc_udp:
+            self._fc_udp.stop()
+            self._fc_udp = None
         self.hide()
 
-    def on_frame(self, session_hex: str, raw: bytes):
-        if not self._open or session_hex != self.session: return
-        annex_b = raw[1:]  # strip keyframe flag byte
+    def _on_udp_frame(self, annex_b: bytes, is_keyframe: bool):
+        """Called from UDP receive thread — decode and store frame."""
         img = self.decoder.decode(annex_b)
         if img:
             self._frame = img
             self._fw = img.width(); self._fh = img.height()
             self._fps_count += 1
+            if self._fps_count == 1:
+                QMetaObject.invokeMethod(
+                    self._st, "setText", Qt.QueuedConnection,
+                    Q_ARG(str, "⚡ UDP stream live")
+                )
+
+    def on_frame(self, session_hex: str, raw: bytes):
+        """Legacy Socket.IO path — not used for UDP desktop viewer."""
+        pass
 
     def on_ready(self, host_alive: bool):
         self._st.setText("⚡ Host connected" if host_alive else "⚡ Waiting for host…")
@@ -284,7 +409,8 @@ class FastViewWidget(QWidget):
         return nx, ny
 
     def _fc(self, payload):
-        self.relay.fc_send(self.session, payload)
+        if self._fc_udp:
+            self._fc_udp.send_input(payload)
 
     def mouseMoveEvent(self, e):
         if not self._frame: return

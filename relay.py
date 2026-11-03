@@ -759,6 +759,7 @@ class _FcSession:
         self.last_keyreq = 0.0
         self.token       = None   # viewer auth token
         self.wait_key    = True
+        self.viewer_addrs = {}    # addr -> last_seen_time (UDP desktop viewers)
 
 
 def _fc_sess(sid):
@@ -832,6 +833,26 @@ def _fc_to_socketio(s, sid, pkt):
     msg = bytes([1 if key else 0]) + frame_data
     socketio.emit("fastcap_video", {"s": sid_hex, "d": msg}, room=room)
 
+    # Forward to pure-UDP desktop viewers
+    # Packet format: [T_VIDEO(1)] + [session(8)] + [kf(1)] + [frame_id(4BE)] + [idx(2BE)] + [cnt(2BE)] + [data]
+    _FC_FRAG = 1300
+    now2 = time.time()
+    with _fc_lock:
+        alive  = {a: t for a, t in s.viewer_addrs.items() if now2 - t < FC_TIMEOUT}
+        s.viewer_addrs = alive
+    if alive and _fc_udp_sock:
+        frags = [frame_data[i:i+_FC_FRAG] for i in range(0, len(frame_data), _FC_FRAG)]
+        total = len(frags)
+        kf_b  = bytes([1 if key else 0])
+        fid_b = struct.pack(">I", fid)
+        for viewer_addr in alive:
+            for vi, frag in enumerate(frags):
+                pkt = bytes([T_VIDEO]) + sid + kf_b + fid_b + struct.pack(">HH", vi, total) + frag
+                try:
+                    _fc_udp_sock.sendto(pkt, viewer_addr)
+                except Exception:
+                    pass
+
 
 def _fc_udp_thread():
     global _fc_udp_sock
@@ -855,8 +876,49 @@ def _fc_udp_thread():
                 s.host_time = now
                 if t == T_VIDEO and len(data) >= 17:
                     _fc_to_socketio(s, sid, data)
+            elif t == T_HELLO_VIEW and len(data) >= 17:
+                # Desktop viewer authenticating via UDP
+                token = data[9:17]
+                sid_hex = sid.hex()
+                ag_name = _fc_sid_to_agent.get(sid_hex)
+                if not ag_name:
+                    for name, info in list(_fastcap_cache.items()):
+                        if info.get("session") == sid_hex:
+                            _fc_sid_to_agent[sid_hex] = name
+                            ag_name = name
+                            break
+                if ag_name:
+                    fc_info = _fastcap_cache.get(ag_name, {})
+                    pw = fc_info.get("password", "")
+                    expected = hashlib.sha256(pw.encode() + sid_hex.encode()).digest()[:8]
+                    if token == expected:
+                        with _fc_lock:
+                            s.viewer_addrs[addr] = now
+                            if s.token is None:
+                                s.token = token
+                            s.wait_key = True
+                        try:
+                            sock.sendto(bytes([T_HELLO_VIEW]) + sid, addr)
+                        except Exception:
+                            pass
+                        _fc_request_key(s, sid)
+            elif t == T_INPUT and len(data) >= 17:
+                # Input packet from a UDP viewer — forward straight to host
+                _fc_send_to_host(s, sid, T_INPUT, data[9:17], data[17:])
+                # Also refresh viewer keepalive
+                with _fc_lock:
+                    if addr in s.viewer_addrs:
+                        s.viewer_addrs[addr] = now
+            elif t == T_KEYREQ:
+                _fc_request_key(s, sid)
+                with _fc_lock:
+                    if addr in s.viewer_addrs:
+                        s.viewer_addrs[addr] = now
             elif t == T_PING:
                 s.host_time = now
+                with _fc_lock:
+                    if addr in s.viewer_addrs:
+                        s.viewer_addrs[addr] = now
         except Exception:
             pass
 
