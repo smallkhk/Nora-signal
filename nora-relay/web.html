@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d12">
+<title>NoraDesk</title>
+<style>
+:root{--bg:#0b0d12;--panel:#151922;--line:#262c38;--text:#e8ecf3;--dim:#8b93a3;--accent:#3d8bff;--bad:#ff5d5d}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden;overscroll-behavior:none}
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h1{margin:0 0 4px;font-size:20px}.card p{margin:0 0 18px;color:var(--dim);font-size:13px}
+.card label{display:block;font-size:12px;color:var(--dim);margin:12px 0 6px}
+.card input{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:16px;outline:none}
+.card input:focus{border-color:var(--accent)}
+.card button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:9px;background:var(--accent);color:#fff;font-size:16px;font-weight:600}
+#err{color:var(--bad);font-size:13px;margin-top:12px;min-height:18px}
+#view{position:fixed;inset:0;display:none;touch-action:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#status{position:absolute;top:calc(8px + env(safe-area-inset-top));left:8px;padding:4px 9px;border-radius:7px;background:rgba(0,0,0,.6);font-size:12px;color:var(--dim);pointer-events:none}
+#bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:6px;overflow-x:auto;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(11,13,18,.88);border-top:1px solid var(--line);scrollbar-width:none}
+#bar::-webkit-scrollbar{display:none}
+#bar button{flex:0 0 auto;min-width:44px;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:14px}
+#bar button:active{background:var(--accent)}
+#bar.hide{transform:translateY(100%)}
+#kb{position:absolute;left:-1000px;top:0;width:10px;height:10px;opacity:0;font-size:16px}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h1>NoraDesk</h1>
+    <p>Connect to your PC</p>
+    <label for="sid">Session ID</label>
+    <input id="sid" inputmode="numeric" autocomplete="off">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="off">
+    <button id="go">Connect</button>
+    <div id="err"></div>
+  </div>
+</div>
+<div id="view">
+  <canvas id="cv"></canvas>
+  <div id="status">Connecting…</div>
+  <div id="bar">
+    <button data-a="kb">⌨</button>
+    <button data-a="fit">Fit</button>
+    <button data-a="esc">Esc</button>
+    <button data-a="tab">Tab</button>
+    <button data-a="enter">Enter</button>
+    <button data-a="bksp">⌫</button>
+    <button data-a="left">←</button>
+    <button data-a="up">↑</button>
+    <button data-a="down">↓</button>
+    <button data-a="right">→</button>
+    <button data-a="win">Win</button>
+    <button data-a="ctrlc">Ctrl+C</button>
+    <button data-a="ctrlv">Ctrl+V</button>
+    <button data-a="ctrlz">Ctrl+Z</button>
+    <button data-a="rclick">R-Click</button>
+    <button data-a="full">⛶</button>
+    <button data-a="exit">✕</button>
+  </div>
+  <input id="kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+</div>
+<script>
+(() => {
+const T_INPUT = 4, T_KEYREQ = 5, T_PING = 6;
+const K = {enter:1,bksp:2,tab:3,esc:4,left:5,right:6,up:7,down:8,del:9,ctrl:14,shift:15,alt:16,win:17};
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d'), st = $('status');
+
+let ws = null, dec = null, waitKey = true, lastFrame = null, fw = 0, fh = 0, ts = 0;
+let curCodec = '', fps = 0, hostUp = false, pingT = null;
+let zoom = 1, panX = 0, panY = 0;           // view
+let lastPt = null;                           // last pointer on screen (normalized)
+
+// ---------- login ----------
+try { $('sid').value = localStorage.getItem('nd_sid') || ''; } catch (e) {}
+$('go').onclick = connect;
+$('pw').onkeydown = e => { if (e.key === 'Enter') connect(); };
+
+function connect() {
+  const session = $('sid').value.trim(), password = $('pw').value;
+  if (!session || !password) { $('err').textContent = 'Enter Session ID and password'; return; }
+  if (!('VideoDecoder' in window)) {
+    $('err').textContent = window.isSecureContext
+      ? 'This browser can\'t decode video. Use Chrome or Safari 16.4+.'
+      : 'Open this page over HTTPS (see BUILD.md).';
+    return;
+  }
+  try { localStorage.setItem('nd_sid', session); } catch (e) {}
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    ws.send(JSON.stringify({session, password}));
+    $('login').style.display = 'none'; $('view').style.display = 'block';
+    resize(); newDecoder();
+    pingT = setInterval(() => send(T_PING), 1000);
+  };
+  ws.onmessage = e => {
+    if (typeof e.data === 'string') { try { hostUp = !!JSON.parse(e.data).host; } catch (x) {} return; }
+    onVideo(new Uint8Array(e.data));
+  };
+  ws.onclose = () => {
+    clearInterval(pingT);
+    $('view').style.display = 'none'; $('login').style.display = 'flex';
+    $('err').textContent = 'Disconnected';
+  };
+}
+
+function send(t, payload) {
+  if (!ws || ws.readyState !== 1) return;
+  const p = payload || new Uint8Array(0);
+  const b = new Uint8Array(1 + p.length); b[0] = t; b.set(p, 1); ws.send(b);
+}
+
+// ---------- H.264 (Annex-B -> avcC) ----------
+function splitNals(d) {
+  const out = []; let i = 0, start = -1;
+  while (i + 2 < d.length) {
+    if (d[i] === 0 && d[i+1] === 0 && d[i+2] === 1) {
+      if (start >= 0) { let e = i; if (e > start && d[e-1] === 0) e--; out.push(d.subarray(start, e)); }
+      i += 3; start = i;
+    } else i++;
+  }
+  if (start >= 0 && start < d.length) out.push(d.subarray(start));
+  return out;
+}
+const hex = n => n.toString(16).padStart(2, '0');
+
+function newDecoder() {
+  if (dec) { try { dec.close(); } catch (e) {} }
+  curCodec = ''; waitKey = true;
+  dec = new VideoDecoder({
+    output: f => {
+      if (lastFrame) lastFrame.close();
+      lastFrame = f; fps++;
+      if (f.displayWidth !== fw || f.displayHeight !== fh) { fw = f.displayWidth; fh = f.displayHeight; clampView(); }
+      draw();
+    },
+    error: e => { console.warn(e); setTimeout(newDecoder, 50); send(T_KEYREQ); }
+  });
+}
+
+function onVideo(msg) {
+  const nals = splitNals(msg.subarray(1));
+  let sps = null, pps = null, key = false, parts = [], size = 0;
+  for (const n of nals) {
+    const t = n[0] & 0x1f;
+    if (t === 7) sps = n; else if (t === 8) pps = n;
+    else if (t === 9) continue;
+    else { if (t === 5) key = true; parts.push(n); size += 4 + n.length; }
+  }
+  if (sps && pps) {
+    const codec = 'avc1.' + hex(sps[1]) + hex(sps[2]) + hex(sps[3]);
+    const desc = new Uint8Array(11 + sps.length + pps.length);
+    desc.set([1, sps[1], sps[2], sps[3], 0xff, 0xe1, sps.length >> 8, sps.length & 255]);
+    desc.set(sps, 8);
+    desc.set([1, pps.length >> 8, pps.length & 255], 8 + sps.length);
+    desc.set(pps, 11 + sps.length);
+    const sig = codec + ':' + Array.from(desc).join(',');
+    if (sig !== curCodec || dec.state !== 'configured') {
+      if (dec.state === 'closed') newDecoder();
+      dec.configure({codec, description: desc, optimizeForLatency: true});
+      curCodec = sig;
+    }
+  }
+  if (!parts.length || dec.state !== 'configured') return;
+  if (waitKey && !key) return;
+  if (!key && dec.decodeQueueSize > 4) { waitKey = true; send(T_KEYREQ); return; } // falling behind
+  waitKey = false;
+  const buf = new Uint8Array(size); let o = 0;
+  for (const n of parts) {
+    buf[o] = n.length >>> 24; buf[o+1] = (n.length >> 16) & 255; buf[o+2] = (n.length >> 8) & 255; buf[o+3] = n.length & 255;
+    buf.set(n, o + 4); o += 4 + n.length;
+  }
+  try { dec.decode(new EncodedVideoChunk({type: key ? 'key' : 'delta', timestamp: (ts += 33333), data: buf})); }
+  catch (e) { waitKey = true; send(T_KEYREQ); }
+}
+
+setInterval(() => {
+  st.textContent = !hostUp ? 'Waiting for host… (check Session ID)' :
+                   !lastFrame ? 'Connecting… (check password)' : `${fps} fps · ${fw}×${fh}`;
+  fps = 0;
+}, 1000);
+
+// ---------- view ----------
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+  clampView(); draw();
+}
+addEventListener('resize', resize);
+
+function base() { return fw ? Math.min(cv.width / fw, cv.height / fh) : 1; }
+function geom() {
+  const s = base() * zoom, w = fw * s, h = fh * s;
+  return {s, x: (cv.width - w) / 2 + panX, y: (cv.height - h) / 2 + panY, w, h};
+}
+function clampView() {
+  if (!fw) return;
+  const s = base() * zoom, mx = Math.max(0, (fw * s - cv.width) / 2), my = Math.max(0, (fh * s - cv.height) / 2);
+  panX = Math.max(-mx, Math.min(mx, panX)); panY = Math.max(-my, Math.min(my, panY));
+}
+function draw() {
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!lastFrame) return;
+  const g = geom();
+  ctx.drawImage(lastFrame, g.x, g.y, g.w, g.h);
+}
+function toRemote(cx, cy) {   // client px -> normalized remote coords
+  const dpr = window.devicePixelRatio || 1, g = geom();
+  const x = (cx * dpr - g.x) / g.w, y = (cy * dpr - g.y) / g.h;
+  return [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))];
+}
+
+// ---------- input senders ----------
+const enc = new TextEncoder();
+function move(nx, ny) { const b = new DataView(new ArrayBuffer(9)); b.setUint8(0, 1); b.setFloat32(1, nx); b.setFloat32(5, ny); send(T_INPUT, new Uint8Array(b.buffer)); lastPt = [nx, ny]; }
+function btn(b, down) { send(T_INPUT, new Uint8Array([2, b, down ? 1 : 0])); }
+function click(b) { btn(b, true); btn(b, false); }
+function scroll(dy) { const v = new DataView(new ArrayBuffer(3)); v.setUint8(0, 3); v.setInt16(1, dy); send(T_INPUT, new Uint8Array(v.buffer)); }
+function text(s) { const t = enc.encode(s); const b = new Uint8Array(1 + t.length); b[0] = 4; b.set(t, 1); send(T_INPUT, b); }
+function key(code, down) { send(T_INPUT, new Uint8Array([5, code, down ? 1 : 0])); }
+function tap(code) { key(code, true); key(code, false); }
+function combo(mod, ch) { key(mod, true); const t = enc.encode(ch); const b = new Uint8Array(1 + t.length); b[0] = 6; b.set(t, 1); send(T_INPUT, b); key(mod, false); }
+
+// ---------- touch ----------
+let t1 = null, dragging = false, lpTimer = null, lpFired = false, two = null, scrollAcc = 0;
+const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+const mid = (a, b) => [(a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2];
+
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    t1 = {x: t.clientX, y: t.clientY}; dragging = false; lpFired = false;
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => { lpFired = true; move(...toRemote(t1.x, t1.y)); click(1); navigator.vibrate && navigator.vibrate(20); }, 550);
+  } else if (e.touches.length === 2) {
+    clearTimeout(lpTimer);
+    if (dragging) { btn(0, false); dragging = false; }
+    t1 = null;
+    two = {d: dist(e.touches[0], e.touches[1]), m: mid(e.touches[0], e.touches[1])};
+    scrollAcc = 0;
+  }
+}, {passive: false});
+
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && t1) {
+    const t = e.touches[0];
+    if (!dragging && Math.hypot(t.clientX - t1.x, t.clientY - t1.y) > 10 && !lpFired) {
+      clearTimeout(lpTimer); dragging = true;
+      move(...toRemote(t1.x, t1.y)); btn(0, true);
+    }
+    if (dragging) move(...toRemote(t.clientX, t.clientY));
+  } else if (e.touches.length === 2 && two) {
+    const dpr = window.devicePixelRatio || 1;
+    const d = dist(e.touches[0], e.touches[1]), m = mid(e.touches[0], e.touches[1]);
+    const r = d / two.d;
+    if (Math.abs(r - 1) > 0.03 || zoom > 1) {
+      // pinch zoom around the midpoint + pan
+      const nz = Math.max(1, Math.min(6, zoom * r));
+      const cx = m[0] * dpr - cv.width / 2, cy = m[1] * dpr - cv.height / 2;
+      panX = cx - (cx - panX) * (nz / zoom) + (m[0] - two.m[0]) * dpr;
+      panY = cy - (cy - panY) * (nz / zoom) + (m[1] - two.m[1]) * dpr;
+      zoom = nz; clampView(); draw();
+      two.d = d;
+    } else {
+      // two-finger scroll
+      scrollAcc += m[1] - two.m[1];
+      while (Math.abs(scrollAcc) >= 30) { scroll(scrollAcc > 0 ? -1 : 1); scrollAcc -= 30 * Math.sign(scrollAcc); }
+    }
+    two.m = m;
+  }
+}, {passive: false});
+
+cv.addEventListener('touchend', e => {
+  e.preventDefault();
+  clearTimeout(lpTimer);
+  if (e.touches.length === 0) {
+    if (dragging) btn(0, false);
+    else if (t1 && !lpFired) { move(...toRemote(t1.x, t1.y)); click(0); }
+    dragging = false; t1 = null; two = null;
+  }
+}, {passive: false});
+
+// mouse (desktop browsers)
+cv.addEventListener('mousemove', e => move(...toRemote(e.clientX, e.clientY)));
+cv.addEventListener('mousedown', e => { move(...toRemote(e.clientX, e.clientY)); btn([0, 2, 1][e.button] ?? 0, true); });
+cv.addEventListener('mouseup', e => btn([0, 2, 1][e.button] ?? 0, false));
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => { e.preventDefault(); scroll(e.deltaY > 0 ? 1 : -1); }, {passive: false});
+
+// ---------- keyboard ----------
+const kb = $('kb'), SENT = '  ';
+kb.value = SENT;
+function flush() {
+  const v = kb.value;
+  if (v.length < SENT.length) for (let i = v.length; i < SENT.length; i++) tap(K.bksp);
+  else if (v.length > SENT.length) text(v.slice(SENT.length));
+  kb.value = SENT;
+}
+kb.addEventListener('input', e => { if (!e.isComposing) flush(); });
+kb.addEventListener('compositionend', flush);
+kb.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); flush(); tap(K.enter); }
+});
+document.addEventListener('keydown', e => {      // physical keyboards
+  if (e.target === kb || $('view').style.display !== 'block') return;
+  const map = {Enter:K.enter,Backspace:K.bksp,Tab:K.tab,Escape:K.esc,ArrowLeft:K.left,ArrowRight:K.right,ArrowUp:K.up,ArrowDown:K.down,Delete:K.del};
+  if (map[e.key]) { e.preventDefault(); tap(map[e.key]); }
+  else if ((e.ctrlKey || e.altKey) && e.key.length === 1) { e.preventDefault(); combo(e.ctrlKey ? K.ctrl : K.alt, e.key.toLowerCase()); }
+  else if (e.key.length === 1) { e.preventDefault(); text(e.key); }
+});
+
+// ---------- toolbar ----------
+$('bar').addEventListener('click', e => {
+  const a = e.target.closest('button')?.dataset.a; if (!a) return;
+  if (a !== 'kb') kb.blur();
+  switch (a) {
+    case 'kb': kb.value = SENT; kb.focus(); break;
+    case 'fit': zoom = 1; panX = panY = 0; draw(); break;
+    case 'win': tap(K.win); break;
+    case 'ctrlc': combo(K.ctrl, 'c'); break;
+    case 'ctrlv': combo(K.ctrl, 'v'); break;
+    case 'ctrlz': combo(K.ctrl, 'z'); break;
+    case 'rclick': if (lastPt) { move(...lastPt); } click(1); break;
+    case 'full':
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else { const p = document.documentElement.requestFullscreen?.(); p && p.catch(() => {}); }
+        const o = screen.orientation?.lock?.('landscape'); o && o.catch(() => {});
+      } catch (x) {}
+      break;
+    case 'exit': ws && ws.close(); break;
+    default: tap(K[a]);
+  }
+});
+})();
+</script>
+</body>
+</html>
