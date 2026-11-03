@@ -127,6 +127,13 @@ def _make_client():
     def _on_connect():
         _log(f"connected to {RELAY_URL} as {AGENT_NAME}")
         sio.emit("register", {"name": AGENT_NAME, "secret": AGENT_SECRET})
+        try:
+            import fastcap_host as fch
+            info = fch.get_info()
+            if info:
+                sio.emit("fastcap_info", info)
+        except Exception:
+            pass
 
     @sio.on("command")
     def _on_command(data):

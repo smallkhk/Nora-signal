@@ -51,6 +51,13 @@ def index():
 @socketio.on("hub_join")
 def on_hub_join(_data=None):
     socketio.emit("agent_list", [{"name": _AGENT_NAME}])
+    try:
+        import fastcap_host as fch
+        info = fch.get_info()
+        if info:
+            socketio.emit("fastcap_info", info)
+    except Exception:
+        pass
 
 
 # ── Camera (socket events for local hub) ─────────────────────────────────────

