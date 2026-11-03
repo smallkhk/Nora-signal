@@ -61,14 +61,14 @@ def _find_exe_asset(assets):
 
 def _do_update(dl_url, latest_tag):
     """Download new EXE, write swap batch, launch it detached, exit."""
-    os.makedirs(_APP_DIR, exist_ok=True)
-    new_exe = os.path.join(_APP_DIR, "NoraMonitor_update.exe")
-    current_exe = os.path.join(_APP_DIR, "NoraMonitor.exe")
-
-    # If not running from the permanent location, fall back to sys.executable
     if not getattr(sys, "frozen", False):
         return  # dev mode — don't self-update
 
+    # Always replace the actual running EXE, whatever it is named/located
+    current_exe = sys.executable
+    new_exe = current_exe + ".update"
+
+    os.makedirs(_APP_DIR, exist_ok=True)
     urllib.request.urlretrieve(dl_url, new_exe)
 
     pid = os.getpid()
