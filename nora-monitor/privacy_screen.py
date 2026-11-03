@@ -467,6 +467,11 @@ class PrivacyScreen:
         _SetLayeredWindowAttributes(self._hwnd, 0, 255, LWA_ALPHA)
         _ShowWindow(self._hwnd, SW_SHOWNA)
         _UpdateWindow(self._hwnd)
+        # Make overlay invisible to ALL screen-capture APIs (fastcap, OBS, etc.)
+        # so the viewer sees the real desktop while the physical display is blocked.
+        # WDA_EXCLUDEFROMCAPTURE requires Windows 10 2004+ (build 19041+).
+        if _SetWindowDisplayAffinity:
+            _SetWindowDisplayAffinity(self._hwnd, WDA_EXCLUDEFROMCAPTURE)
         _SetTimer(self._hwnd, TIMER_ID, 250, None)
 
         self._install_hooks(hinst)
