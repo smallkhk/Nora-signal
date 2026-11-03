@@ -2016,63 +2016,57 @@ socket.on("privacy_result",d=>{_prvResult(d)});
   $("theme-btn").addEventListener("click",()=>{dark=!dark;apply();try{localStorage.setItem("nora_theme",dark?"dark":"light")}catch{}});
 })();
 
-/* ── Fast View (H.264 / WebCodecs) ──────────────────────────── */
+/* ── Fast View (H.264 / WebCodecs, via Socket.IO) ───────────── */
 (function(){
-  const T_INPUT=4,T_KEYREQ=5,T_PING=6;
-  let fvInfo=null,fvWs=null,fvDec=null,fvLast=null,fvWaitKey=true;
-  let fvTs=0,fvFps=0,fvCurCodec='',fvPingT=null,fvFw=0,fvFh=0;
+  const T_INPUT=4;
+  let fvInfo=null,fvDec=null,fvLast=null,fvWaitKey=true;
+  let fvTs=0,fvFps=0,fvCurCodec='',fvFw=0,fvFh=0,fvOpen=false;
   const fvOv=document.getElementById('fv-overlay');
   const fvCv=document.getElementById('fv-canvas');
   const fvCt=fvCv.getContext('2d');
   const fvSt=document.getElementById('fv-status');
   const fvBtn=document.getElementById('fv-btn');
 
-  socket.on('fastcap_info',info=>{
-    fvInfo=info;
-    fvBtn.style.display='';
+  socket.on('fastcap_info',info=>{fvInfo=info;fvBtn.style.display='';});
+  socket.on('fastcap_ready',d=>{fvSt.textContent=d.host?'⚡ Host connected':'⚡ Waiting for host…';});
+  socket.on('fastcap_video',d=>{
+    if(!fvOpen||!fvInfo||d.s!==fvInfo.session)return;
+    const raw=d.d;
+    fvOnVideo(raw instanceof Uint8Array?raw:new Uint8Array(raw));
   });
 
   window.openFastView=function(){
     if(!fvInfo)return;
+    fvOpen=true;
     fvOv.style.display='flex';
     fvResize();
-    fvConnect();
+    fvNewDecoder();
+    socket.emit('fastcap_join',{session:fvInfo.session,password:fvInfo.password});
+    fvSt.textContent='⚡ Connecting…';
   };
   window.closeFastView=function(){
+    fvOpen=false;
     fvOv.style.display='none';
-    if(fvWs){fvWs.close();fvWs=null;}
-    clearInterval(fvPingT);fvPingT=null;
     if(fvDec){try{fvDec.close();}catch(e){}fvDec=null;}
     if(fvLast){fvLast.close();fvLast=null;}
     fvWaitKey=true;fvCurCodec='';
   };
-
   fvBtn.addEventListener('click',openFastView);
 
-  function fvSend(t,payload){
-    if(!fvWs||fvWs.readyState!==1)return;
-    const p=payload||new Uint8Array(0);
-    const b=new Uint8Array(1+p.length);b[0]=t;b.set(p,1);fvWs.send(b);
+  function fvSendInput(payload){
+    if(!fvOpen||!fvInfo)return;
+    socket.emit('fastcap_input',{s:fvInfo.session,d:Array.from(payload)});
   }
-  function fvConnect(){
-    if(fvWs){fvWs.close();fvWs=null;}
-    fvSt.textContent='⚡ Connecting…';
-    fvWs=new WebSocket(fvInfo.relay_ws);
-    fvWs.binaryType='arraybuffer';
-    fvWs.onopen=()=>{
-      fvWs.send(JSON.stringify({session:fvInfo.session,password:fvInfo.password}));
-      fvNewDecoder();
-      fvPingT=setInterval(()=>fvSend(T_PING),1000);
-    };
-    fvWs.onmessage=e=>{if(typeof e.data!=='string')fvOnVideo(new Uint8Array(e.data));};
-    fvWs.onclose=()=>{clearInterval(fvPingT);fvPingT=null;fvSt.textContent='⚡ Disconnected';};
+  function fvKeyReq(){
+    if(!fvOpen||!fvInfo)return;
+    socket.emit('fastcap_keyreq',{s:fvInfo.session});
   }
   function fvNewDecoder(){
     if(fvDec){try{fvDec.close();}catch(e){}}
     fvCurCodec='';fvWaitKey=true;
     fvDec=new VideoDecoder({
       output:f=>{if(fvLast)fvLast.close();fvLast=f;fvFps++;if(f.displayWidth!==fvFw||f.displayHeight!==fvFh){fvFw=f.displayWidth;fvFh=f.displayHeight;}fvDraw();},
-      error:()=>{setTimeout(fvNewDecoder,50);fvSend(T_KEYREQ);}
+      error:()=>{setTimeout(fvNewDecoder,50);fvKeyReq();}
     });
   }
   function fvSplitNals(d){
@@ -2096,15 +2090,15 @@ socket.on("privacy_result",d=>{_prvResult(d)});
     }
     if(!parts.length||fvDec.state!=='configured')return;
     if(fvWaitKey&&!key)return;
-    if(!key&&fvDec.decodeQueueSize>4){fvWaitKey=true;fvSend(T_KEYREQ);return;}
+    if(!key&&fvDec.decodeQueueSize>4){fvWaitKey=true;fvKeyReq();return;}
     fvWaitKey=false;
     const buf=new Uint8Array(size);let o=0;
     for(const n of parts){buf[o]=n.length>>>24;buf[o+1]=(n.length>>16)&255;buf[o+2]=(n.length>>8)&255;buf[o+3]=n.length&255;buf.set(n,o+4);o+=4+n.length;}
     try{fvDec.decode(new EncodedVideoChunk({type:key?'key':'delta',timestamp:(fvTs+=33333),data:buf}));}
-    catch(e){fvWaitKey=true;fvSend(T_KEYREQ);}
+    catch(e){fvWaitKey=true;fvKeyReq();}
   }
   setInterval(()=>{
-    if(fvOv.style.display==='none')return;
+    if(!fvOpen)return;
     fvSt.textContent=!fvLast?'⚡ Waiting for host…':`⚡ ${fvFps} fps · ${fvFw}×${fvFh}`;
     fvFps=0;
   },1000);
@@ -2114,7 +2108,7 @@ socket.on("privacy_result",d=>{_prvResult(d)});
     fvCv.height=Math.round(fvCv.offsetHeight*dpr);
     fvDraw();
   }
-  window.addEventListener('resize',()=>{if(fvOv.style.display!=='none')fvResize();});
+  window.addEventListener('resize',()=>{if(fvOpen)fvResize();});
   function fvDraw(){
     fvCt.fillStyle='#000';fvCt.fillRect(0,0,fvCv.width,fvCv.height);
     if(!fvLast)return;
@@ -2129,25 +2123,25 @@ socket.on("privacy_result",d=>{_prvResult(d)});
     const ox=(sw-dw)/2,oy=(sh-dh)/2;
     return[Math.max(0,Math.min(1,(cx*dpr-ox)/dw)),Math.max(0,Math.min(1,(cy*dpr-oy)/dh))];
   }
-  function fvMove(nx,ny){const b=new DataView(new ArrayBuffer(9));b.setUint8(0,1);b.setFloat32(1,nx);b.setFloat32(5,ny);fvSend(T_INPUT,new Uint8Array(b.buffer));}
-  function fvBtn2(b,down){fvSend(T_INPUT,new Uint8Array([2,b,down?1:0]));}
-  function fvScroll(dy){const v=new DataView(new ArrayBuffer(3));v.setUint8(0,3);v.setInt16(1,dy);fvSend(T_INPUT,new Uint8Array(v.buffer));}
+  function fvMove(nx,ny){const b=new DataView(new ArrayBuffer(9));b.setUint8(0,1);b.setFloat32(1,nx);b.setFloat32(5,ny);fvSendInput(new Uint8Array(b.buffer));}
+  function fvBtn2(b,down){fvSendInput(new Uint8Array([2,b,down?1:0]));}
+  function fvScroll(dy){const v=new DataView(new ArrayBuffer(3));v.setUint8(0,3);v.setInt16(1,dy);fvSendInput(new Uint8Array(v.buffer));}
   fvCv.addEventListener('mousemove',e=>{if(fvLast)fvMove(...fvToRemote(e.clientX,e.clientY));});
   fvCv.addEventListener('mousedown',e=>{if(fvLast){fvMove(...fvToRemote(e.clientX,e.clientY));fvBtn2([0,2,1][e.button]??0,true);}});
   fvCv.addEventListener('mouseup',e=>fvBtn2([0,2,1][e.button]??0,false));
   fvCv.addEventListener('contextmenu',e=>e.preventDefault());
   fvCv.addEventListener('wheel',e=>{e.preventDefault();fvScroll(e.deltaY>0?1:-1);},{passive:false});
   document.addEventListener('keydown',e=>{
-    if(fvOv.style.display==='none')return;
+    if(!fvOpen)return;
     if(e.key==='Escape'){closeFastView();return;}
     const K={Enter:1,Backspace:2,Tab:3,Escape:4,ArrowLeft:5,ArrowRight:6,ArrowUp:7,ArrowDown:8,Delete:9};
     const enc=new TextEncoder();
-    function fk(code,down){fvSend(T_INPUT,new Uint8Array([5,code,down?1:0]));}
+    function fk(code,down){fvSendInput(new Uint8Array([5,code,down?1:0]));}
     function ft(code){fk(code,true);fk(code,false);}
-    function fc(mod,ch){const m={ctrl:14,alt:16};fk(m[mod],true);const t=enc.encode(ch);const b=new Uint8Array(1+t.length);b[0]=6;b.set(t,1);fvSend(T_INPUT,b);fk(m[mod],false);}
+    function fc(mod,ch){const m={ctrl:14,alt:16};fk(m[mod],true);const t=enc.encode(ch);const b=new Uint8Array(1+t.length);b[0]=6;b.set(t,1);fvSendInput(b);fk(m[mod],false);}
     if(K[e.key]){e.preventDefault();ft(K[e.key]);}
     else if((e.ctrlKey||e.altKey)&&e.key.length===1){e.preventDefault();fc(e.ctrlKey?'ctrl':'alt',e.key.toLowerCase());}
-    else if(e.key.length===1){e.preventDefault();const t=enc.encode(e.key);const b=new Uint8Array(1+t.length);b[0]=4;b.set(t,1);fvSend(T_INPUT,b);}
+    else if(e.key.length===1){e.preventDefault();const t=enc.encode(e.key);const b=new Uint8Array(1+t.length);b[0]=4;b.set(t,1);fvSendInput(b);}
   });
 })();
 </script>

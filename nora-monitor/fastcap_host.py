@@ -13,8 +13,7 @@ import platform
 import secrets
 import threading
 
-RELAY_UDP = os.environ.get("FASTCAP_RELAY", "162.35.37.67:21900")
-RELAY_WS  = os.environ.get("FASTCAP_RELAY_WS", "ws://162.35.37.67:21901/ws")
+RELAY_UDP = os.environ.get("FASTCAP_RELAY", "162.35.37.67:5000")
 
 _APP_DIR  = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost")
 _PW_FILE  = os.path.join(_APP_DIR, "fastcap.pw")
@@ -84,12 +83,11 @@ def stop():
 
 
 def get_info():
-    """Return dict for broadcast; None if not running."""
+    """Return dict for broadcast; None if not yet started."""
     with _lock:
         if _session is None:
             return None
         return {
             "session":  _session,
             "password": _password,
-            "relay_ws": RELAY_WS,
         }

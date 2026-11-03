@@ -26,7 +26,6 @@ import os
 import json
 import time
 import datetime
-import asyncio
 import base64
 import hashlib
 import socket as _rawsock
@@ -724,17 +723,22 @@ for _rr in [
     _make_req_resp(*_rr)
 
 
-# ── Fastcap UDP/WebSocket relay (ports 21900 / 21901) ────────────────────────
+# ── Fastcap UDP relay — merged onto port 5000 UDP ────────────────────────────
+# UDP 5000 and TCP 5000 are independent OS-level sockets; no conflict.
+# Video frames arrive from the PC as UDP datagrams → reassembled → emitted
+# as Socket.IO binary events to the hub room.  Input (mouse/keyboard) arrives
+# as Socket.IO events from the browser → forwarded to the PC as UDP.
 
-_FC_UDP_PORT = int(os.environ.get("FC_UDP_PORT", 21900))
-_FC_WS_PORT  = int(os.environ.get("FC_WS_PORT",  21901))
-_FC_WS_MAX_BUF = 768 * 1024
+_FC_UDP_PORT = int(os.environ.get("FC_UDP_PORT", 5000))
+FC_TIMEOUT   = 30
 
 T_HELLO_HOST, T_HELLO_VIEW, T_VIDEO, T_INPUT, T_KEYREQ, T_PING = 1, 2, 3, 4, 5, 6
-FC_TIMEOUT = 30
 
-_fc_sessions = {}
-_fc_udp = None
+_fc_sessions    = {}   # sid(bytes) -> _FcSession
+_fc_sid_to_agent= {}   # sid_hex   -> agent_name
+_fc_udp_sock    = None
+_fc_lock        = threading.Lock()
+
 
 
 def _fc_is_keyframe(data):
@@ -748,260 +752,172 @@ def _fc_is_keyframe(data):
 
 class _FcSession:
     def __init__(self):
-        self.host = None
-        self.viewer = None
-        self.ws = set()
-        self.frames = {}
-        self.next_id = None
+        self.host_addr   = None
+        self.host_time   = 0.0
+        self.frames      = {}
+        self.next_id     = None
         self.last_keyreq = 0.0
+        self.token       = None   # viewer auth token
+        self.wait_key    = True
 
 
 def _fc_sess(sid):
-    s = _fc_sessions.get(sid)
-    if s is None:
-        s = _fc_sessions[sid] = _FcSession()
-    return s
+    with _fc_lock:
+        s = _fc_sessions.get(sid)
+        if s is None:
+            s = _fc_sessions[sid] = _FcSession()
+        return s
 
 
 def _fc_host_alive(s):
-    return s.host and time.time() - s.host[1] < FC_TIMEOUT
+    return s.host_addr is not None and time.time() - s.host_time < FC_TIMEOUT
 
 
-def _fc_send_to_host(s, sid, t, token, payload=b""):
-    if _fc_host_alive(s) and _fc_udp:
-        _fc_udp.sendto(bytes([t]) + sid + token + payload, s.host[0])
+def _fc_send_to_host(s, sid, t, token=None, payload=b""):
+    if _fc_host_alive(s) and _fc_udp_sock:
+        tok = token or (b"\x00" * 8)
+        try:
+            _fc_udp_sock.sendto(bytes([t]) + sid + tok + payload, s.host_addr)
+        except Exception:
+            pass
 
 
 def _fc_request_key(s, sid):
     now = time.time()
-    if now - s.last_keyreq < 0.3 or not s.ws:
+    if now - s.last_keyreq < 0.3:
         return
     s.last_keyreq = now
-    c = next(iter(s.ws))
-    _fc_send_to_host(s, sid, T_KEYREQ, c.token)
+    _fc_send_to_host(s, sid, T_KEYREQ, s.token)
 
 
-class _FcUdp(asyncio.DatagramProtocol):
-    def connection_made(self, transport):
-        global _fc_udp
-        _fc_udp = transport
-
-    def datagram_received(self, data, addr):
-        if len(data) < 9:
-            return
-        now = time.time()
-        t, sid = data[0], data[1:9]
-        s = _fc_sess(sid)
-        if t in (T_HELLO_HOST, T_VIDEO):
-            s.host = (addr, now)
-            if t == T_VIDEO:
-                if s.viewer and now - s.viewer[1] < FC_TIMEOUT:
-                    _fc_udp.sendto(data, s.viewer[0])
-                if s.ws and len(data) >= 17:
-                    self._to_web(s, sid, data)
-        else:
-            s.viewer = (addr, now)
-            if t != T_HELLO_VIEW and _fc_host_alive(s):
-                _fc_udp.sendto(data, s.host[0])
-
-    def _to_web(self, s, sid, pkt):
-        fid, idx, cnt = struct.unpack(">IHH", pkt[9:17])
-        if s.next_id is not None and fid < s.next_id and s.next_id - fid < 1000:
-            return
-        f = s.frames.setdefault(fid, [cnt, {}])
-        f[1][idx] = pkt[17:]
-        if len(f[1]) != cnt:
-            if len(s.frames) > 60:
-                s.frames.clear()
-            return
-        frame_data = b"".join(f[1][i] for i in range(cnt))
-        lost = s.next_id is not None and fid > s.next_id
-        for old in [k for k in s.frames if k <= fid]:
-            del s.frames[old]
-        s.next_id = fid + 1
-        key = _fc_is_keyframe(frame_data)
-        if lost:
-            for c in s.ws:
-                c.wait_key = True
-        msg = bytes([1 if key else 0]) + frame_data
-        need_key = False
-        for c in list(s.ws):
-            if c.wait_key and not key:
-                need_key = True
-                continue
-            if c.writer.transport.get_write_buffer_size() > _FC_WS_MAX_BUF:
-                c.wait_key = True
-                need_key = True
-                continue
-            c.wait_key = False
-            c.send(msg)
-        if need_key:
-            _fc_request_key(s, sid)
-
-
-class _FcWsClient:
-    def __init__(self, writer):
-        self.writer = writer
-        self.sid = None
-        self.token = None
-        self.wait_key = True
-
-    def send(self, payload, opcode=2):
-        n = len(payload)
-        if n < 126:
-            head = struct.pack("!BB", 0x80 | opcode, n)
-        elif n < 65536:
-            head = struct.pack("!BBH", 0x80 | opcode, 126, n)
-        else:
-            head = struct.pack("!BBQ", 0x80 | opcode, 127, n)
-        try:
-            self.writer.write(head + payload)
-        except Exception:
-            pass
-
-
-async def _fc_read_frame(reader):
-    b1, b2 = await reader.readexactly(2)
-    op = b1 & 0x0F
-    n = b2 & 0x7F
-    if n == 126:
-        n = struct.unpack("!H", await reader.readexactly(2))[0]
-    elif n == 127:
-        n = struct.unpack("!Q", await reader.readexactly(8))[0]
-    if n > 1 << 20:
-        raise ValueError("frame too big")
-    mask = await reader.readexactly(4) if b2 & 0x80 else None
-    data = await reader.readexactly(n)
-    if mask:
-        m = (mask * (n // 4 + 1))[:n]
-        data = (int.from_bytes(data, "big") ^ int.from_bytes(m, "big")).to_bytes(n, "big") if n else b""
-    return op, data
-
-
-async def _fc_handle_http(reader, writer):
-    try:
-        head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 10)
-    except Exception:
-        writer.close()
+def _fc_to_socketio(s, sid, pkt):
+    """Reassemble fragmented H.264 frame and emit to hub room via Socket.IO."""
+    fid, idx, cnt = struct.unpack(">IHH", pkt[9:17])
+    if s.next_id is not None and fid < s.next_id and s.next_id - fid < 1000:
         return
-    lines = head.decode(errors="ignore").split("\r\n")
-    path = lines[0].split(" ")[1] if len(lines[0].split(" ")) > 1 else "/"
-    hdr = {}
-    for l in lines[1:]:
-        if ":" in l:
-            k, v = l.split(":", 1)
-            hdr[k.strip().lower()] = v.strip()
-
-    if path.startswith("/ws") and hdr.get("upgrade", "").lower() == "websocket":
-        accept = base64.b64encode(hashlib.sha1(
-            (hdr.get("sec-websocket-key", "") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()
-        ).digest()).decode()
-        writer.write((
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-            f"Connection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
-        ).encode())
-        await _fc_ws_loop(reader, writer)
+    f = s.frames.setdefault(fid, [cnt, {}])
+    f[1][idx] = pkt[17:]
+    if len(f[1]) != cnt:
+        if len(s.frames) > 60:
+            s.frames.clear()
         return
+    frame_data = b"".join(f[1][i] for i in range(cnt))
+    lost = s.next_id is not None and fid > s.next_id
+    for old in [k for k in s.frames if k <= fid]:
+        del s.frames[old]
+    s.next_id = fid + 1
 
-    # Serve web.html from same directory as relay.py
-    if path in ("/", "/index.html"):
-        try:
-            body = open(os.path.join(_DIR, "web.html"), "rb").read()
-            writer.write(
-                b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-                b"Cache-Control: no-cache\r\nContent-Length: " + str(len(body)).encode() +
-                b"\r\nConnection: close\r\n\r\n" + body
-            )
-        except OSError:
-            writer.write(b"HTTP/1.1 500 Error\r\nConnection: close\r\n\r\nweb.html missing")
-    else:
-        writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-    try:
-        await writer.drain()
-    except Exception:
-        pass
-    writer.close()
+    key = _fc_is_keyframe(frame_data)
+    if lost or (s.wait_key and not key):
+        s.wait_key = True
+        _fc_request_key(s, sid)
+        return
+    s.wait_key = False
 
-
-async def _fc_ws_loop(reader, writer):
-    c = _FcWsClient(writer)
-    s = None
-    try:
-        while True:
-            op, data = await _fc_read_frame(reader)
-            if op == 8:
+    sid_hex = sid.hex()
+    ag_name = _fc_sid_to_agent.get(sid_hex)
+    if not ag_name:
+        for name, info in list(_fastcap_cache.items()):
+            if info.get("session") == sid_hex:
+                _fc_sid_to_agent[sid_hex] = name
+                ag_name = name
                 break
-            if op == 9:
-                c.send(data, 10)
-                continue
-            if op == 1 and c.sid is None:
-                j = json.loads(data.decode())
-                session = str(j.get("session", ""))[:8]
-                pw = str(j.get("password", ""))
-                c.sid = session.encode().ljust(8)[:8]
-                c.token = hashlib.sha256(pw.encode() + session.encode()).digest()[:8]
-                s = _fc_sess(c.sid)
-                s.ws.add(c)
-                c.send(json.dumps({"host": bool(_fc_host_alive(s))}).encode(), 1)
-                _fc_send_to_host(s, c.sid, T_KEYREQ, c.token)
-                continue
-            if op == 2 and s is not None and data and data[0] in (T_INPUT, T_KEYREQ, T_PING):
-                _fc_send_to_host(s, c.sid, data[0], c.token, data[1:])
-                if data[0] == T_PING:
-                    c.send(json.dumps({"host": bool(_fc_host_alive(s))}).encode(), 1)
-                    try:
-                        await writer.drain()
-                    except Exception:
-                        break
-    except Exception:
-        pass
-    finally:
-        if s is not None:
-            s.ws.discard(c)
-        try:
-            writer.close()
-        except Exception:
-            pass
+    if not ag_name:
+        return
+
+    ag_secret = _agent_secret(ag_name)
+    if ag_secret is None:
+        return
+    room = _hub_room(ag_secret)
+    msg = bytes([1 if key else 0]) + frame_data
+    socketio.emit("fastcap_video", {"s": sid_hex, "d": msg}, room=room)
 
 
-async def _fc_cleanup():
-    while True:
-        await asyncio.sleep(30)
-        now = time.time()
-        for k in list(_fc_sessions):
-            s = _fc_sessions[k]
-            if s.host and now - s.host[1] > FC_TIMEOUT:
-                s.host = None
-            if s.viewer and now - s.viewer[1] > FC_TIMEOUT:
-                s.viewer = None
-            if not s.host and not s.viewer and not s.ws:
-                del _fc_sessions[k]
-
-
-async def _fc_main():
-    loop = asyncio.get_running_loop()
+def _fc_udp_thread():
+    global _fc_udp_sock
     sock = _rawsock.socket(_rawsock.AF_INET, _rawsock.SOCK_DGRAM)
     sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_RCVBUF, 8 * 1024 * 1024)
     sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_SNDBUF, 8 * 1024 * 1024)
     sock.bind(("0.0.0.0", _FC_UDP_PORT))
-    await loop.create_datagram_endpoint(_FcUdp, sock=sock)
-    await asyncio.start_server(_fc_handle_http, "0.0.0.0", _FC_WS_PORT)
-    print(f"[fastcap] UDP {_FC_UDP_PORT} | WS 0.0.0.0:{_FC_WS_PORT}", flush=True)
-    await _fc_cleanup()
+    _fc_udp_sock = sock
+    print(f"[fastcap] UDP listening on :{_FC_UDP_PORT}", flush=True)
+    while True:
+        try:
+            data, addr = sock.recvfrom(65536)
+            if len(data) < 9:
+                continue
+            now = time.time()
+            t   = data[0]
+            sid = data[1:9]
+            s   = _fc_sess(sid)
+            if t in (T_HELLO_HOST, T_VIDEO):
+                s.host_addr = addr
+                s.host_time = now
+                if t == T_VIDEO and len(data) >= 17:
+                    _fc_to_socketio(s, sid, data)
+            elif t == T_PING:
+                s.host_time = now
+        except Exception:
+            pass
 
 
-def _start_fastcap_thread():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# ── Browser ↔ relay fastcap Socket.IO events ─────────────────────────────────
+
+@socketio.on("fastcap_join")
+def on_fastcap_join(data):
+    """Browser authenticates; relay stores token and requests first keyframe."""
+    session_hex = str(data.get("session", ""))[:16]
+    password    = str(data.get("password", ""))
+    token = hashlib.sha256(password.encode() + session_hex.encode()).digest()[:8]
     try:
-        loop.run_until_complete(_fc_main())
-    except Exception as e:
-        print(f"[fastcap] relay error: {e}", flush=True)
+        sid = bytes.fromhex(session_hex)
+    except Exception:
+        return
+    s = _fc_sess(sid)
+    s.token    = token
+    s.wait_key = True
+    _fc_send_to_host(s, sid, T_KEYREQ, token)
+    emit("fastcap_ready", {"host": _fc_host_alive(s)})
+
+
+@socketio.on("fastcap_input")
+def on_fastcap_input(data):
+    """Mouse/keyboard input from browser — forward to PC via UDP."""
+    session_hex = str(data.get("s", ""))[:16]
+    payload = data.get("d", b"")
+    if isinstance(payload, list):
+        payload = bytes(payload)
+    elif not isinstance(payload, (bytes, bytearray)):
+        return
+    try:
+        sid = bytes.fromhex(session_hex)
+    except Exception:
+        return
+    s = _fc_sess(sid)
+    if _fc_host_alive(s) and _fc_udp_sock and s.token:
+        try:
+            _fc_udp_sock.sendto(
+                bytes([T_INPUT]) + sid + s.token + payload, s.host_addr
+            )
+        except Exception:
+            pass
+
+
+@socketio.on("fastcap_keyreq")
+def on_fastcap_keyreq(data):
+    """Browser requests a fresh keyframe."""
+    session_hex = str(data.get("s", ""))[:16]
+    try:
+        sid = bytes.fromhex(session_hex)
+    except Exception:
+        return
+    s = _fc_sess(sid)
+    _fc_request_key(s, sid)
 
 
 # ── Local dev entry point ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    threading.Thread(target=_start_fastcap_thread, daemon=True, name="fastcap-relay").start()
+    threading.Thread(target=_fc_udp_thread, daemon=True, name="fastcap-udp").start()
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
