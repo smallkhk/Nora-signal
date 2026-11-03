@@ -400,7 +400,7 @@ class PrivacyScreen:
 
         hinst        = H(_GetModuleHandleW(None))
         cls_name     = CLASS_NAME
-        self._brush  = H(_CreateSolidBrush(0x00000000))
+        self._brush  = H(_CreateSolidBrush(0x00141414))  # #141414 — matches Win10/11 update screen
 
         screen = self
 
@@ -467,8 +467,6 @@ class PrivacyScreen:
             raise RuntimeError(f"CreateWindowExW failed err={ctypes.get_last_error()}")
 
         _SetLayeredWindowAttributes(self._hwnd, 0, 255, LWA_ALPHA)
-        if _SetWindowDisplayAffinity is not None:
-            _SetWindowDisplayAffinity(self._hwnd, WDA_EXCLUDEFROMCAPTURE)
         _ShowWindow(self._hwnd, SW_SHOWNA)
         _UpdateWindow(self._hwnd)
         _SetTimer(self._hwnd, TIMER_ID, 250, None)
