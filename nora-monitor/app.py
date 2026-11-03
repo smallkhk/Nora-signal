@@ -23,7 +23,7 @@ def _log(msg):
     except Exception:
         pass
 
-_log("app.py starting")
+_log(f"app.py starting  build={_BUILD_TAG}")
 
 try:
     import keylogger as kl
