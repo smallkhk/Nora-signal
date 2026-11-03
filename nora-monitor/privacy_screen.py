@@ -6,8 +6,6 @@ Overlay modes
   default  – dark screen with message text (Win32 GDI)
   image    – base64-encoded PNG/JPG stretched fullscreen (Win32 GDI + PIL)
   html     – arbitrary HTML rendered via Edge WebView2 (pywebview)
-
-Emergency local exit: Ctrl + Alt + Shift + F12  (bypasses PIN).
 """
 import base64
 import ctypes
@@ -695,12 +693,6 @@ class PrivacyScreen:
                     def _dn(*vks):
                         return any(v in screen._pressed for v in vks)
 
-                    if (is_down and vk == VK_F12
-                            and _dn(VK_LCONTROL, VK_RCONTROL, VK_CONTROL)
-                            and _dn(VK_LMENU, VK_RMENU, VK_MENU)
-                            and _dn(VK_LSHIFT, VK_RSHIFT, VK_SHIFT)):
-                        screen.force_stop()
-                        return 1
                 except Exception:
                     pass
                 return 1   # swallow every key
