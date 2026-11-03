@@ -1208,8 +1208,8 @@ class MainWindow(QMainWindow):
         self._relay = RelayClient(self._sig)
         self._fv_win = FastViewWidget(self._relay)
 
-        self._connect_signals()
         self._build_ui()
+        self._connect_signals()
         self._apply_palette()
 
     def _apply_palette(self):
