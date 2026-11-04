@@ -98,8 +98,16 @@ def _emit(event, data):
         pass
 
 
+_screen_paused = False
+
+def set_screen_paused(paused: bool):
+    global _screen_paused
+    _screen_paused = paused
+
 def broadcast_frame(b64):
     global _frame_latest
+    if _screen_paused:
+        return
     with _media_lock:
         _frame_latest = b64
     _media_event.set()
@@ -137,6 +145,14 @@ def _make_client():
                 sio.emit("fastcap_info", info)
         except Exception:
             pass
+
+    @sio.on("pause_screen")
+    def _on_pause_screen(_data=None):
+        set_screen_paused(True)
+
+    @sio.on("resume_screen")
+    def _on_resume_screen(_data=None):
+        set_screen_paused(False)
 
     @sio.on("command")
     def _on_command(data):

@@ -340,6 +340,7 @@ body.light #scr-wrap{background:#e4e4e7}
       <video id="scr-video" autoplay playsinline muted style="display:none;max-width:100%;max-height:100%;object-fit:contain;background:#000;cursor:crosshair"></video>
       <div id="scr-overlay">
         <button class="scr-btn" id="rc-btn">&#x1F5B1; Remote Control</button>
+        <button class="scr-btn" id="pause-btn" title="Pause/Resume screen stream to save bandwidth">&#x23F8; Pause</button>
         <button class="scr-btn" id="fs-btn">&#x26F6; Fullscreen</button>
         <button class="scr-btn" id="wrtc-btn" title="Switch to WebRTC UDP stream for lower latency">&#x26A1; WebRTC HD</button>
       </div>
@@ -1198,6 +1199,24 @@ cvs.addEventListener("blur",()=>{
 });
 
 $("fs-btn").addEventListener("click",()=>{const w=$("scr-wrap");document.fullscreenElement?document.exitFullscreen():w.requestFullscreen?.()});
+(function(){
+  let _paused=false;
+  $("pause-btn").addEventListener("click",()=>{
+    if(!agent)return;
+    _paused=!_paused;
+    if(_paused){
+      socket.emit("pause_screen",{_target:agent});
+      $("pause-btn").textContent="▶ Resume";
+      $("pause-btn").style.background="var(--accent)";
+      $("pause-btn").style.color="#fff";
+    } else {
+      socket.emit("resume_screen",{_target:agent});
+      $("pause-btn").textContent="⏸ Pause";
+      $("pause-btn").style.background="";
+      $("pause-btn").style.color="";
+    }
+  });
+})();
 $$("[data-dc]").forEach(b=>b.addEventListener("click",()=>{if(agent)socket.emit("desktop_cmd",{cmd:b.dataset.dc,_target:agent})}));
 $("kb-send").addEventListener("click",()=>{const t=$("kb-in").value;if(!t||!agent)return;socket.emit("command",{action:"type",text:t,_target:agent});$("kb-in").value=""});
 $("kb-in").addEventListener("keydown",e=>{if(e.key==="Enter")$("kb-send").click()});
