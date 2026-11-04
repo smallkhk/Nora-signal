@@ -955,21 +955,27 @@ def _fc_udp_thread():
                             _fc_sid_to_agent[sid_hex] = name
                             ag_name = name
                             break
+                token_ok = False
                 if ag_name:
                     fc_info = _fastcap_cache.get(ag_name, {})
                     pw = fc_info.get("password", "")
                     expected = hashlib.sha256(pw.encode() + sid_hex.encode()).digest()[:8]
-                    if token == expected:
-                        with _fc_lock:
-                            s.viewer_addrs[addr] = now
-                            if s.token is None:
-                                s.token = token
-                            s.wait_key = True
-                        try:
-                            sock.sendto(bytes([T_HELLO_VIEW]) + sid, addr)
-                        except Exception:
-                            pass
-                        _fc_request_key(s, sid)
+                    token_ok = (token == expected)
+                elif _fc_host_alive(s):
+                    # No SyncHost cache entry but host is live (direct-test mode).
+                    # Accept viewer; host will validate T_KEYREQ with its own password.
+                    token_ok = True
+                if token_ok:
+                    with _fc_lock:
+                        s.viewer_addrs[addr] = now
+                        if s.token is None:
+                            s.token = token
+                        s.wait_key = True
+                    try:
+                        sock.sendto(bytes([T_HELLO_VIEW]) + sid, addr)
+                    except Exception:
+                        pass
+                    _fc_request_key(s, sid)
             elif t == T_INPUT and len(data) >= 17:
                 # Input packet from a UDP viewer — forward straight to host
                 _fc_send_to_host(s, sid, T_INPUT, data[9:17], data[17:])
