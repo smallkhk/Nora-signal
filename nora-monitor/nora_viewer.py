@@ -307,7 +307,7 @@ class RelayClient(QObject):
 # ── Fast View overlay window ──────────────────────────────────────────────────
 class FastViewWidget(QWidget):
     def __init__(self, relay: RelayClient, parent=None):
-        super().__init__(parent, Qt.Window | Qt.FramelessWindowHint)
+        super().__init__(parent, Qt.Window)
         self.relay = relay
         self.session = ""
         self.decoder = H264Decoder()
@@ -352,7 +352,9 @@ class FastViewWidget(QWidget):
             self._fc_udp.stop()
         self._fc_udp = FcUdpClient(session, password, self._on_udp_frame)
         self._fc_udp.start()
-        self.showFullScreen()
+        self.setWindowTitle("⚡ Fast View")
+        self.resize(1280, 720)
+        self.show()
         self.activateWindow(); self.setFocus()
         self._st.setText("⚡ UDP connecting…")
         self._fps_timer.start()
