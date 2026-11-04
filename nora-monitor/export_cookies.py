@@ -1,13 +1,12 @@
 """
-export_cookies.py  —  Run on your SOURCE Windows PC
-Exports Chrome, Edge, and Firefox cookies to a portable JSON file.
+export_cookies.py  —  Exports Chrome, Edge, and Firefox cookies to a list.
+Called by cookie_manager.py -> server.py -> relay_client.py.
 
-Requirements (install once):
-    pip install pycryptodome pywin32
-
-Usage:
-    python export_cookies.py
-    -> writes cookies_export.json in the same folder
+Handles:
+  - Chrome/Edge v10/v11 (DPAPI + AES-GCM, pre-Chrome-130)
+  - Chrome/Edge v20     (App-Bound Encryption, Chrome 130+ / Edge equivalents)
+                         → falls back to CDP (headless debug mode)
+  - Firefox             (plain SQLite, no encryption)
 """
 
 import os
@@ -18,15 +17,16 @@ import base64
 import tempfile
 import ctypes
 import ctypes.wintypes
+import subprocess
+import time
+import urllib.request
 from pathlib import Path
 
 
+# ── Shared file-copy helper ────────────────────────────────────────────────────
+
 def _copy_locked_file(src: Path, dst: str):
-    """
-    Copy a file that Windows has locked (e.g. Chrome/Edge cookies DB while
-    the browser is open) by opening it with full sharing flags via CreateFileW.
-    Falls back to shutil.copy2 if the Win32 call is unavailable.
-    """
+    """Copy a browser-locked file using Win32 sharing flags."""
     try:
         GENERIC_READ          = 0x80000000
         FILE_SHARE_ALL        = 0x00000001 | 0x00000002 | 0x00000004
@@ -48,11 +48,10 @@ def _copy_locked_file(src: Path, dst: str):
         shutil.copy2(src, dst)
 
 
-# ── Chrome / Edge helpers ──────────────────────────────────────────────────────
+# ── Chrome / Edge: key + AES-GCM decrypt (v10/v11) ───────────────────────────
 
 def _get_chrome_key(local_state_path: Path) -> bytes:
     import win32crypt
-    from Crypto.Cipher import AES
 
     with open(local_state_path, encoding="utf-8") as f:
         state = json.load(f)
@@ -67,14 +66,14 @@ def _decrypt_value(key: bytes, encrypted_value: bytes) -> str:
         return ""
     try:
         from Crypto.Cipher import AES
-        # v10/v11 format: b"v10" + 12-byte nonce + ciphertext + 16-byte tag
         if encrypted_value[:3] in (b"v10", b"v11"):
-            nonce = encrypted_value[3:15]
-            tag = encrypted_value[-16:]
+            nonce      = encrypted_value[3:15]
+            tag        = encrypted_value[-16:]
             ciphertext = encrypted_value[15:-16]
             cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(ciphertext, tag).decode("utf-8", errors="replace")
         else:
+            # Older DPAPI-only format (pre-v10) or unknown
             import win32crypt
             return win32crypt.CryptUnprotectData(encrypted_value, None, None, None, 0)[1].decode(
                 "utf-8", errors="replace"
@@ -83,65 +82,175 @@ def _decrypt_value(key: bytes, encrypted_value: bytes) -> str:
         return ""
 
 
+# ── Chrome / Edge: CDP fallback for App-Bound Encryption (v20, Chrome 130+) ──
+
+def _find_browser_exe(browser: str) -> str | None:
+    candidates = []
+    if browser == "Edge":
+        candidates = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ]
+    else:
+        candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _cdp_export_cookies(exe: str, user_data_dir: Path, browser: str) -> list:
+    """
+    Kill any running browser instance, launch it headless with a debug port,
+    pull all cookies via CDP Network.getAllCookies, then close it.
+    Chrome epoch offset: (unix_ts + 11644473600) * 1_000_000
+    """
+    import websocket  # websocket-client
+
+    proc_name = "msedge.exe" if browser == "Edge" else "chrome.exe"
+    subprocess.run(["taskkill", "/F", "/IM", proc_name], capture_output=True)
+    time.sleep(1)
+
+    debug_port = 9224  # non-standard to avoid clashing with any existing debug session
+    proc = subprocess.Popen(
+        [
+            exe,
+            f"--remote-debugging-port={debug_port}",
+            f"--user-data-dir={str(user_data_dir)}",
+            "--headless=new",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-sync",
+            "--disable-extensions",
+            "about:blank",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    rows = []
+    try:
+        # Wait for browser to be ready
+        ws_url = None
+        for _ in range(20):
+            try:
+                data = urllib.request.urlopen(
+                    f"http://localhost:{debug_port}/json/list", timeout=2
+                ).read()
+                targets = json.loads(data)
+                if targets:
+                    ws_url = targets[0]["webSocketDebuggerUrl"]
+                    break
+            except Exception:
+                time.sleep(0.5)
+
+        if not ws_url:
+            return []
+
+        ws = websocket.create_connection(ws_url, timeout=10)
+        ws.send(json.dumps({"id": 1, "method": "Network.getAllCookies"}))
+        response = json.loads(ws.recv())
+        ws.close()
+
+        CHROME_EPOCH_OFFSET = 11_644_473_600  # seconds between 1601-01-01 and 1970-01-01
+
+        for c in response.get("result", {}).get("cookies", []):
+            expires_unix = c.get("expires", -1)
+            if expires_unix >= 0:
+                expires_utc = int((expires_unix + CHROME_EPOCH_OFFSET) * 1_000_000)
+            else:
+                expires_utc = 0
+
+            samesite_map = {"Strict": 2, "Lax": 1, "None": 0}
+            rows.append({
+                "browser":      browser,
+                "host":         c.get("domain", ""),
+                "name":         c.get("name", ""),
+                "value":        c.get("value", ""),
+                "path":         c.get("path", "/"),
+                "expires_utc":  expires_utc,
+                "is_secure":    bool(c.get("secure", False)),
+                "is_httponly":  bool(c.get("httpOnly", False)),
+                "samesite":     samesite_map.get(c.get("sameSite", ""), -1),
+                "source_scheme": 2 if c.get("secure") else 1,
+            })
+    finally:
+        proc.terminate()
+        time.sleep(0.5)
+
+    return rows
+
+
+# ── Main Chromium export ───────────────────────────────────────────────────────
+
 def export_chromium_cookies(profile_path: Path, local_state_path: Path, browser: str) -> list:
     # Chrome 96+ moved cookies to Network/Cookies
     cookie_db = profile_path / "Network" / "Cookies"
     if not cookie_db.exists():
         cookie_db = profile_path / "Cookies"
     if not cookie_db.exists():
-        print(f"  [{browser}] Cookie file not found, skipping.")
         return []
 
+    # --- Try DPAPI + AES-GCM (v10/v11) first ---
     try:
         key = _get_chrome_key(local_state_path)
-    except Exception as e:
-        print(f"  [{browser}] Could not read encryption key: {e}")
-        return []
-
-    # Copy DB to temp (using sharing flags so it works even while browser is open)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
-        tmp_path = tmp.name
-    _copy_locked_file(cookie_db, tmp_path)
+    except Exception:
+        key = None
 
     rows = []
-    try:
-        con = sqlite3.connect(tmp_path)
-        cur = con.execute(
-            "SELECT host_key, name, encrypted_value, path, expires_utc, "
-            "is_secure, is_httponly, samesite, source_scheme FROM cookies"
-        )
-        for row in cur.fetchall():
-            host, name, enc_val, path, expires, secure, httponly, samesite, scheme = row
-            value = _decrypt_value(key, enc_val)
-            rows.append(
-                {
-                    "browser": browser,
-                    "host": host,
-                    "name": name,
-                    "value": value,
-                    "path": path,
-                    "expires_utc": expires,
-                    "is_secure": bool(secure),
-                    "is_httponly": bool(httponly),
-                    "samesite": samesite,
-                    "source_scheme": scheme,
-                }
+    if key:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+            tmp_path = tmp.name
+        _copy_locked_file(cookie_db, tmp_path)
+        try:
+            con = sqlite3.connect(tmp_path)
+            cur = con.execute(
+                "SELECT host_key, name, encrypted_value, path, expires_utc, "
+                "is_secure, is_httponly, samesite, source_scheme FROM cookies"
             )
-        con.close()
-    finally:
-        os.unlink(tmp_path)
+            for row in cur.fetchall():
+                host, name, enc_val, path, expires, secure, httponly, samesite, scheme = row
+                value = _decrypt_value(key, enc_val)
+                rows.append({
+                    "browser":      browser,
+                    "host":         host,
+                    "name":         name,
+                    "value":        value,
+                    "path":         path,
+                    "expires_utc":  expires,
+                    "is_secure":    bool(secure),
+                    "is_httponly":  bool(httponly),
+                    "samesite":     samesite,
+                    "source_scheme": scheme,
+                })
+            con.close()
+        finally:
+            os.unlink(tmp_path)
 
-    print(f"  [{browser}] Exported {len(rows)} cookies.")
+    # If all values are empty (v20 App-Bound Encryption), fall back to CDP
+    has_values = any(r["value"] for r in rows)
+    if not has_values:
+        exe = _find_browser_exe(browser)
+        if exe:
+            try:
+                cdp_rows = _cdp_export_cookies(exe, profile_path.parent, browser)
+                if cdp_rows:
+                    return cdp_rows
+            except Exception:
+                pass
+
     return rows
 
 
-# ── Firefox helpers ────────────────────────────────────────────────────────────
+# ── Firefox ────────────────────────────────────────────────────────────────────
 
 def export_firefox_cookies() -> list:
     appdata = Path(os.environ.get("APPDATA", ""))
     profiles_ini = appdata / "Mozilla" / "Firefox" / "profiles.ini"
     if not profiles_ini.exists():
-        print("  [Firefox] profiles.ini not found, skipping.")
         return []
 
     import configparser
@@ -152,7 +261,6 @@ def export_firefox_cookies() -> list:
     for section in cfg.sections():
         if not section.startswith("Profile"):
             continue
-        is_default = cfg.get(section, "Default", fallback="0") == "1"
         rel_path = cfg.get(section, "Path", fallback=None)
         if not rel_path:
             continue
@@ -176,67 +284,53 @@ def export_firefox_cookies() -> list:
             )
             for row in cur.fetchall():
                 host, name, value, path, expiry, secure, httponly, samesite = row
-                rows.append(
-                    {
-                        "browser": "Firefox",
-                        "host": host,
-                        "name": name,
-                        "value": value,
-                        "path": path,
-                        "expires_utc": expiry * 1_000_000,  # normalise to Chrome epoch
-                        "is_secure": bool(secure),
-                        "is_httponly": bool(httponly),
-                        "samesite": samesite,
-                        "source_scheme": 0,
-                    }
-                )
+                rows.append({
+                    "browser":      "Firefox",
+                    "host":         host,
+                    "name":         name,
+                    "value":        value,
+                    "path":         path,
+                    "expires_utc":  expiry * 1_000_000,
+                    "is_secure":    bool(secure),
+                    "is_httponly":  bool(httponly),
+                    "samesite":     samesite,
+                    "source_scheme": 0,
+                })
             con.close()
         finally:
             os.unlink(tmp_path)
 
-        label = f"Firefox ({section}{'*' if is_default else ''})"
-        print(f"  [{label}] Exported {len(rows)} cookies so far.")
-
     return rows
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Standalone usage ───────────────────────────────────────────────────────────
 
 def main():
-    appdata_local = Path(os.environ.get("LOCALAPPDATA", ""))
-    appdata_roaming = Path(os.environ.get("APPDATA", ""))
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
 
     browsers = {
         "Chrome": {
-            "profile": appdata_local / "Google" / "Chrome" / "User Data" / "Default",
-            "local_state": appdata_local / "Google" / "Chrome" / "User Data" / "Local State",
+            "profile":     local / "Google"    / "Chrome" / "User Data" / "Default",
+            "local_state": local / "Google"    / "Chrome" / "User Data" / "Local State",
         },
         "Edge": {
-            "profile": appdata_local / "Microsoft" / "Edge" / "User Data" / "Default",
-            "local_state": appdata_local / "Microsoft" / "Edge" / "User Data" / "Local State",
+            "profile":     local / "Microsoft" / "Edge"   / "User Data" / "Default",
+            "local_state": local / "Microsoft" / "Edge"   / "User Data" / "Local State",
         },
     }
 
     all_cookies = []
-
     for name, paths in browsers.items():
         if paths["profile"].exists():
-            print(f"\nExporting {name}...")
-            all_cookies.extend(
-                export_chromium_cookies(paths["profile"], paths["local_state"], name)
-            )
-        else:
-            print(f"\n[{name}] Not installed / profile not found, skipping.")
+            all_cookies.extend(export_chromium_cookies(paths["profile"], paths["local_state"], name))
 
-    print("\nExporting Firefox...")
     all_cookies.extend(export_firefox_cookies())
 
-    out_file = Path("cookies_export.json")
-    with open(out_file, "w", encoding="utf-8") as f:
+    out = Path("cookies_export.json")
+    with open(out, "w", encoding="utf-8") as f:
         json.dump(all_cookies, f, indent=2, ensure_ascii=False)
 
-    print(f"\nDone! {len(all_cookies)} cookies saved to {out_file.resolve()}")
-    print("Transfer this file to your second PC and run import_cookies.py there.")
+    print(f"Done. {len(all_cookies)} cookies → {out.resolve()}")
 
 
 if __name__ == "__main__":
