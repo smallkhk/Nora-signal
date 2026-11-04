@@ -740,12 +740,43 @@ for _rr in [
     ("force_update",           "force_update_result"),
     # WebRTC signaling: hub requests offer, agent responds with SDP offer
     ("webrtc_request",         "webrtc_offer"),
-    # SOCKS5 proxy control
-    ("start_socks5",           "socks5_result"),
-    ("stop_socks5",            "socks5_result"),
-    ("get_socks5_status",      "socks5_status_result"),
 ]:
     _make_req_resp(*_rr)
+
+
+# ── SOCKS5 proxy control (hub → agent → hub) ─────────────────────────────────
+
+def _socks5_to_agent(event, data):
+    target_name = (data or {}).get("_target")
+    target_sid  = name_to_sid.get(target_name)
+    if target_sid and _hub_may_reach(freq.sid, target_name):
+        payload = dict(data) if data else {}
+        payload["_requester"] = freq.sid
+        socketio.emit(event, payload, room=target_sid)
+
+@socketio.on("start_socks5")
+def on_start_socks5(data):
+    _socks5_to_agent("start_socks5", data)
+
+@socketio.on("stop_socks5")
+def on_stop_socks5(data):
+    _socks5_to_agent("stop_socks5", data)
+
+@socketio.on("get_socks5_status")
+def on_get_socks5_status(data):
+    _socks5_to_agent("get_socks5_status", data)
+
+@socketio.on("socks5_result")
+def on_socks5_result(data):
+    requester = (data or {}).get("_requester")
+    if requester:
+        socketio.emit("socks5_result", data, room=requester)
+
+@socketio.on("socks5_status_result")
+def on_socks5_status_result(data):
+    requester = (data or {}).get("_requester")
+    if requester:
+        socketio.emit("socks5_status_result", data, room=requester)
 
 
 # ── Fastcap UDP relay — merged onto port 5000 UDP ────────────────────────────
