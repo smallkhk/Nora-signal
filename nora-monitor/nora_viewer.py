@@ -343,18 +343,28 @@ class FastViewWidget(QWidget):
     def resizeEvent(self, e):
         self._bar.setGeometry(0, self.height()-30, self.width(), 30)
 
+    def show_waiting(self):
+        """Open window immediately in waiting state before fastcap_info arrives."""
+        self._frame = None; self._open = True
+        self.setWindowTitle("⚡ Fast View")
+        self.resize(1280, 720)
+        self.show()
+        self.activateWindow()
+        self._st.setText("⏳ Waiting for stream to start…")
+        self._draw_timer.start()
+
     def open_view(self, session: str, password: str):
         self.session = session
         self._frame = None; self._fw = self._fh = 1
         self._open = True
-        # Stop any previous UDP client
         if self._fc_udp:
             self._fc_udp.stop()
         self._fc_udp = FcUdpClient(session, password, self._on_udp_frame)
         self._fc_udp.start()
         self.setWindowTitle("⚡ Fast View")
-        self.resize(1280, 720)
-        self.show()
+        if not self.isVisible():
+            self.resize(1280, 720)
+            self.show()
         self.activateWindow(); self.setFocus()
         self._st.setText("⚡ UDP connecting…")
         self._fps_timer.start()
@@ -513,6 +523,7 @@ class ScreenPanel(QWidget):
         self.relay = relay; self.fv_win = fv_win
         self._fv_info = None; self._rc = False
         self._fw = self._fh = 1; self._mm_last = 0.0
+        self._streaming = False  # only show JPEG canvas after Start is clicked
         layout = QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(0)
 
         # Canvas
@@ -559,6 +570,8 @@ class ScreenPanel(QWidget):
         layout.addWidget(kbar)
 
     def set_frame(self, b64: str):
+        if not self._streaming:
+            return
         raw = base64.b64decode(b64)
         img = QImage(); img.loadFromData(raw)
         if not img.isNull():
@@ -569,11 +582,11 @@ class ScreenPanel(QWidget):
             self._canvas.setPixmap(pm)
 
     def set_fv_info(self, info: dict):
-        self._fv_info = info; self._fv_btn.setVisible(True)
-        # Auto-open FastView if user already clicked Start Stream
-        if getattr(self, "_streaming_requested", False):
-            self._streaming_requested = False
-            self._open_fv()
+        self._fv_info = info
+        self._fv_btn.setVisible(True)
+        # Auto-connect UDP whenever fastcap_info arrives while streaming is active
+        if self._stream_stop_btn.isVisible():
+            self.fv_win.open_view(info["session"], info["password"])
 
     def _open_fv(self):
         if not self._fv_info: return
@@ -581,18 +594,21 @@ class ScreenPanel(QWidget):
 
     def _start_stream(self):
         if not self.relay._agent: return
-        self._streaming_requested = True
+        self._streaming = True
         self._stream_start_btn.setVisible(False)
         self._stream_stop_btn.setVisible(True)
+        self._fv_btn.setVisible(False)
+        self.fv_win.show_waiting()   # open window immediately
         self.relay.emit("fastcap_start", {"_target": self.relay._agent})
 
     def _stop_stream(self):
         if not self.relay._agent: return
-        self._streaming_requested = False
+        self._streaming = False
         self._stream_stop_btn.setVisible(False)
         self._stream_start_btn.setVisible(True)
         self._fv_btn.setVisible(False)
         self._fv_info = None
+        self._canvas.clear()
         self.fv_win.close_view()
         self.relay.emit("fastcap_stop", {"_target": self.relay._agent})
 
