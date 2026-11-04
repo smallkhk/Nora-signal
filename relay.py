@@ -896,26 +896,6 @@ def _fc_to_socketio(s, sid, pkt):
     msg = bytes([1 if key else 0]) + frame_data
     socketio.emit("fastcap_video", {"s": sid_hex, "d": msg}, room=room)
 
-    # Forward to pure-UDP desktop viewers
-    # Packet format: [T_VIDEO(1)] + [session(8)] + [kf(1)] + [frame_id(4BE)] + [idx(2BE)] + [cnt(2BE)] + [data]
-    _FC_FRAG = 1300
-    now2 = time.time()
-    with _fc_lock:
-        alive  = {a: t for a, t in s.viewer_addrs.items() if now2 - t < FC_TIMEOUT}
-        s.viewer_addrs = alive
-    if alive and _fc_udp_sock:
-        frags = [frame_data[i:i+_FC_FRAG] for i in range(0, len(frame_data), _FC_FRAG)]
-        total = len(frags)
-        fid_b = struct.pack(">I", fid)
-        for viewer_addr in alive:
-            for vi, frag in enumerate(frags):
-                # Format matches viewer.py: T_VIDEO + SID(8) + fid(4) + idx(2) + cnt(2) + data
-                pkt = bytes([T_VIDEO]) + sid + fid_b + struct.pack(">HH", vi, total) + frag
-                try:
-                    _fc_udp_sock.sendto(pkt, viewer_addr)
-                except Exception:
-                    pass
-
 
 def _fc_udp_thread():
     global _fc_udp_sock
@@ -937,8 +917,20 @@ def _fc_udp_thread():
             if t in (T_HELLO_HOST, T_VIDEO):
                 s.host_addr = addr
                 s.host_time = now
-                if t == T_VIDEO and len(data) >= 17:
-                    _fc_to_socketio(s, sid, data)
+                if t == T_VIDEO:
+                    # Forward raw packet directly to UDP viewers (no reassembly)
+                    now2 = time.time()
+                    with _fc_lock:
+                        alive = {a: t2 for a, t2 in s.viewer_addrs.items() if now2 - t2 < FC_TIMEOUT}
+                        s.viewer_addrs = alive
+                    for viewer_addr in alive:
+                        try:
+                            sock.sendto(data, viewer_addr)
+                        except Exception:
+                            pass
+                    # Also feed web/Socket.IO viewers (needs reassembly)
+                    if len(data) >= 17:
+                        _fc_to_socketio(s, sid, data)
             elif t == T_HELLO_VIEW and len(data) >= 17:
                 # Desktop viewer authenticating via UDP
                 token = data[9:17]
