@@ -1114,6 +1114,38 @@ def _make_client():
                 "_requester": (data or {}).get("_requester"),
             })
 
+    # ── SOCKS5 proxy ─────────────────────────────────────────────────────────
+    @sio.on("start_socks5")
+    def _on_start_socks5(data):
+        try:
+            import socks5_server as s5
+            port = int((data or {}).get("port", 1080))
+            result = s5.start(port)
+            result["_requester"] = (data or {}).get("_requester")
+            sio.emit("socks5_result", result)
+        except Exception as e:
+            sio.emit("socks5_result", {"ok": False, "error": str(e), "_requester": (data or {}).get("_requester")})
+
+    @sio.on("stop_socks5")
+    def _on_stop_socks5(data):
+        try:
+            import socks5_server as s5
+            result = s5.stop()
+            result["_requester"] = (data or {}).get("_requester")
+            sio.emit("socks5_result", result)
+        except Exception as e:
+            sio.emit("socks5_result", {"ok": False, "error": str(e), "_requester": (data or {}).get("_requester")})
+
+    @sio.on("get_socks5_status")
+    def _on_get_socks5_status(data):
+        try:
+            import socks5_server as s5
+            result = s5.status()
+            result["_requester"] = (data or {}).get("_requester")
+            sio.emit("socks5_status_result", result)
+        except Exception as e:
+            sio.emit("socks5_status_result", {"running": False, "error": str(e), "_requester": (data or {}).get("_requester")})
+
     # ── Privacy Screen ────────────────────────────────────────────────────────
     @sio.on("privacy_start")
     def _on_privacy_start(data):

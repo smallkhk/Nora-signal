@@ -740,6 +740,10 @@ for _rr in [
     ("force_update",           "force_update_result"),
     # WebRTC signaling: hub requests offer, agent responds with SDP offer
     ("webrtc_request",         "webrtc_offer"),
+    # SOCKS5 proxy control
+    ("start_socks5",           "socks5_result"),
+    ("stop_socks5",            "socks5_result"),
+    ("get_socks5_status",      "socks5_status_result"),
 ]:
     _make_req_resp(*_rr)
 
