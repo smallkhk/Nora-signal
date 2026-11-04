@@ -26,18 +26,20 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 _AGENT_NAME = os.environ.get("NORA_NAME", "") or platform.node() or _sock.gethostname() or "local"
 
-_controller = None
-_recorder   = None
-_camera     = None
-_mic        = None
+_controller     = None
+_recorder       = None
+_camera         = None
+_mic            = None
+_screen_capture = None
 
 
-def init(controller_fn, recorder, camera, mic=None):
-    global _controller, _recorder, _camera, _mic
-    _controller = controller_fn
-    _recorder   = recorder
-    _camera     = camera
-    _mic        = mic
+def init(controller_fn, recorder, camera, mic=None, screen_capture=None):
+    global _controller, _recorder, _camera, _mic, _screen_capture
+    _controller     = controller_fn
+    _recorder       = recorder
+    _camera         = camera
+    _mic            = mic
+    _screen_capture = screen_capture
     if _WRT_OK:
         _wrt.init(controller_fn)
 
@@ -166,6 +168,18 @@ def on_win_capture_start(data):
 @socketio.on("win_capture_stop")
 def on_win_capture_stop(_data=None):
     wc.stop_window_capture()
+
+
+@socketio.on("start_screen_stream")
+def on_start_screen_stream(_data=None):
+    if _screen_capture:
+        _screen_capture.start()
+
+
+@socketio.on("stop_screen_stream")
+def on_stop_screen_stream(_data=None):
+    if _screen_capture:
+        _screen_capture.stop()
 
 
 # ── Window / desktop control ──────────────────────────────────────────────────

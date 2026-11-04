@@ -1,148 +1,446 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import UIKit
 
 // MARK: - App entry point
 
 @main
-struct FastcapViewerApp: App {
+struct NoraViewerApp: App {
     var body: some Scene {
-        WindowGroup { ContentView() }
+        WindowGroup { RootView() }
     }
 }
 
 // MARK: - ViewModel
 
-final class ViewerVM: ObservableObject {
-    @Published var host     = "162.35.37.67"
-    @Published var portStr  = "5000"
-    @Published var session  = ""
-    @Published var password = ""
-    @Published var status   = ""
-    @Published var frame:   CVPixelBuffer? = nil
-    @Published var connected = false
+@MainActor
+final class AppVM: ObservableObject {
 
-    private let client  = FastcapClient()
+    // Connection
+    @Published var relayHost = "162.35.37.67"
+    @Published var relayPort = "5000"
+    @Published var isConnected = false
+    @Published var statusMsg   = ""
+
+    // Agents
+    @Published var agents:        [String] = []
+    @Published var selectedAgent: String?  = nil
+
+    // JPEG stream
+    @Published var jpegImage:   UIImage? = nil
+    @Published var jpegStreaming = false
+
+    // FastCap stream
+    @Published var fcFrame:  CVPixelBuffer? = nil
+    @Published var fcActive = false
+
+    // Update
+    @Published var updateInfo: ReleaseInfo? = nil
+
+    // Active tab
+    @Published var tab: ViewTab = .jpeg
+
+    // Internals
+    private var relay:   RelayClient?
     private let decoder = H264Decoder()
-    private var bag     = Set<AnyCancellable>()
+    private var fcClient: FastcapClient?
+    private var bag = Set<AnyCancellable>()
 
-    init() {
-        decoder.onFrame = { [weak self] pb in
-            DispatchQueue.main.async { self?.frame = pb }
-        }
-        client.onFrame = { [weak self] annexB in
-            self?.decoder.feed(annexB: annexB)
-        }
-        client.$statusText
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.status, on: self)
-            .store(in: &bag)
-    }
+    enum ViewTab { case jpeg, fastcap }
+
+    // MARK: - Connect / Disconnect
 
     func connect() {
-        client.connect(host: host,
-                       port: UInt16(portStr) ?? 5000,
-                       session: session,
-                       password: password)
-        connected = true
+        guard let url = URL(string: "http://\(relayHost):\(relayPort)") else {
+            statusMsg = "Invalid URL"; return
+        }
+        let r = RelayClient(relayURL: url)
+
+        r.onLog = { [weak self] msg in
+            Task { @MainActor in self?.statusMsg = msg }
+        }
+
+        r.$agents.receive(on: DispatchQueue.main)
+            .assign(to: \.agents, on: self)
+            .store(in: &bag)
+
+        r.$connected.receive(on: DispatchQueue.main)
+            .assign(to: \.isConnected, on: self)
+            .store(in: &bag)
+
+        r.onJpegFrame = { [weak self] data in
+            guard let img = UIImage(data: data) else { return }
+            Task { @MainActor in self?.jpegImage = img }
+        }
+
+        r.onFastcapInfo = { [weak self] host, port, sess, pass in
+            Task { @MainActor in
+                guard let self else { return }
+                self.fcClient?.disconnect()
+                let fc = FastcapClient()
+                self.fcClient = fc
+                self.decoder.onFrame = { [weak self] pb in
+                    Task { @MainActor in self?.fcFrame = pb }
+                }
+                fc.onFrame = { [weak self] annexB in
+                    self?.decoder.feed(annexB: annexB)
+                }
+                fc.connect(host: host, port: port, session: sess, password: pass)
+                self.fcActive  = true
+                self.tab       = .fastcap
+                self.statusMsg = "FastCap connected"
+            }
+        }
+
+        relay = r
+        r.connect()
+
+        checkForUpdate()
     }
 
     func disconnect() {
-        client.disconnect()
-        connected = false
-        frame = nil
+        stopJpeg()
+        stopFastcap()
+        relay?.disconnect()
+        relay = nil
+        bag.removeAll()
+        isConnected    = false
+        agents         = []
+        selectedAgent  = nil
+        jpegImage      = nil
+        fcFrame        = nil
+        fcActive       = false
+        jpegStreaming   = false
+    }
+
+    // MARK: - Agent selection
+
+    func selectAgent(_ name: String) {
+        selectedAgent = name
+        relay?.selectAgent(name)
+    }
+
+    // MARK: - JPEG stream
+
+    func startJpeg() {
+        jpegStreaming = true
+        relay?.startJpegStream()
+    }
+
+    func stopJpeg() {
+        jpegStreaming = false
+        jpegImage = nil
+        relay?.stopJpegStream()
+    }
+
+    // MARK: - FastCap
+
+    func requestFastcap() {
+        relay?.requestFastcap()
+        statusMsg = "Requesting FastCap…"
+    }
+
+    func stopFastcap() {
+        relay?.stopFastcap()
+        fcClient?.disconnect()
+        fcClient = nil
+        fcFrame  = nil
+        fcActive = false
+    }
+
+    // MARK: - Update check
+
+    private func checkForUpdate() {
+        UpdateChecker.check { [weak self] info in
+            Task { @MainActor in self?.updateInfo = info }
+        }
     }
 }
 
 // MARK: - Root view
 
-struct ContentView: View {
-    @StateObject private var vm = ViewerVM()
+struct RootView: View {
+    @StateObject private var vm = AppVM()
 
     var body: some View {
-        if vm.connected {
-            VideoScreen(vm: vm)
-        } else {
-            NavigationStack {
-                LoginScreen(vm: vm)
-                    .navigationTitle("FastCap Viewer")
+        Group {
+            if !vm.isConnected {
+                ConnectView(vm: vm)
+            } else if vm.selectedAgent == nil {
+                AgentPickerView(vm: vm)
+            } else {
+                MainViewerView(vm: vm)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let info = vm.updateInfo {
+                UpdateBanner(info: info) { vm.updateInfo = nil }
             }
         }
     }
 }
 
-// MARK: - Login screen
+// MARK: - Connect view
 
-struct LoginScreen: View {
-    @ObservedObject var vm: ViewerVM
+struct ConnectView: View {
+    @ObservedObject var vm: AppVM
 
     var body: some View {
-        Form {
-            Section("Relay server") {
-                TextField("Host", text: $vm.host)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .keyboardType(.URL)
-                TextField("Port", text: $vm.portStr)
-                    .keyboardType(.numberPad)
-            }
-            Section("Session") {
-                TextField("Session ID (8 chars)", text: $vm.session)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                SecureField("Password", text: $vm.password)
-            }
-            Section {
-                Button(action: vm.connect) {
-                    Label("Connect", systemImage: "play.fill")
+        NavigationStack {
+            Form {
+                Section("Relay server") {
+                    HStack {
+                        TextField("Host", text: $vm.relayHost)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .keyboardType(.URL)
+                        Text(":")
+                        TextField("Port", text: $vm.relayPort)
+                            .keyboardType(.numberPad)
+                            .frame(width: 70)
+                    }
                 }
-                .disabled(vm.session.count < 8 || vm.password.isEmpty)
-                if !vm.status.isEmpty {
-                    Text(vm.status).font(.caption).foregroundStyle(.secondary)
+                Section {
+                    Button(action: vm.connect) {
+                        Label("Connect", systemImage: "wifi")
+                    }
+                    if !vm.statusMsg.isEmpty {
+                        Text(vm.statusMsg)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Nora Viewer")
+        }
+    }
+}
+
+// MARK: - Agent picker
+
+struct AgentPickerView: View {
+    @ObservedObject var vm: AppVM
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if vm.agents.isEmpty {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                        Text("Waiting for agents…")
+                            .foregroundStyle(.secondary)
+                        Text(vm.statusMsg)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    List(vm.agents, id: \.self) { agent in
+                        Button {
+                            vm.selectAgent(agent)
+                        } label: {
+                            Label(agent, systemImage: "desktopcomputer")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Select Device")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Disconnect") { vm.disconnect() }
                 }
             }
         }
     }
 }
 
-// MARK: - Video screen
+// MARK: - Main viewer
 
-struct VideoScreen: View {
-    @ObservedObject var vm: ViewerVM
+struct MainViewerView: View {
+    @ObservedObject var vm: AppVM
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
-            if let frame = vm.frame {
-                PixelBufferView(pixelBuffer: frame)
-                    .ignoresSafeArea()
-            } else {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Waiting for host…")
-                        .foregroundStyle(.white)
-                        .font(.headline)
-                    Text(vm.status).font(.caption).foregroundStyle(.gray)
+            // Video area
+            Group {
+                if vm.tab == .jpeg {
+                    JpegViewerPanel(vm: vm)
+                } else {
+                    FastcapViewerPanel(vm: vm)
                 }
             }
 
-            Button {
-                vm.disconnect()
-            } label: {
-                Image(systemName: "xmark")
-                    .padding(10)
-                    .background(.black.opacity(0.6))
-                    .clipShape(Circle())
+            // Bottom toolbar
+            VStack(spacing: 0) {
+                Divider().overlay(Color.gray.opacity(0.5))
+                HStack(spacing: 0) {
+                    TabButton(label: "JPEG", icon: "photo",
+                              active: vm.tab == .jpeg) { vm.tab = .jpeg }
+                    TabButton(label: "FastCap", icon: "bolt.fill",
+                              active: vm.tab == .fastcap) { vm.tab = .fastcap }
+                    Spacer()
+                    Button { vm.selectedAgent = nil } label: {
+                        Image(systemName: "chevron.left")
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
                     .foregroundColor(.white)
+                }
+                .background(Color.black.opacity(0.85))
             }
-            .padding()
         }
         .statusBarHidden(true)
     }
 }
 
-// MARK: - AVSampleBufferDisplayLayer wrapper
+struct TabButton: View {
+    let label: String
+    let icon:  String
+    let active: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(label).font(.caption2)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .foregroundColor(active ? .accentColor : .gray)
+        }
+    }
+}
+
+// MARK: - JPEG panel
+
+struct JpegViewerPanel: View {
+    @ObservedObject var vm: AppVM
+
+    var body: some View {
+        ZStack {
+            if let img = vm.jpegImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .ignoresSafeArea()
+            } else if vm.jpegStreaming {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Waiting for frames…").foregroundStyle(.white).font(.headline)
+                }
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "photo.on.rectangle").font(.largeTitle).foregroundColor(.gray)
+                    Text("Tap Start to begin JPEG stream").foregroundStyle(.gray)
+                }
+            }
+
+            // Start / Stop overlay
+            VStack {
+                Spacer()
+                HStack(spacing: 20) {
+                    if !vm.jpegStreaming {
+                        ActionButton(title: "▶ Start JPEG", color: .green) { vm.startJpeg() }
+                    } else {
+                        ActionButton(title: "■ Stop JPEG", color: .red)   { vm.stopJpeg() }
+                    }
+                }
+                .padding(.bottom, 56)
+            }
+        }
+    }
+}
+
+// MARK: - FastCap panel
+
+struct FastcapViewerPanel: View {
+    @ObservedObject var vm: AppVM
+
+    var body: some View {
+        ZStack {
+            if let pb = vm.fcFrame {
+                PixelBufferView(pixelBuffer: pb).ignoresSafeArea()
+            } else if vm.fcActive {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Waiting for H.264 frames…").foregroundStyle(.white).font(.headline)
+                }
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "bolt.fill").font(.largeTitle).foregroundColor(.gray)
+                    Text("Tap Start FastCap for H.264 stream").foregroundStyle(.gray)
+                }
+            }
+
+            VStack {
+                Spacer()
+                HStack(spacing: 20) {
+                    if !vm.fcActive {
+                        ActionButton(title: "⚡ Start FastCap", color: .orange) { vm.requestFastcap() }
+                    } else {
+                        ActionButton(title: "■ Stop FastCap", color: .red)     { vm.stopFastcap() }
+                    }
+                }
+                .padding(.bottom, 56)
+            }
+        }
+    }
+}
+
+struct ActionButton: View {
+    let title:  String
+    let color:  Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.bold())
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(color.opacity(0.85))
+                .foregroundColor(.white)
+                .clipShape(Capsule())
+        }
+    }
+}
+
+// MARK: - Update banner
+
+struct UpdateBanner: View {
+    let info:    ReleaseInfo
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack {
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundColor(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Update \(info.tag) available")
+                    .font(.subheadline.bold())
+                Text("Tap to download IPA")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.thinMaterial)
+        .onTapGesture {
+            UIApplication.shared.open(info.ipaURL)
+        }
+    }
+}
+
+// MARK: - AVSampleBufferDisplayLayer wrapper (reused from original)
 
 struct PixelBufferView: UIViewRepresentable {
     let pixelBuffer: CVPixelBuffer

@@ -104,6 +104,8 @@ class ScreenCapture:
         self._recorder = recorder
 
     def start(self):
+        if self._running:
+            return
         self._running = True
         threading.Thread(target=self._loop, daemon=True, name="screencap").start()
 

@@ -1,0 +1,76 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - claude/**
+    paths:
+      - 'ios-viewer/**'
+      - '.github/workflows/build-ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          gem install xcpretty --no-document 2>/dev/null || true
+
+      - name: Generate Xcode project
+        working-directory: ios-viewer
+        run: xcodegen generate
+
+      - name: Build archive (no code sign)
+        working-directory: ios-viewer
+        run: |
+          xcodebuild archive \
+            -project NoraViewer.xcodeproj \
+            -scheme NoraViewer \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/NoraViewer.xcarchive" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            2>&1 | tee /tmp/xcodebuild.log | xcpretty || (cat /tmp/xcodebuild.log; exit 1)
+
+      - name: Package IPA (unsigned)
+        run: |
+          APP=$(find "$RUNNER_TEMP/NoraViewer.xcarchive/Products/Applications" -name "*.app" | head -1)
+          mkdir -p /tmp/ipa/Payload
+          cp -r "$APP" /tmp/ipa/Payload/
+          cd /tmp/ipa
+          zip -r "$RUNNER_TEMP/NoraViewer.ipa" Payload/
+          echo "IPA: $RUNNER_TEMP/NoraViewer.ipa"
+          ls -lh "$RUNNER_TEMP/NoraViewer.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NoraViewer-IPA
+          path: ${{ runner.temp }}/NoraViewer.ipa
+          retention-days: 30
+
+      - name: Upload IPA to release (if tagged)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ runner.temp }}/NoraViewer.ipa
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
