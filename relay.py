@@ -906,11 +906,11 @@ def _fc_to_socketio(s, sid, pkt):
     if alive and _fc_udp_sock:
         frags = [frame_data[i:i+_FC_FRAG] for i in range(0, len(frame_data), _FC_FRAG)]
         total = len(frags)
-        kf_b  = bytes([1 if key else 0])
         fid_b = struct.pack(">I", fid)
         for viewer_addr in alive:
             for vi, frag in enumerate(frags):
-                pkt = bytes([T_VIDEO]) + sid + kf_b + fid_b + struct.pack(">HH", vi, total) + frag
+                # Format matches viewer.py: T_VIDEO + SID(8) + fid(4) + idx(2) + cnt(2) + data
+                pkt = bytes([T_VIDEO]) + sid + fid_b + struct.pack(">HH", vi, total) + frag
                 try:
                     _fc_udp_sock.sendto(pkt, viewer_addr)
                 except Exception:
