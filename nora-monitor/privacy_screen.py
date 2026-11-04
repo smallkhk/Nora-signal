@@ -398,7 +398,7 @@ class PrivacyScreen:
 
         hinst        = H(_GetModuleHandleW(None))
         cls_name     = CLASS_NAME
-        self._brush  = H(_CreateSolidBrush(0x00141414))  # #141414 — matches Win10/11 update screen
+        self._brush  = H(_CreateSolidBrush(0x00D47800))  # #0078D4 Windows update blue
 
         screen = self
 

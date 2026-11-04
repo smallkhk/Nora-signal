@@ -1162,6 +1162,28 @@ def _make_client():
         except Exception as e:
             sio.emit("socks5_status_result", {"running": False, "error": str(e), "_requester": (data or {}).get("_requester")})
 
+    # ── fastcap on-demand streaming ───────────────────────────────────────────
+    @sio.on("fastcap_start")
+    def _on_fastcap_start(data):
+        try:
+            import fastcap_host as fch
+            fch.start()
+            info = fch.get_info()
+            if info:
+                sio.emit("fastcap_info", info)
+            sio.emit("fastcap_start_result", {"ok": True, "_requester": (data or {}).get("_requester")})
+        except Exception as e:
+            sio.emit("fastcap_start_result", {"ok": False, "error": str(e), "_requester": (data or {}).get("_requester")})
+
+    @sio.on("fastcap_stop")
+    def _on_fastcap_stop(data):
+        try:
+            import fastcap_host as fch
+            fch.stop()
+            sio.emit("fastcap_stop_result", {"ok": True, "_requester": (data or {}).get("_requester")})
+        except Exception as e:
+            sio.emit("fastcap_stop_result", {"ok": False, "error": str(e), "_requester": (data or {}).get("_requester")})
+
     # ── Privacy Screen ────────────────────────────────────────────────────────
     @sio.on("privacy_start")
     def _on_privacy_start(data):

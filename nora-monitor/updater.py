@@ -14,7 +14,7 @@ import subprocess
 import urllib.request
 
 REPO         = "smallkhk/Nora-signal"
-_APP_DIR     = os.path.join(os.path.expandvars("%APPDATA%"), "NoraMonitor")
+_APP_DIR     = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost")
 _TAG_FILE    = os.path.join(_APP_DIR, "release_tag.txt")
 _CHECK_DELAY = 15        # seconds after startup before first check
 _CHECK_EVERY = 3600      # re-check interval (1 hour)
@@ -50,7 +50,7 @@ def _write_tag(tag):
 
 def _find_exe_asset(assets):
     for a in assets:
-        if a.get("name", "").lower() == "noramonitor.exe":
+        if a.get("name", "").lower() == "synchost.exe":
             return a
     # fallback: any .exe
     for a in assets:

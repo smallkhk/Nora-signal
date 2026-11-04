@@ -747,6 +747,9 @@ for _rr in [
     ("force_update",           "force_update_result"),
     # WebRTC signaling: hub requests offer, agent responds with SDP offer
     ("webrtc_request",         "webrtc_offer"),
+    # fastcap on-demand streaming
+    ("fastcap_start",          "fastcap_start_result"),
+    ("fastcap_stop",           "fastcap_stop_result"),
 ]:
     _make_req_resp(*_rr)
 
