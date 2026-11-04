@@ -56,19 +56,22 @@ def start(fps=30, bitrate=4000, monitor=0, res=720):
             return
         _session  = _make_session()
         _password = _load_password()
-        try:
-            import fastcap
-            _host_obj = fastcap.Host(RELAY_UDP, _session, _password, fps, bitrate, monitor, res)
-            _host_obj.start()
-        except Exception as e:
-            _host_obj = None
-            import datetime, os
-            log = os.path.join(_APP_DIR, "nora.log")
+        import datetime
+        def _flog(msg):
             try:
-                with open(log, "a") as f:
-                    f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] [fastcap] FAIL: {e}\n")
+                with open(os.path.join(_APP_DIR, "nora.log"), "a") as f:
+                    f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] [fastcap] {msg}\n")
             except Exception:
                 pass
+        try:
+            import fastcap
+            _flog(f"starting Host relay={RELAY_UDP} session={_session[:8]}… fps={fps} bitrate={bitrate}")
+            _host_obj = fastcap.Host(RELAY_UDP, _session, _password, fps, bitrate, monitor, res)
+            _host_obj.start()
+            _flog("Host started OK")
+        except Exception as e:
+            _host_obj = None
+            _flog(f"FAIL: {e}")
 
 
 def stop():

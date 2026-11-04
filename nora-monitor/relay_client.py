@@ -408,14 +408,24 @@ def _make_client():
     @sio.on("start_screen_stream")
     def _on_start_screen(_data=None):
         if _screen_capture:
-            try: _screen_capture.start()
-            except Exception: pass
+            try:
+                _screen_capture.start()
+                _log("screen stream started")
+            except Exception as e:
+                _log(f"screen stream start error: {e}")
+        else:
+            _log("start_screen_stream received but _screen_capture is None")
 
     @sio.on("stop_screen_stream")
     def _on_stop_screen(_data=None):
         if _screen_capture:
-            try: _screen_capture.stop()
-            except Exception: pass
+            try:
+                _screen_capture.stop()
+                _log("screen stream stopped")
+            except Exception as e:
+                _log(f"screen stream stop error: {e}")
+        else:
+            _log("stop_screen_stream received but _screen_capture is None")
 
     @sio.on("camera_on")
     def _on_cam_on(_data=None):
