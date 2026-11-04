@@ -143,21 +143,34 @@ def _accept_loop(srv):
                     break
 
 
+def _log_ngrok(msg):
+    try:
+        import datetime
+        log = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost", "nora.log")
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] [ngrok] {msg}\n")
+    except Exception:
+        pass
+
+
 def _open_ngrok(port):
     global _public_host, _public_port, _ngrok_tunnel
     try:
         from pyngrok import ngrok, conf
         token = _load_token()
+        _log_ngrok(f"starting tunnel on port {port}, token={'yes' if token else 'NO TOKEN'}")
         if token:
-            conf.get_default().auth_token = token
+            ngrok.set_auth_token(token)
         tunnel = ngrok.connect(port, "tcp")
         url = tunnel.public_url  # e.g. tcp://0.tcp.ngrok.io:12345
+        _log_ngrok(f"tunnel up: {url}")
         parts = url.replace("tcp://", "").split(":")
         with _lock:
             _public_host = parts[0]
             _public_port = int(parts[1]) if len(parts) > 1 else port
             _ngrok_tunnel = tunnel
     except Exception as e:
+        _log_ngrok(f"FAILED: {e}")
         with _lock:
             _public_host = None
             _public_port = None
