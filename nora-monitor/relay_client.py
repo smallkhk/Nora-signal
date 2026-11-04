@@ -140,13 +140,20 @@ def _make_client():
 
     @sio.on("registered")
     def _on_registered(_data=None):
-        try:
-            import fastcap_host as fch
-            info = fch.get_info()
-            if info:
-                sio.emit("fastcap_info", info)
-        except Exception:
-            pass
+        _log("registered OK — starting fastcap host in background")
+        def _init_fc():
+            try:
+                import fastcap_host as fch
+                fch.start()          # idempotent; starts AMD encoder if not running
+                info = fch.get_info()
+                if info:
+                    _log(f"fastcap_info ready, session={info['session'][:8]}…")
+                    sio.emit("fastcap_info", info)
+                else:
+                    _log("fastcap_info is None after start()")
+            except Exception as e:
+                _log(f"fastcap init error: {e}")
+        threading.Thread(target=_init_fc, daemon=True, name="fc-init").start()
 
     @sio.on("pause_screen")
     def _on_pause_screen(_data=None):
