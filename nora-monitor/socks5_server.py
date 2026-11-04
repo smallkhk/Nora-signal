@@ -34,6 +34,15 @@ def _load_token():
         return ""
 
 
+def save_token(token: str):
+    try:
+        os.makedirs(os.path.dirname(_TOKEN_FILE), exist_ok=True)
+        with open(_TOKEN_FILE, "w", encoding="utf-8") as f:
+            f.write(token.strip())
+    except Exception:
+        pass
+
+
 def _get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

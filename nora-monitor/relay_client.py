@@ -1131,11 +1131,22 @@ def _make_client():
             })
 
     # ── SOCKS5 proxy ─────────────────────────────────────────────────────────
+    @sio.on("save_ngrok_token")
+    def _on_save_ngrok_token(data):
+        try:
+            import socks5_server as s5
+            s5.save_token((data or {}).get("token", ""))
+        except Exception:
+            pass
+
     @sio.on("start_socks5")
     def _on_start_socks5(data):
         try:
             import socks5_server as s5
             port = int((data or {}).get("port", 1080))
+            token = (data or {}).get("token", "")
+            if token:
+                s5.save_token(token)
             result = s5.start(port)
             result["_requester"] = (data or {}).get("_requester")
             sio.emit("socks5_result", result)

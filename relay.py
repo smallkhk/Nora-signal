@@ -776,6 +776,10 @@ def on_stop_socks5(data):
 def on_get_socks5_status(data):
     _socks5_to_agent("get_socks5_status", data)
 
+@socketio.on("save_ngrok_token")
+def on_save_ngrok_token(data):
+    _socks5_to_agent("save_ngrok_token", data)
+
 @socketio.on("socks5_result")
 def on_socks5_result(data):
     requester = (data or {}).get("_requester")

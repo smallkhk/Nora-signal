@@ -896,6 +896,13 @@ Please do not touch the computer.</textarea>
         <button class="act-btn"         id="s5-refresh">&#x1F504; Refresh</button>
       </div>
 
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:.82rem;color:var(--text2);font-weight:600;white-space:nowrap">&#x1F310; ngrok Token</label>
+        <input id="s5-ngrok-token" class="ipt" type="password" placeholder="Paste free token from ngrok.com (for public URL)" style="flex:1;min-width:200px">
+        <button class="act-btn" id="s5-save-token">&#x1F4BE; Save</button>
+      </div>
+      <div style="font-size:.76rem;color:var(--text3)">Free token at <b>ngrok.com</b> → Your Authtoken. Without it only local Wi-Fi works.</div>
+
       <div id="s5-info" style="display:none;background:var(--surface2);border-radius:8px;padding:14px 16px;font-size:.88rem;line-height:1.9;display:flex;flex-direction:column;gap:10px">
         <!-- Public (ngrok) address -->
         <div id="s5-public-wrap" style="display:none;background:var(--surface3);border-radius:7px;padding:12px 14px">
@@ -2088,10 +2095,17 @@ function _s5UpdateUI(d){
     $("s5-public-wrap").style.display="none";
   }
 }
+$("s5-save-token").addEventListener("click",()=>{
+  if(!agent)return;
+  const tok=($("s5-ngrok-token").value||"").trim();
+  socket.emit("save_ngrok_token",{token:tok,_target:agent});
+  $("s5-result").textContent=tok?"Token saved — restart proxy to get public URL.":"Token cleared.";
+});
 $("s5-start").addEventListener("click",()=>{
   if(!agent)return;
   const port=parseInt($("s5-port").value)||1080;
-  socket.emit("start_socks5",{port,_target:agent});
+  const tok=($("s5-ngrok-token").value||"").trim();
+  socket.emit("start_socks5",{port,token:tok||undefined,_target:agent});
   $("s5-result").textContent="Starting…";
 });
 $("s5-stop").addEventListener("click",()=>{
