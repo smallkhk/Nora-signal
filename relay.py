@@ -985,6 +985,8 @@ def _fc_udp_thread():
                 with _fc_lock:
                     if addr in s.viewer_addrs:
                         s.viewer_addrs[addr] = now
+                # Forward viewer ping to host so it knows someone is watching
+                _fc_send_to_host(s, sid, T_PING, s.token)
         except Exception:
             pass
 
