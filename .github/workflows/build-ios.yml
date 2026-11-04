@@ -32,29 +32,32 @@ jobs:
         working-directory: ios-viewer
         run: xcodegen generate
 
-      - name: Build archive (no code sign)
+      - name: Build app (no code sign)
         working-directory: ios-viewer
         run: |
-          xcodebuild archive \
+          xcodebuild build \
             -project NoraViewer.xcodeproj \
             -scheme NoraViewer \
             -configuration Release \
+            -sdk iphoneos \
             -destination "generic/platform=iOS" \
-            -archivePath "$RUNNER_TEMP/NoraViewer.xcarchive" \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/build" \
+            SKIP_INSTALL=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
             2>&1 | tee /tmp/xcodebuild.log | xcpretty || (cat /tmp/xcodebuild.log; exit 1)
 
       - name: Package IPA (unsigned)
         run: |
-          APP=$(find "$RUNNER_TEMP/NoraViewer.xcarchive/Products/Applications" -name "*.app" | head -1)
+          APP=$(find "$RUNNER_TEMP/build" -name "*.app" -maxdepth 2 | head -1)
+          if [ -z "$APP" ]; then echo "ERROR: .app not found"; find "$RUNNER_TEMP/build" -ls; exit 1; fi
+          echo "Packaging: $APP"
+          ls -lh "$APP"
           mkdir -p /tmp/ipa/Payload
           cp -r "$APP" /tmp/ipa/Payload/
           cd /tmp/ipa
           zip -r "$RUNNER_TEMP/NoraViewer.ipa" Payload/
-          echo "IPA: $RUNNER_TEMP/NoraViewer.ipa"
           ls -lh "$RUNNER_TEMP/NoraViewer.ipa"
 
       - name: Upload IPA artifact
