@@ -523,7 +523,8 @@ class ScreenPanel(QWidget):
         self.relay = relay; self.fv_win = fv_win
         self._fv_info = None; self._rc = False
         self._fw = self._fh = 1; self._mm_last = 0.0
-        self._streaming = False  # only show JPEG canvas after Start is clicked
+        self._streaming  = False   # True while JPEG stream is running
+        self._fastcap_on = False   # True while fastcap H.264 stream is running
         layout = QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(0)
 
         # Canvas
@@ -544,19 +545,24 @@ class ScreenPanel(QWidget):
         self._rc_btn.clicked.connect(self._toggle_rc)
         self._rc_stat = QLabel("RC off — click canvas to control")
         self._rc_stat.setStyleSheet("color:#71717a;font-size:12px")
-        self._fv_btn = QPushButton("⚡ Fast View"); self._fv_btn.setStyleSheet(_BTN_P)
-        self._fv_btn.setVisible(False); self._fv_btn.clicked.connect(self._open_fv)
-        self._stream_start_btn = QPushButton("▶ Start Stream"); self._stream_start_btn.setStyleSheet(_BTN_P)
-        self._stream_start_btn.clicked.connect(self._start_stream)
-        self._stream_stop_btn  = QPushButton("■ Stop Stream");  self._stream_stop_btn.setStyleSheet(_BTN_S)
-        self._stream_stop_btn.setVisible(False); self._stream_stop_btn.clicked.connect(self._stop_stream)
+        # JPEG stream buttons
+        self._jpeg_start_btn = QPushButton("▶ Start JPEG"); self._jpeg_start_btn.setStyleSheet(_BTN_P)
+        self._jpeg_start_btn.clicked.connect(self._start_jpeg)
+        self._jpeg_stop_btn  = QPushButton("■ Stop JPEG");  self._jpeg_stop_btn.setStyleSheet(_BTN_S)
+        self._jpeg_stop_btn.setVisible(False); self._jpeg_stop_btn.clicked.connect(self._stop_jpeg)
+        # FastCap H.264 buttons
+        self._fc_start_btn = QPushButton("⚡ Fast View"); self._fc_start_btn.setStyleSheet(_BTN_P)
+        self._fc_start_btn.clicked.connect(self._start_fastcap)
+        self._fc_stop_btn  = QPushButton("■ Stop Fast");  self._fc_stop_btn.setStyleSheet(_BTN_S)
+        self._fc_stop_btn.setVisible(False); self._fc_stop_btn.clicked.connect(self._stop_fastcap)
         for dc, lbl2 in [("new","+ New"),("left","← Left"),("right","Right →"),("close","✕ Close")]:
             b = QPushButton(lbl2); b.setStyleSheet(_BTN_S); b.setProperty("dc", dc)
             b.clicked.connect(lambda _, x=dc: relay.emit("desktop_cmd",{"cmd":x,"_target":relay._agent}))
             rbl.addWidget(b)
         rbl.addWidget(self._rc_btn); rbl.addStretch()
-        rbl.addWidget(self._stream_start_btn); rbl.addWidget(self._stream_stop_btn)
-        rbl.addWidget(self._fv_btn); rbl.addWidget(self._rc_stat)
+        rbl.addWidget(self._jpeg_start_btn); rbl.addWidget(self._jpeg_stop_btn)
+        rbl.addWidget(self._fc_start_btn);   rbl.addWidget(self._fc_stop_btn)
+        rbl.addWidget(self._rc_stat)
         layout.addWidget(rcbar)
 
         # Text send bar
@@ -583,32 +589,39 @@ class ScreenPanel(QWidget):
 
     def set_fv_info(self, info: dict):
         self._fv_info = info
-        self._fv_btn.setVisible(True)
-        # Auto-connect UDP whenever fastcap_info arrives while streaming is active
-        if self._stream_stop_btn.isVisible():
+        # Auto-connect UDP if Fast View is already active
+        if self._fastcap_on:
             self.fv_win.open_view(info["session"], info["password"])
 
-    def _open_fv(self):
-        if not self._fv_info: return
-        self.fv_win.open_view(self._fv_info["session"], self._fv_info["password"])
-
-    def _start_stream(self):
+    def _start_jpeg(self):
         if not self.relay._agent: return
         self._streaming = True
-        self._stream_start_btn.setVisible(False)
-        self._stream_stop_btn.setVisible(True)
-        self._fv_btn.setVisible(False)
-        self.fv_win.show_waiting()   # open window immediately
-        self.relay.emit("fastcap_start", {"_target": self.relay._agent})
+        self._jpeg_start_btn.setVisible(False)
+        self._jpeg_stop_btn.setVisible(True)
+        self.relay.emit("start_screen_stream", {"_target": self.relay._agent})
 
-    def _stop_stream(self):
+    def _stop_jpeg(self):
         if not self.relay._agent: return
         self._streaming = False
-        self._stream_stop_btn.setVisible(False)
-        self._stream_start_btn.setVisible(True)
-        self._fv_btn.setVisible(False)
-        self._fv_info = None
+        self._jpeg_stop_btn.setVisible(False)
+        self._jpeg_start_btn.setVisible(True)
         self._canvas.clear()
+        self.relay.emit("stop_screen_stream", {"_target": self.relay._agent})
+
+    def _start_fastcap(self):
+        if not self.relay._agent: return
+        self._fastcap_on = True
+        self._fc_start_btn.setVisible(False)
+        self._fc_stop_btn.setVisible(True)
+        self.fv_win.show_waiting()
+        self.relay.emit("fastcap_start", {"_target": self.relay._agent})
+
+    def _stop_fastcap(self):
+        if not self.relay._agent: return
+        self._fastcap_on = False
+        self._fc_stop_btn.setVisible(False)
+        self._fc_start_btn.setVisible(True)
+        self._fv_info = None
         self.fv_win.close_view()
         self.relay.emit("fastcap_stop", {"_target": self.relay._agent})
 

