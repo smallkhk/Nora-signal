@@ -77,13 +77,19 @@ final class SocketIOClient {
     // MARK: - Private impl
 
     private func _open() {
-        // EIO4 handshake query
+        // EIO4 — must use ws:// / wss:// scheme; URLSessionWebSocketTask rejects http://
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        if comps.scheme == "http"  { comps.scheme = "ws"  }
+        if comps.scheme == "https" { comps.scheme = "wss" }
+        comps.path = "/socket.io/"
         comps.queryItems = (comps.queryItems ?? []) + [
             .init(name: "EIO",       value: "4"),
             .init(name: "transport", value: "websocket"),
         ]
-        let req = URLRequest(url: comps.url!)
+        guard let wsURL = comps.url else { return }
+        var req = URLRequest(url: wsURL)
+        req.setValue("websocket", forHTTPHeaderField: "Upgrade")
+        req.setValue("Upgrade",   forHTTPHeaderField: "Connection")
         task = session.webSocketTask(with: req)
         task?.resume()
         _recv()
