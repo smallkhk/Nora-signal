@@ -100,13 +100,14 @@ final class RelayClient: ObservableObject {
             self.onLog?("Socket.IO disconnected: \(err?.localizedDescription ?? "none")")
         }
 
-        // Agent list
+        // Agent list — relay sends [{"name": "AgentName"}, ...]
         sio.on("agent_list") { [weak self] args in
             guard let self,
                   let first = args.first,
-                  let list  = first as? [String] else { return }
-            self.agents = list
-            self.onLog?("Agents: \(list.joined(separator: ", "))")
+                  let list  = first as? [[String: Any]] else { return }
+            let names = list.compactMap { $0["name"] as? String }
+            self.agents = names
+            self.onLog?("Agents: \(names.joined(separator: ", "))")
         }
 
         // Single agent joined
