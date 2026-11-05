@@ -174,6 +174,11 @@ final class SocketIOClient {
                 _close(error: nil)
             case "2":   // SIO EVENT
                 _dispatch(payload)
+            case "5":   // SIO BINARY_EVENT — text frame carries JSON; binary follows separately
+                // Payload looks like "1-[\"event\",{...}]" — strip "N-" prefix
+                if let dash = payload.firstIndex(of: "-") {
+                    _dispatch(String(payload[payload.index(after: dash)...]))
+                }
             default: break
             }
 

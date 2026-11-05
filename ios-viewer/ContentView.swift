@@ -44,7 +44,6 @@ final class AppVM: ObservableObject {
     // Internals
     private var relay:   RelayClient?
     private let decoder = H264Decoder()
-    private var fcClient: FastcapClient?
     private var bag = Set<AnyCancellable>()
 
     enum ViewTab { case jpeg, fastcap }
@@ -74,23 +73,20 @@ final class AppVM: ObservableObject {
             Task { @MainActor in self?.jpegImage = img }
         }
 
-        r.onFastcapInfo = { [weak self] host, port, sess, pass in
+        r.onFastcapReady = { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                self.fcClient?.disconnect()
-                let fc = FastcapClient()
-                self.fcClient = fc
                 self.decoder.onFrame = { [weak self] pb in
                     Task { @MainActor in self?.fcFrame = pb }
                 }
-                fc.onFrame = { [weak self] annexB in
-                    self?.decoder.feed(annexB: annexB)
-                }
-                fc.connect(host: host, port: port, session: sess, password: pass)
                 self.fcActive  = true
                 self.tab       = .fastcap
-                self.statusMsg = "FastCap connected"
+                self.statusMsg = "FastCap stream active"
             }
+        }
+
+        r.onFastcapFrame = { [weak self] annexB in
+            self?.decoder.feed(annexB: annexB)
         }
 
         relay = r
@@ -105,13 +101,13 @@ final class AppVM: ObservableObject {
         relay?.disconnect()
         relay = nil
         bag.removeAll()
-        isConnected    = false
-        agents         = []
-        selectedAgent  = nil
-        jpegImage      = nil
-        fcFrame        = nil
-        fcActive       = false
-        jpegStreaming   = false
+        isConnected   = false
+        agents        = []
+        selectedAgent = nil
+        jpegImage     = nil
+        fcFrame       = nil
+        fcActive      = false
+        jpegStreaming  = false
     }
 
     // MARK: - Agent selection
@@ -137,14 +133,12 @@ final class AppVM: ObservableObject {
     // MARK: - FastCap
 
     func requestFastcap() {
-        relay?.requestFastcap()
-        statusMsg = "Requesting FastCap…"
+        relay?.joinFastcap()
+        statusMsg = "Joining FastCap…"
     }
 
     func stopFastcap() {
         relay?.stopFastcap()
-        fcClient?.disconnect()
-        fcClient = nil
         fcFrame  = nil
         fcActive = false
     }

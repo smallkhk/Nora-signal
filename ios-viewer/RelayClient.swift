@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 // Connects to the Nora relay server via Socket.IO v4.
-// Handles: agent list, JPEG frames, fastcap_info, screen stream control.
+// FastCap video arrives via Socket.IO fastcap_video events (no direct UDP).
 
 final class RelayClient: ObservableObject {
 
@@ -14,7 +14,8 @@ final class RelayClient: ObservableObject {
 
     // Callbacks set by ViewModel
     var onJpegFrame:    ((Data) -> Void)?
-    var onFastcapInfo:  ((_ host: String, _ port: UInt16, _ session: String, _ password: String) -> Void)?
+    var onFastcapFrame: ((Data) -> Void)?   // H.264 annex-B
+    var onFastcapReady: (() -> Void)?
     var onLog:          ((String) -> Void)?
 
     // MARK: - Private
@@ -22,6 +23,8 @@ final class RelayClient: ObservableObject {
     private var sio: SocketIOClient
     private var relayURL: URL
     private var streaming = false
+    private var fcSession  = ""
+    private var fcPassword = ""
 
     // MARK: - Init
 
@@ -50,7 +53,6 @@ final class RelayClient: ObservableObject {
 
     func selectAgent(_ name: String) {
         selectedAgent = name
-        // Join as hub viewer
         sio.emit("hub_join", ["role": "hub"])
         onLog?("Selected agent: \(name)")
     }
@@ -71,16 +73,19 @@ final class RelayClient: ObservableObject {
         onLog?("stop_screen_stream → \(agent)")
     }
 
-    func requestFastcap() {
-        guard let agent = selectedAgent else { return }
-        sio.emit("fastcap_start", ["_target": agent])
-        onLog?("fastcap_start → \(agent)")
+    // MARK: - FastCap via Socket.IO
+
+    func joinFastcap() {
+        guard !fcSession.isEmpty else {
+            onLog?("No fastcap session yet — waiting for agent")
+            return
+        }
+        sio.emit("fastcap_join", ["session": fcSession, "password": fcPassword])
+        onLog?("fastcap_join session=\(String(fcSession.prefix(8)))…")
     }
 
     func stopFastcap() {
-        guard let agent = selectedAgent else { return }
-        sio.emit("fastcap_stop", ["_target": agent])
-        onLog?("fastcap_stop → \(agent)")
+        // Relay times out the viewer automatically; nothing to send
     }
 
     // MARK: - Private setup
@@ -110,7 +115,6 @@ final class RelayClient: ObservableObject {
             self.onLog?("Agents: \(names.joined(separator: ", "))")
         }
 
-        // Single agent joined
         sio.on("agent_joined") { [weak self] args in
             guard let self,
                   let d    = args.first as? [String: Any],
@@ -121,7 +125,6 @@ final class RelayClient: ObservableObject {
             }
         }
 
-        // Agent left
         sio.on("agent_left") { [weak self] args in
             guard let self,
                   let d    = args.first as? [String: Any],
@@ -140,18 +143,34 @@ final class RelayClient: ObservableObject {
             self.onJpegFrame?(img)
         }
 
-        // FastCap info (session/password from host)
+        // FastCap info — store session/password; relay re-delivers on hub_join
         sio.on("fastcap_info") { [weak self] args in
             guard let self,
-                  let d   = args.first as? [String: Any],
+                  let d    = args.first as? [String: Any],
                   let sess = d["session"]  as? String,
                   let pass = d["password"] as? String else { return }
-            // The relay UDP host/port — same relay IP, port 5000
-            var comps = URLComponents(url: self.relayURL, resolvingAgainstBaseURL: false)!
-            let host  = comps.host ?? "162.35.37.67"
-            let port  = UInt16(comps.port ?? 5000)
+            self.fcSession  = sess
+            self.fcPassword = pass
             self.onLog?("fastcap_info session=\(sess.prefix(8))…")
-            self.onFastcapInfo?(host, port, sess, pass)
+        }
+
+        // Relay confirmed fastcap host is alive
+        sio.on("fastcap_ready") { [weak self] args in
+            guard let self,
+                  let d    = args.first as? [String: Any],
+                  let host = d["host"] as? Bool, host else { return }
+            self.onFastcapReady?()
+            self.onLog?("fastcap_ready: host alive")
+        }
+
+        // H.264 video via relay — b64 field: base64([keyFlag(1 byte)] + annexB)
+        sio.on("fastcap_video") { [weak self] args in
+            guard let self,
+                  let d   = args.first as? [String: Any],
+                  let b64 = d["b64"] as? String,
+                  let raw = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+                  raw.count > 1 else { return }
+            self.onFastcapFrame?(Data(raw.dropFirst()))
         }
     }
 }

@@ -902,7 +902,7 @@ def _fc_to_socketio(s, sid, pkt):
         return
     room = _hub_room(ag_secret)
     msg = bytes([1 if key else 0]) + frame_data
-    socketio.emit("fastcap_video", {"s": sid_hex, "d": msg}, room=room)
+    socketio.emit("fastcap_video", {"s": sid_hex, "d": msg, "b64": base64.b64encode(msg).decode()}, room=room)
 
 
 def _fc_udp_thread():
