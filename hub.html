@@ -1012,7 +1012,11 @@ let _wrtcPc=null,_wrtcOn=false,_dcRc=null;
 function _wrtcStart(){
   if(!agent)return;
   if(_wrtcPc)_wrtcStop();
-  _wrtcPc=new RTCPeerConnection({iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}]});
+  _wrtcPc=new RTCPeerConnection({iceServers:[
+    {urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},
+    {urls:["turn:162.35.37.67:3478?transport=udp","turn:162.35.37.67:3478?transport=tcp"],
+     username:"nora",credential:"noraturn42"}
+  ]});
   _wrtcPc.ontrack=e=>{
     wrtcVideo.srcObject=e.streams[0];
     wrtcVideo.style.display="block";

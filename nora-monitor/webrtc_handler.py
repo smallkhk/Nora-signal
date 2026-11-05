@@ -106,6 +106,12 @@ _peers: dict = {}   # sid -> RTCPeerConnection
 _STUN_CFG = RTCConfiguration(iceServers=[
     RTCIceServer(urls=["stun:stun.l.google.com:19302",
                        "stun:stun1.l.google.com:19302"]),
+    # TURN relay (self-hosted on the nora relay VPS). Required when either
+    # end has symmetric NAT that blocks direct peer-to-peer UDP.
+    RTCIceServer(urls=["turn:162.35.37.67:3478?transport=udp",
+                       "turn:162.35.37.67:3478?transport=tcp"],
+                 username="nora",
+                 credential="noraturn42"),
 ])
 
 

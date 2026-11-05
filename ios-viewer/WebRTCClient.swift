@@ -17,7 +17,12 @@ final class WebRTCClient: NSObject {
     // MARK: - Config
     private static let iceServers = [
         RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302",
-                                   "stun:stun1.l.google.com:19302"])
+                                   "stun:stun1.l.google.com:19302"]),
+        // Self-hosted coturn — required when either end has symmetric NAT.
+        RTCIceServer(urlStrings: ["turn:162.35.37.67:3478?transport=udp",
+                                   "turn:162.35.37.67:3478?transport=tcp"],
+                     username: "nora",
+                     credential: "noraturn42")
     ]
 
     // One shared factory per process — RTCPeerConnectionFactory is expensive.
