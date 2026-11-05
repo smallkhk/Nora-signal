@@ -557,10 +557,13 @@ for _wcmd in ("webrtc_answer", "webrtc_stop"):
         def _h(data):
             target_name = (data or {}).get("_target")
             target_sid  = name_to_sid.get(target_name)
-            if target_sid and _hub_may_reach(freq.sid, target_name):
+            reaches = _hub_may_reach(freq.sid, target_name) if target_sid else False
+            print(f"[wrtc] {ev} from hub sid={freq.sid} target={target_name!r} target_sid={target_sid!r} reaches={reaches}", flush=True)
+            if target_sid and reaches:
                 payload = dict(data) if data else {}
                 payload["_requester"] = freq.sid
                 socketio.emit(ev, payload, room=target_sid)
+                print(f"[wrtc]   forwarded {ev} to agent {target_name}", flush=True)
         _h.__name__ = f"wrtc_{ev}"
         return _h
     socketio.on(_wcmd)(_make_wrtc_handler(_wcmd))
@@ -722,17 +725,26 @@ def _make_req_resp(req_event, resp_event):
     def _on_req(data):
         target_name = (data or {}).get("_target")
         target_sid = name_to_sid.get(target_name)
-        if target_sid and _hub_may_reach(freq.sid, target_name):
+        reaches = _hub_may_reach(freq.sid, target_name) if target_sid else False
+        if req_event.startswith("webrtc"):
+            print(f"[wrtc] {req_event} from hub sid={freq.sid} target={target_name!r} target_sid={target_sid!r} reaches={reaches}", flush=True)
+        if target_sid and reaches:
             payload = dict(data) if data else {}
             payload["_requester"] = freq.sid
             socketio.emit(req_event, payload, room=target_sid)
+            if req_event.startswith("webrtc"):
+                print(f"[wrtc]   forwarded {req_event} to agent {target_name}", flush=True)
     _on_req.__name__ = f"rr_{req_event}"
     socketio.on(req_event)(_on_req)
 
     def _on_resp(data):
         requester = (data or {}).get("_requester")
+        if resp_event.startswith("webrtc"):
+            print(f"[wrtc] {resp_event} from agent, requester={requester!r} sdp_len={len((data or {}).get('sdp','')) if data else 0}", flush=True)
         if requester:
             socketio.emit(resp_event, data, room=requester)
+            if resp_event.startswith("webrtc"):
+                print(f"[wrtc]   routed {resp_event} back to hub {requester}", flush=True)
     _on_resp.__name__ = f"rr_{resp_event}"
     socketio.on(resp_event)(_on_resp)
 
