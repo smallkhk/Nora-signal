@@ -134,8 +134,8 @@ final class RelayClient: ObservableObject {
             self.onLog?("Agent left: \(name)")
         }
 
-        // JPEG screen frame
-        sio.on("screen_frame") { [weak self] args in
+        // JPEG screen frame — PC agent emits "frame", not "screen_frame"
+        sio.on("frame") { [weak self] args in
             guard let self,
                   let d   = args.first as? [String: Any],
                   let b64 = d["data"] as? String,
