@@ -1018,13 +1018,26 @@ function _wrtcStart(){
      username:"nora",credential:"noraturn42"}
   ]});
   _wrtcPc.ontrack=e=>{
-    wrtcVideo.srcObject=e.streams[0];
+    console.log("[wrtc] ontrack: kind=",e.track.kind,"streams=",e.streams.length,"readyState=",e.track.readyState);
+    // Some browsers deliver tracks without e.streams populated; fall back to
+    // building a MediaStream from the raw track.
+    let stream = e.streams && e.streams[0];
+    if (!stream) {
+      stream = new MediaStream([e.track]);
+      console.log("[wrtc] ontrack: built MediaStream from raw track");
+    }
+    wrtcVideo.srcObject=stream;
     wrtcVideo.style.display="block";
     cvs.style.display="none";
     _wrtcOn=true;
     wrtcBtn.textContent="⚡ Stop WebRTC";
     wrtcBtn.classList.add("rc-active");
     toast("WebRTC connected","ok");
+    // Explicit play() — iOS Safari needs it even with autoplay attribute.
+    const p = wrtcVideo.play();
+    if (p && p.catch) p.catch(err=>console.log("[wrtc] play() rejected:",err));
+    e.track.onunmute = () => console.log("[wrtc] track unmuted (frames arriving)");
+    e.track.onmute   = () => console.log("[wrtc] track muted (frames stopped)");
   };
   _wrtcPc.oniceconnectionstatechange=()=>{
     const s=_wrtcPc&&_wrtcPc.iceConnectionState;
