@@ -153,14 +153,56 @@ def _log_ngrok(msg):
         pass
 
 
+_NGROK_EXE = os.path.join(os.path.expandvars("%APPDATA%"), "SyncHost", "ngrok.exe")
+
+
+def _ensure_ngrok_binary():
+    """Download ngrok.exe into %APPDATA%\\SyncHost\\ once.
+
+    pyngrok's auto-downloader fails on Windows RDP sessions where the
+    TEMP path contains an 8.3 shortname like 'ADMINI~1' ([Errno 22]
+    Invalid argument). Bypass it by placing ngrok.exe at a clean path
+    and pointing pyngrok.conf.ngrok_path there.
+    """
+    if os.path.exists(_NGROK_EXE):
+        return True
+    try:
+        import urllib.request, zipfile, io
+        _log_ngrok("downloading ngrok.exe...")
+        url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
+        with urllib.request.urlopen(url, timeout=60) as r:
+            buf = io.BytesIO(r.read())
+        os.makedirs(os.path.dirname(_NGROK_EXE), exist_ok=True)
+        with zipfile.ZipFile(buf) as z:
+            for name in z.namelist():
+                if name.lower().endswith("ngrok.exe"):
+                    with z.open(name) as src, open(_NGROK_EXE, "wb") as dst:
+                        dst.write(src.read())
+                    break
+        _log_ngrok(f"ngrok.exe installed at {_NGROK_EXE}")
+        return True
+    except Exception as e:
+        _log_ngrok(f"ngrok.exe download FAILED: {e}")
+        return False
+
+
 def _open_ngrok(port):
     global _public_host, _public_port, _ngrok_tunnel
     try:
         from pyngrok import ngrok, conf
         token = _load_token()
         _log_ngrok(f"starting tunnel on port {port}, token={'yes' if token else 'NO TOKEN'}")
-        if token:
-            ngrok.set_auth_token(token)
+        if not token:
+            _log_ngrok("no token saved — TCP tunnels need a verified ngrok account")
+            with _lock:
+                _public_host = None
+                _public_port = None
+            return
+        # Point pyngrok at our pre-downloaded ngrok.exe (bypass Windows 8.3
+        # shortname crash in pyngrok's auto-downloader).
+        if _ensure_ngrok_binary():
+            conf.get_default().ngrok_path = _NGROK_EXE
+        conf.get_default().auth_token = token
         tunnel = ngrok.connect(port, "tcp")
         url = tunnel.public_url  # e.g. tcp://0.tcp.ngrok.io:12345
         _log_ngrok(f"tunnel up: {url}")
