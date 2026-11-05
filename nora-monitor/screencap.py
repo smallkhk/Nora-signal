@@ -157,11 +157,6 @@ class ScreenCapture:
                         self._sleep_remainder(t0, interval)
                         continue
 
-                    # Skip Socket.IO send if relay hasn't finished the last frame
-                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
-                        self._sleep_remainder(t0, interval)
-                        continue
-
                     ret, buf = cv2.imencode(
                         ".jpg", bgr,
                         [cv2.IMWRITE_JPEG_QUALITY, self._quality],
@@ -209,10 +204,6 @@ class ScreenCapture:
                         _wrt.push_rgb(_np.array(img))
 
                     if not changed and not self._recorder:
-                        self._sleep_remainder(t0, interval)
-                        continue
-
-                    if changed and _RELAY_OK and _relay.relay_busy() and not self._recorder:
                         self._sleep_remainder(t0, interval)
                         continue
 
