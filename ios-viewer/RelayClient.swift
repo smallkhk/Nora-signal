@@ -109,6 +109,52 @@ final class RelayClient: ObservableObject {
         onLog?("webrtc_stop → \(agent)")
     }
 
+    // MARK: - Remote control (mouse, keyboard, type, scroll)
+
+    /// Send any "command" event with an action. x/y are normalized 0..1.
+    func sendCommand(_ payload: [String: Any]) {
+        guard let agent = selectedAgent else { return }
+        var p = payload
+        p["_target"] = agent
+        sio.emit("command", p)
+    }
+
+    func mouseMove(x: Double, y: Double) {
+        sendCommand(["action": "mousemove", "x": x, "y": y, "sw": 1, "sh": 1])
+    }
+
+    func mouseClick(x: Double, y: Double, button: Int = 0) {
+        sendCommand(["action": "mouse_click", "x": x, "y": y, "sw": 1, "sh": 1, "button": button])
+    }
+
+    func mouseRightClick(x: Double, y: Double) {
+        sendCommand(["action": "mouse_right", "x": x, "y": y, "sw": 1, "sh": 1])
+    }
+
+    func mouseDown(x: Double, y: Double, button: Int = 0) {
+        sendCommand(["action": "mousedown", "x": x, "y": y, "sw": 1, "sh": 1, "button": button])
+    }
+
+    func mouseUp(x: Double, y: Double, button: Int = 0) {
+        sendCommand(["action": "mouseup", "x": x, "y": y, "sw": 1, "sh": 1, "button": button])
+    }
+
+    func scroll(dy: Double) {
+        sendCommand(["action": "scroll", "dy": dy])
+    }
+
+    func typeText(_ text: String) {
+        sendCommand(["action": "type", "text": text])
+    }
+
+    func keyPress(key: String, code: String) {
+        sendCommand(["action": "keydown", "key": key, "code": code])
+        // Brief delay then keyup — matches hub.html's tapKey pattern
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
+            self?.sendCommand(["action": "keyup", "key": key, "code": code])
+        }
+    }
+
     // MARK: - Private setup
 
     private func _setup() {

@@ -44,6 +44,11 @@ final class AppVM: ObservableObject {
     @Published var wrtcActive  = false
     @Published var wrtcStatus  = ""
 
+    // Remote control
+    @Published var rcEnabled   = false
+    @Published var showKeyboard = false
+    @Published var typedText   = ""
+
     // Update
     @Published var updateInfo: ReleaseInfo? = nil
 
@@ -173,6 +178,108 @@ final class AppVM: ObservableObject {
 
     func attachWebrtcRenderer(_ renderer: RTCVideoRenderer) {
         wrtc.attachRenderer(renderer)
+    }
+
+    // MARK: - Remote control
+
+    func rcClick(normX: Double, normY: Double) {
+        guard rcEnabled else { return }
+        relay?.mouseClick(x: normX, y: normY)
+    }
+
+    func rcRightClick(normX: Double, normY: Double) {
+        guard rcEnabled else { return }
+        relay?.mouseRightClick(x: normX, y: normY)
+    }
+
+    func rcMove(normX: Double, normY: Double) {
+        guard rcEnabled else { return }
+        relay?.mouseMove(x: normX, y: normY)
+    }
+
+    func rcDown(normX: Double, normY: Double) {
+        guard rcEnabled else { return }
+        relay?.mouseDown(x: normX, y: normY)
+    }
+
+    func rcUp(normX: Double, normY: Double) {
+        guard rcEnabled else { return }
+        relay?.mouseUp(x: normX, y: normY)
+    }
+
+    func rcScroll(dy: Double) {
+        guard rcEnabled else { return }
+        relay?.scroll(dy: dy)
+    }
+
+    func sendTypedText() {
+        let text = typedText
+        guard !text.isEmpty else { return }
+        relay?.typeText(text)
+        typedText = ""
+    }
+
+    func sendSpecialKey(_ key: SpecialKey) {
+        relay?.keyPress(key: key.key, code: key.code)
+    }
+
+    enum SpecialKey: String, CaseIterable, Identifiable {
+        case esc, tab, enter, backspace, up, down, left, right, win, ctrlC, ctrlV, ctrlX, ctrlA, ctrlZ
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .esc:       return "Esc"
+            case .tab:       return "Tab"
+            case .enter:     return "↵"
+            case .backspace: return "⌫"
+            case .up:        return "↑"
+            case .down:      return "↓"
+            case .left:      return "←"
+            case .right:     return "→"
+            case .win:       return "⊞"
+            case .ctrlC:     return "⌃C"
+            case .ctrlV:     return "⌃V"
+            case .ctrlX:     return "⌃X"
+            case .ctrlA:     return "⌃A"
+            case .ctrlZ:     return "⌃Z"
+            }
+        }
+        var key: String {
+            switch self {
+            case .esc:       return "Escape"
+            case .tab:       return "Tab"
+            case .enter:     return "Enter"
+            case .backspace: return "Backspace"
+            case .up:        return "ArrowUp"
+            case .down:      return "ArrowDown"
+            case .left:      return "ArrowLeft"
+            case .right:     return "ArrowRight"
+            case .win:       return "Meta"
+            case .ctrlC:     return "c"
+            case .ctrlV:     return "v"
+            case .ctrlX:     return "x"
+            case .ctrlA:     return "a"
+            case .ctrlZ:     return "z"
+            }
+        }
+        var code: String {
+            switch self {
+            case .esc:       return "Escape"
+            case .tab:       return "Tab"
+            case .enter:     return "Enter"
+            case .backspace: return "Backspace"
+            case .up:        return "ArrowUp"
+            case .down:      return "ArrowDown"
+            case .left:      return "ArrowLeft"
+            case .right:     return "ArrowRight"
+            case .win:       return "MetaLeft"
+            case .ctrlC:     return "KeyC"
+            case .ctrlV:     return "KeyV"
+            case .ctrlX:     return "KeyX"
+            case .ctrlA:     return "KeyA"
+            case .ctrlZ:     return "KeyZ"
+            }
+        }
     }
 
     // MARK: - Agent selection
@@ -332,6 +439,34 @@ struct MainViewerView: View {
                 case .webrtc:  WebrtcViewerPanel(vm: vm)
                 }
             }
+            // RC transparent overlay — only captures taps when RC is enabled
+            if vm.rcEnabled {
+                GeometryReader { geo in
+                    RCTouchOverlay(vm: vm, size: geo.size)
+                }
+                .ignoresSafeArea()
+                // Status badge top-right
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text("RC on — tap to click")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color.red.opacity(0.85))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                            .padding(.top, 8).padding(.trailing, 12)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
+
+            // Keyboard bar (above tab bar)
+            if vm.showKeyboard {
+                KeyboardBar(vm: vm)
+                    .padding(.bottom, 56)
+            }
 
             // Bottom toolbar
             VStack(spacing: 0) {
@@ -344,10 +479,25 @@ struct MainViewerView: View {
                     TabButton(label: "WebRTC", icon: "waveform.path.ecg",
                               active: vm.tab == .webrtc) { vm.tab = .webrtc }
                     Spacer()
+                    // RC toggle
+                    Button { vm.rcEnabled.toggle() } label: {
+                        Image(systemName: vm.rcEnabled ? "cursorarrow.click.2" : "cursorarrow")
+                            .font(.system(size: 18))
+                            .padding(.horizontal, 10).padding(.vertical, 12)
+                    }
+                    .foregroundColor(vm.rcEnabled ? .red : .gray)
+
+                    // Keyboard toggle
+                    Button { vm.showKeyboard.toggle() } label: {
+                        Image(systemName: "keyboard")
+                            .font(.system(size: 18))
+                            .padding(.horizontal, 10).padding(.vertical, 12)
+                    }
+                    .foregroundColor(vm.showKeyboard ? .accentColor : .gray)
+
                     Button { vm.selectedAgent = nil } label: {
                         Image(systemName: "chevron.left")
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, 12).padding(.vertical, 12)
                     }
                     .foregroundColor(.white)
                 }
@@ -355,6 +505,94 @@ struct MainViewerView: View {
             }
         }
         .statusBarHidden(true)
+    }
+}
+
+// MARK: - RC touch overlay
+
+struct RCTouchOverlay: View {
+    @ObservedObject var vm: AppVM
+    let size: CGSize
+
+    @State private var isDragging = false
+
+    var body: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+                // Drag → mousemove + mousedown on first, mouseup on end
+                DragGesture(minimumDistance: 4)
+                    .onChanged { v in
+                        let (x, y) = normalize(v.location, in: size)
+                        if !isDragging {
+                            isDragging = true
+                            vm.rcDown(normX: x, normY: y)
+                        }
+                        vm.rcMove(normX: x, normY: y)
+                    }
+                    .onEnded { v in
+                        let (x, y) = normalize(v.location, in: size)
+                        vm.rcUp(normX: x, normY: y)
+                        isDragging = false
+                    }
+            )
+            .onTapGesture { p in
+                let (x, y) = normalize(p, in: size)
+                vm.rcClick(normX: x, normY: y)
+            }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                // Right-click at last-known approximate location
+                // (SwiftUI long-press doesn't give location; use center as fallback)
+                vm.rcRightClick(normX: 0.5, normY: 0.5)
+            }
+    }
+
+    private func normalize(_ p: CGPoint, in sz: CGSize) -> (Double, Double) {
+        let x = max(0, min(1, Double(p.x / max(sz.width, 1))))
+        let y = max(0, min(1, Double(p.y / max(sz.height, 1))))
+        return (x, y)
+    }
+}
+
+// MARK: - Keyboard bar
+
+struct KeyboardBar: View {
+    @ObservedObject var vm: AppVM
+
+    private let specialKeys: [AppVM.SpecialKey] = [
+        .esc, .tab, .enter, .backspace, .up, .down, .left, .right,
+        .win, .ctrlC, .ctrlV, .ctrlX, .ctrlA, .ctrlZ
+    ]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            // Text input row
+            HStack(spacing: 8) {
+                TextField("Type text to send…", text: $vm.typedText)
+                    .textFieldStyle(.roundedBorder)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                    .onSubmit { vm.sendTypedText() }
+                Button("Send") { vm.sendTypedText() }
+                    .buttonStyle(.borderedProminent)
+            }
+
+            // Special keys row (scrollable)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(specialKeys) { k in
+                        Button(k.label) { vm.sendSpecialKey(k) }
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.gray.opacity(0.3))
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Color.black.opacity(0.85))
     }
 }
 
