@@ -52,6 +52,9 @@ hub_secrets = {}  # hub_sid -> secret
 _fastcap_cache = {}  # agent_name -> last fastcap_info dict
 HUB_ROOM = "hubs"
 
+_frame_last_fwd  = {}   # agent_name -> last forwarded time (JPEG throttle)
+_FRAME_THROTTLE  = 0.1  # forward at most 10 fps per agent
+
 
 def _hub_room(secret):
     """Room name for hubs sharing a secret."""
@@ -496,6 +499,12 @@ def _make_fwd(event):
             _append_keylog(agent_name, dict(data))
         if event == "fastcap_info":
             _fastcap_cache[agent_name] = dict(data)
+        # Throttle JPEG frames to avoid flooding the hub WebSocket buffer
+        if event == "frame":
+            now = time.time()
+            if now - _frame_last_fwd.get(agent_name, 0) < _FRAME_THROTTLE:
+                return
+            _frame_last_fwd[agent_name] = now
         socketio.emit(event, data, room=_hub_room(secret))
     _handler.__name__ = f"fwd_{event}"
     return _handler
