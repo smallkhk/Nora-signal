@@ -919,6 +919,11 @@ def _fc_to_socketio(s, sid, pkt):
 def _fc_udp_thread():
     global _fc_udp_sock
     sock = _rawsock.socket(_rawsock.AF_INET, _rawsock.SOCK_DGRAM)
+    sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_REUSEADDR, 1)
+    try:
+        sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_REUSEPORT, 1)
+    except (AttributeError, OSError):
+        pass  # SO_REUSEPORT not available on this platform
     sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_RCVBUF, 8 * 1024 * 1024)
     sock.setsockopt(_rawsock.SOL_SOCKET, _rawsock.SO_SNDBUF, 8 * 1024 * 1024)
     sock.bind(("0.0.0.0", _FC_UDP_PORT))
