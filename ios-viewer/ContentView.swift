@@ -103,19 +103,27 @@ final class AppVM: ObservableObject {
             self?.wrtc.handleOffer(sdp: sdp, type: typ)
         }
 
-        // Wire WebRTC signaling → relay
-        wrtc.emitSignal = { [weak self, weak r] event, extras in
-            guard let self, let r else { return }
+        // Wire WebRTC signaling → relay. Capture relay strongly via self.relay
+        // at call time (not via `r` which would go weak and could go nil early).
+        wrtc.emitSignal = { [weak self] event, extras in
+            print("[iOS] wrtc emitSignal: \(event)")
+            guard let self else { print("[iOS] wrtc emitSignal: self is nil"); return }
+            guard let rc = self.relay else {
+                print("[iOS] wrtc emitSignal: self.relay is nil")
+                self.wrtcStatus = "no relay connection"
+                return
+            }
             switch event {
-            case "webrtc_request": r.webrtcRequest()
+            case "webrtc_request": rc.webrtcRequest()
             case "webrtc_answer":
-                r.webrtcAnswer(sdp: extras["sdp"]  as? String ?? "",
+                rc.webrtcAnswer(sdp:  extras["sdp"]  as? String ?? "",
                                 type: extras["type"] as? String ?? "answer")
-            case "webrtc_stop":    r.webrtcStop()
+            case "webrtc_stop":    rc.webrtcStop()
             default: self.statusMsg = "unknown webrtc signal: \(event)"
             }
         }
         wrtc.onLog = { [weak self] msg in
+            print("[iOS] wrtc: \(msg)")
             Task { @MainActor in self?.wrtcStatus = msg }
         }
         wrtc.onConnectionState = { [weak self] s in

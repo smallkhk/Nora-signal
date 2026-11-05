@@ -46,7 +46,14 @@ final class WebRTCClient: NSObject {
 
     /// Create the peer connection and send `webrtc_request` to the PC.
     func start() {
+        onLog?("start() called")
         close()  // reset any previous state
+
+        // Touch the factory FIRST — this forces lazy init so if the WebRTC
+        // framework failed to load, we see it in the log rather than silently
+        // getting nil back.
+        let fac = Self.factory
+        onLog?("factory ready")
 
         let cfg = RTCConfiguration()
         cfg.iceServers       = Self.iceServers
@@ -57,21 +64,27 @@ final class WebRTCClient: NSObject {
             mandatoryConstraints: nil,
             optionalConstraints:  ["DtlsSrtpKeyAgreement": "true"])
 
-        guard let newPc = Self.factory.peerConnection(with: cfg,
-                                                      constraints: constraints,
-                                                      delegate: self) else {
-            onLog?("WebRTC: peerConnection() returned nil")
+        guard let newPc = fac.peerConnection(with: cfg,
+                                              constraints: constraints,
+                                              delegate: self) else {
+            onLog?("peerConnection() returned nil")
             return
         }
         pc = newPc
+        onLog?("peerConnection created")
 
         // We only RECEIVE video from the PC — set recv-only transceiver.
         let transceiverInit = RTCRtpTransceiverInit()
         transceiverInit.direction = .recvOnly
         _ = newPc.addTransceiver(of: .video, init: transceiverInit)
+        onLog?("transceiver added")
 
-        onLog?("WebRTC: emitting webrtc_request")
+        if emitSignal == nil {
+            onLog?("ERROR: emitSignal callback not wired")
+            return
+        }
         emitSignal?("webrtc_request", [:])
+        onLog?("webrtc_request emitted")
     }
 
     /// Call when a `webrtc_offer` arrives from the PC.
