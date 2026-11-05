@@ -463,10 +463,13 @@ def on_hub_join(data=None):
     join_room(_hub_room(secret))
     emit("agent_list", _agent_list(secret))
     # Re-deliver cached fastcap_info for any connected agent visible to this hub
+    redelivered = 0
     for ag_name, fc_info in list(_fastcap_cache.items()):
         ag_secret = _agent_secret(ag_name)
         if ag_secret is not None and ag_secret == secret:
             emit("fastcap_info", fc_info)
+            redelivered += 1
+    print(f"[fc] hub_join from sid={freq.sid} secret='{secret}' — re-delivered fastcap_info x{redelivered}", flush=True)
 
 
 # ── Disconnect ────────────────────────────────────────────────────────────────
@@ -499,6 +502,7 @@ def _make_fwd(event):
             _append_keylog(agent_name, dict(data))
         if event == "fastcap_info":
             _fastcap_cache[agent_name] = dict(data)
+            print(f"[fc] fastcap_info cached: agent={agent_name} session={data.get('session','?')[:8]}… pw_len={len(str(data.get('password','')))}", flush=True)
         # Throttle JPEG frames to avoid flooding the hub WebSocket buffer
         if event == "frame":
             now = time.time()
@@ -906,14 +910,21 @@ def _fc_to_socketio(s, sid, pkt):
                 ag_name = name
                 break
     if not ag_name:
+        print(f"[fc_vid] DROP: no agent mapped for sid_hex={sid_hex}", flush=True)
         return
 
     ag_secret = _agent_secret(ag_name)
     if ag_secret is None:
+        print(f"[fc_vid] DROP: agent {ag_name} has no secret", flush=True)
         return
     room = _hub_room(ag_secret)
     msg = bytes([1 if key else 0]) + frame_data
     socketio.emit("fastcap_video", {"s": sid_hex, "d": msg, "b64": base64.b64encode(msg).decode()}, room=room)
+    # Sampled log to avoid flooding — print every 60th frame
+    _fc_emit_count = getattr(_fc_to_socketio, "_count", 0) + 1
+    _fc_to_socketio._count = _fc_emit_count
+    if _fc_emit_count % 60 == 1:
+        print(f"[fc_vid] emit #{_fc_emit_count} agent={ag_name} room={room} key={key} size={len(msg)}", flush=True)
 
 
 def _fc_udp_thread():
@@ -1022,6 +1033,7 @@ def on_fastcap_join(data):
     """Browser/iOS authenticates; relay stores token and requests first keyframe."""
     session_str = str(data.get("session", ""))
     password    = str(data.get("password", ""))
+    print(f"[fc] fastcap_join from sid={freq.sid} session='{session_str}' pw_len={len(password)}", flush=True)
 
     # PC sends UDP SID as session[:8].encode('ascii') — 8 raw ASCII bytes.
     # bytes.fromhex(session[:16]) produces a completely different byte sequence.
@@ -1032,11 +1044,14 @@ def on_fastcap_join(data):
 
     if wire_live:
         sid = wire_sid
+        print(f"[fc]   using wire_sid={wire_sid.hex()} (host alive)", flush=True)
     else:
         try:
             sid = bytes.fromhex(session_str[:16])
+            print(f"[fc]   wire_sid={wire_sid.hex()} NOT live, falling back to hex_sid={sid.hex()}", flush=True)
         except Exception:
             sid = wire_sid
+            print(f"[fc]   hex decode failed, using wire_sid={sid.hex()}", flush=True)
 
     # Token must match what the PC's fastcap_host validates against —
     # the UDP T_HELLO_VIEW handler already proves the formula: sha256(pw + sid_hex).
@@ -1052,10 +1067,15 @@ def on_fastcap_join(data):
         for ag_name, info in list(_fastcap_cache.items()):
             if info.get("session", "") == session_str:
                 _fc_sid_to_agent[sid_hex] = ag_name
+                print(f"[fc]   mapped sid_hex={sid_hex} -> agent={ag_name}", flush=True)
                 break
+        else:
+            print(f"[fc]   WARN: no agent in cache has session='{session_str}'", flush=True)
 
+    host_alive = _fc_host_alive(s)
     _fc_send_to_host(s, sid, T_KEYREQ, token)
-    emit("fastcap_ready", {"host": _fc_host_alive(s)})
+    print(f"[fc]   T_KEYREQ sent to host, replying fastcap_ready host={host_alive}", flush=True)
+    emit("fastcap_ready", {"host": host_alive})
 
 
 @socketio.on("fastcap_input")
