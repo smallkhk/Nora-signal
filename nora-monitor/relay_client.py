@@ -937,6 +937,16 @@ def _make_client():
         if not _wrt.available():
             sio.emit("webrtc_offer", {"error": "aiortc not available", "_requester": requester})
             return
+        # Make sure the screen capture loop is running — WebRTC frames come
+        # from screencap pushing into webrtc_handler.push_bgr(). If capture
+        # isn't running (viewer never clicked Start JPEG), WebRTC connects
+        # but shows a black screen.
+        if _screen_capture:
+            try:
+                _screen_capture.start()
+                _log("webrtc_request: ensured screencap is running")
+            except Exception as e:
+                _log(f"webrtc_request: screencap.start() failed: {e}")
         def _cb(sdp, type_):
             if sdp:
                 sio.emit("webrtc_offer", {"sdp": sdp, "type": type_, "_requester": requester})
