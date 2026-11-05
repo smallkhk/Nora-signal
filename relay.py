@@ -890,7 +890,9 @@ def _fc_to_socketio(s, sid, pkt):
     ag_name = _fc_sid_to_agent.get(sid_hex)
     if not ag_name:
         for name, info in list(_fastcap_cache.items()):
-            if info.get("session") == sid_hex:
+            stored = info.get("session", "")
+            # Accept both: exact match or wire-SID match (ASCII bytes of stored[:8])
+            if stored == sid_hex or stored[:8].encode("ascii", "replace").hex() == sid_hex:
                 _fc_sid_to_agent[sid_hex] = name
                 ag_name = name
                 break
@@ -1003,17 +1005,39 @@ def _fc_udp_thread():
 
 @socketio.on("fastcap_join")
 def on_fastcap_join(data):
-    """Browser authenticates; relay stores token and requests first keyframe."""
-    session_hex = str(data.get("session", ""))[:16]
+    """Browser/iOS authenticates; relay stores token and requests first keyframe."""
+    session_str = str(data.get("session", ""))
     password    = str(data.get("password", ""))
+    session_hex = session_str[:16]
     token = hashlib.sha256(password.encode() + session_hex.encode()).digest()[:8]
-    try:
-        sid = bytes.fromhex(session_hex)
-    except Exception:
-        return
+
+    # PC sends UDP SID as session[:8].encode('ascii') — 8 raw ASCII bytes.
+    # bytes.fromhex(session_hex) produces a completely different byte sequence.
+    # Try the wire form first; fall back to hex-decode for legacy compatibility.
+    wire_sid = session_str[:8].encode("ascii", "replace")
+    with _fc_lock:
+        wire_live = wire_sid in _fc_sessions and _fc_host_alive(_fc_sessions[wire_sid])
+
+    if wire_live:
+        sid = wire_sid
+    else:
+        try:
+            sid = bytes.fromhex(session_hex)
+        except Exception:
+            sid = wire_sid
+
     s = _fc_sess(sid)
     s.token    = token
     s.wait_key = True
+
+    # Populate SID->agent mapping so _fc_to_socketio can route frames to hub room
+    sid_hex_key = sid.hex()
+    if sid_hex_key not in _fc_sid_to_agent:
+        for ag_name, info in list(_fastcap_cache.items()):
+            if info.get("session", "") == session_str:
+                _fc_sid_to_agent[sid_hex_key] = ag_name
+                break
+
     _fc_send_to_host(s, sid, T_KEYREQ, token)
     emit("fastcap_ready", {"host": _fc_host_alive(s)})
 

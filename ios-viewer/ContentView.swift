@@ -133,8 +133,10 @@ final class AppVM: ObservableObject {
     // MARK: - FastCap
 
     func requestFastcap() {
-        relay?.joinFastcap()
+        fcActive = true
+        tab      = .fastcap
         statusMsg = "Joining FastCap…"
+        relay?.joinFastcap()
     }
 
     func stopFastcap() {
@@ -416,7 +418,7 @@ struct UpdateBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Update \(info.tag) available")
                     .font(.subheadline.bold())
-                Text("Tap to download IPA")
+                Text("Tap to auto-install")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -429,7 +431,13 @@ struct UpdateBanner: View {
         .padding(12)
         .background(.thinMaterial)
         .onTapGesture {
-            UIApplication.shared.open(info.ipaURL)
+            // Try TrollStore silent install first; fall back to Safari download
+            let trollURL = URL(string: "apple-magnifier://install?url=\(info.ipaURL.absoluteString)")!
+            if UIApplication.shared.canOpenURL(trollURL) {
+                UIApplication.shared.open(trollURL)
+            } else {
+                UIApplication.shared.open(info.ipaURL)
+            }
         }
     }
 }
