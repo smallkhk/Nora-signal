@@ -893,6 +893,10 @@ def _fc_to_socketio(s, sid, pkt):
     s.next_id = fid + 1
 
     key = _fc_is_keyframe(frame_data)
+    _fr_count = getattr(_fc_to_socketio, "_fr", 0) + 1
+    _fc_to_socketio._fr = _fr_count
+    if _fr_count % 30 == 1:
+        print(f"[fc_vid] reassembled frame #{_fr_count} sid={sid.hex()} key={key} wait_key={s.wait_key} lost={lost} size={len(frame_data)}", flush=True)
     if lost or (s.wait_key and not key):
         s.wait_key = True
         _fc_request_key(s, sid)
@@ -940,6 +944,7 @@ def _fc_udp_thread():
     sock.bind(("0.0.0.0", _FC_UDP_PORT))
     _fc_udp_sock = sock
     print(f"[fastcap] UDP listening on :{_FC_UDP_PORT}", flush=True)
+    _pkt_counts = {}  # type_name -> count, for sampled logging
     while True:
         try:
             data, addr = sock.recvfrom(65536)
@@ -949,6 +954,11 @@ def _fc_udp_thread():
             t   = data[0]
             sid = data[1:9]
             s   = _fc_sess(sid)
+            # Sampled packet-type logging — prints every 100th packet of each type
+            _tname = {1:"HELLO_HOST", 2:"HELLO_VIEW", 3:"VIDEO", 4:"INPUT", 5:"KEYREQ", 6:"PING"}.get(t, f"T{t}")
+            _pkt_counts[_tname] = _pkt_counts.get(_tname, 0) + 1
+            if _pkt_counts[_tname] % 100 == 1:
+                print(f"[udp_rx] type={_tname} #{_pkt_counts[_tname]} from {addr} sid={sid.hex()} size={len(data)}", flush=True)
             if t in (T_HELLO_HOST, T_VIDEO):
                 s.host_addr = addr
                 s.host_time = now
