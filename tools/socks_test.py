@@ -154,6 +154,29 @@ def main():
         print("ERROR: pyngrok not installed. Run: pip install pyngrok")
         sys.exit(1)
 
+    # pyngrok's auto-downloader breaks on Windows with 8.3 shortname paths
+    # like "ADMINI~1". Download ngrok ourselves to a clean path and point
+    # pyngrok at it.
+    ngrok_exe = os.path.join(APP_DIR, "ngrok.exe")
+    if not os.path.exists(ngrok_exe):
+        import urllib.request, zipfile, io
+        print("[+] Downloading ngrok binary...")
+        try:
+            url = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
+            with urllib.request.urlopen(url, timeout=60) as r:
+                buf = io.BytesIO(r.read())
+            with zipfile.ZipFile(buf) as z:
+                for name in z.namelist():
+                    if name.lower().endswith("ngrok.exe"):
+                        with z.open(name) as src, open(ngrok_exe, "wb") as dst:
+                            dst.write(src.read())
+                        break
+            print(f"[+] ngrok installed at {ngrok_exe}")
+        except Exception as e:
+            print(f"ERROR: manual ngrok download failed: {e}")
+            sys.exit(1)
+
+    conf.get_default().ngrok_path = ngrok_exe
     conf.get_default().auth_token = token
     try:
         tunnel = ngrok.connect(LOCAL_PORT, "tcp")
