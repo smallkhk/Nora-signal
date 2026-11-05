@@ -1084,6 +1084,16 @@ def on_fastcap_join(data):
 
     host_alive = _fc_host_alive(s)
     _fc_send_to_host(s, sid, T_KEYREQ, token)
+
+    # Also notify the agent over Socket.IO so it can call Host.viewer_connected()
+    # on the PC — the fastcap Host stays idle (ping-only) until that's invoked.
+    ag_name = _fc_sid_to_agent.get(sid_hex)
+    if ag_name:
+        target_sid = name_to_sid.get(ag_name)
+        if target_sid:
+            socketio.emit("fastcap_viewer_join", {"session": session_str}, room=target_sid)
+            print(f"[fc]   fastcap_viewer_join emitted to agent {ag_name}", flush=True)
+
     print(f"[fc]   T_KEYREQ sent to host, replying fastcap_ready host={host_alive}", flush=True)
     emit("fastcap_ready", {"host": host_alive})
 

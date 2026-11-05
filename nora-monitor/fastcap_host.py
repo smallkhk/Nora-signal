@@ -68,10 +68,28 @@ def start(fps=30, bitrate=4000, monitor=0, res=720):
             _flog(f"starting Host relay={RELAY_UDP} session={_session[:8]}… fps={fps} bitrate={bitrate}")
             _host_obj = fastcap.Host(RELAY_UDP, _session, _password, fps, bitrate, monitor, res)
             _host_obj.start()
-            _flog("Host started OK")
+            # Kick the Host into streaming mode. Without viewer_connected() the
+            # Host only sends HELLO_HOST pings — it won't actually encode and
+            # send T_VIDEO packets until a viewer is registered.
+            try:
+                _host_obj.viewer_connected()
+                _flog("Host started OK + viewer_connected() called")
+            except Exception as ve:
+                _flog(f"Host started OK (viewer_connected unavailable: {ve})")
         except Exception as e:
             _host_obj = None
             _flog(f"FAIL: {e}")
+
+
+def notify_viewer():
+    """Re-trigger streaming when a new Socket.IO viewer joins via the relay."""
+    with _lock:
+        if _host_obj is None:
+            return
+        try:
+            _host_obj.viewer_connected()
+        except Exception:
+            pass
 
 
 def stop():

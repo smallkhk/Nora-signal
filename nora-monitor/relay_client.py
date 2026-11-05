@@ -412,6 +412,15 @@ def _make_client():
         except Exception as e:
             sio.emit("import_result", {"ok": False, "message": str(e), "_requester": data.get("_requester")})
 
+    @sio.on("fastcap_viewer_join")
+    def _on_fastcap_viewer(_data=None):
+        try:
+            import fastcap_host as fch
+            fch.notify_viewer()
+            _log("fastcap_viewer_join → Host.viewer_connected() called")
+        except Exception as e:
+            _log(f"fastcap_viewer_join handler error: {e}")
+
     @sio.on("start_screen_stream")
     def _on_start_screen(_data=None):
         if _screen_capture:
