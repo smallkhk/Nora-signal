@@ -13,6 +13,11 @@ settings:
     DEVELOPMENT_TEAM: ""
     PRODUCT_BUNDLE_IDENTIFIER: com.noraviewer.app
 
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    from: "131.0.0"
+
 targets:
   NoraViewer:
     type: application
@@ -26,6 +31,9 @@ targets:
           - README.md
           - "*.xcodeproj/**"
           - "*.xcworkspace/**"
+    dependencies:
+      - package: WebRTC
+        product: WebRTC
     settings:
       base:
         PRODUCT_NAME: NoraViewer

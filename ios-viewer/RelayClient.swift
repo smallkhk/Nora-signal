@@ -16,6 +16,7 @@ final class RelayClient: ObservableObject {
     var onJpegFrame:    ((Data) -> Void)?
     var onFastcapFrame: ((Data) -> Void)?   // H.264 annex-B
     var onFastcapReady: (() -> Void)?
+    var onWebrtcOffer:  ((String, String) -> Void)?   // (sdp, type)
     var onLog:          ((String) -> Void)?
 
     // MARK: - Private
@@ -86,6 +87,46 @@ final class RelayClient: ObservableObject {
 
     func stopFastcap() {
         // Relay times out the viewer automatically; nothing to send
+    }
+
+    // MARK: - WebRTC signaling
+
+    func webrtcRequest() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_request", ["_target": agent])
+        onLog?("webrtc_request → \(agent)")
+    }
+
+    func webrtcAnswer(sdp: String, type: String) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_answer", ["_target": agent, "sdp": sdp, "type": type])
+        onLog?("webrtc_answer → \(agent)")
+    }
+
+    func webrtcStop() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_stop", ["_target": agent])
+        onLog?("webrtc_stop → \(agent)")
+    }
+
+    // MARK: - WebRTC signaling
+
+    func webrtcRequest() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_request", ["_target": agent])
+        onLog?("webrtc_request → \(agent)")
+    }
+
+    func webrtcAnswer(sdp: String, type: String) {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_answer", ["_target": agent, "sdp": sdp, "type": type])
+        onLog?("webrtc_answer → \(agent) (sdp \(sdp.count) bytes)")
+    }
+
+    func webrtcStop() {
+        guard let agent = selectedAgent else { return }
+        sio.emit("webrtc_stop", ["_target": agent])
+        onLog?("webrtc_stop → \(agent)")
     }
 
     // MARK: - Private setup
@@ -171,6 +212,16 @@ final class RelayClient: ObservableObject {
                   let raw = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
                   raw.count > 1 else { return }
             self.onFastcapFrame?(Data(raw.dropFirst()))
+        }
+
+        // WebRTC: PC-generated SDP offer arrives here; viewer answers.
+        sio.on("webrtc_offer") { [weak self] args in
+            guard let self,
+                  let d   = args.first as? [String: Any],
+                  let sdp = d["sdp"]  as? String,
+                  let typ = d["type"] as? String else { return }
+            self.onLog?("webrtc_offer received (sdp \(sdp.count) bytes)")
+            self.onWebrtcOffer?(sdp, typ)
         }
     }
 }

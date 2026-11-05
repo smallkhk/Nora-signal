@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Combine
 import UIKit
+import WebRTC
 
 // MARK: - App entry point
 
@@ -38,6 +39,11 @@ final class AppVM: ObservableObject {
     @Published var fcFrame:  CVPixelBuffer? = nil
     @Published var fcActive = false
 
+    // WebRTC stream
+    @Published var wrtcTrack:  RTCVideoTrack? = nil
+    @Published var wrtcActive  = false
+    @Published var wrtcStatus  = ""
+
     // Update
     @Published var updateInfo: ReleaseInfo? = nil
 
@@ -47,9 +53,10 @@ final class AppVM: ObservableObject {
     // Internals
     private var relay:   RelayClient?
     private let decoder = H264Decoder()
+    private let wrtc    = WebRTCClient()
     private var bag = Set<AnyCancellable>()
 
-    enum ViewTab { case jpeg, fastcap }
+    enum ViewTab { case jpeg, fastcap, webrtc }
 
     // MARK: - Connect / Disconnect
 
@@ -92,6 +99,34 @@ final class AppVM: ObservableObject {
             self?.decoder.feed(annexB: annexB)
         }
 
+        r.onWebrtcOffer = { [weak self] sdp, typ in
+            self?.wrtc.handleOffer(sdp: sdp, type: typ)
+        }
+
+        // Wire WebRTC signaling → relay
+        wrtc.emitSignal = { [weak self, weak r] event, extras in
+            guard let self, let r else { return }
+            switch event {
+            case "webrtc_request": r.webrtcRequest()
+            case "webrtc_answer":
+                r.webrtcAnswer(sdp: extras["sdp"]  as? String ?? "",
+                                type: extras["type"] as? String ?? "answer")
+            case "webrtc_stop":    r.webrtcStop()
+            default: self.statusMsg = "unknown webrtc signal: \(event)"
+            }
+        }
+        wrtc.onLog = { [weak self] msg in
+            Task { @MainActor in self?.wrtcStatus = msg }
+        }
+        wrtc.onConnectionState = { [weak self] s in
+            Task { @MainActor in
+                self?.wrtcActive = (s == .connected || s == .connecting || s == .new)
+            }
+        }
+        wrtc.onRemoteTrack = { [weak self] track in
+            Task { @MainActor in self?.wrtcTrack = track }
+        }
+
         relay = r
         r.connect()
 
@@ -101,6 +136,7 @@ final class AppVM: ObservableObject {
     func disconnect() {
         stopJpeg()
         stopFastcap()
+        stopWebrtc()
         relay?.disconnect()
         relay = nil
         bag.removeAll()
@@ -111,6 +147,24 @@ final class AppVM: ObservableObject {
         fcFrame       = nil
         fcActive      = false
         jpegStreaming  = false
+    }
+
+    // MARK: - WebRTC
+
+    func startWebrtc() {
+        wrtcActive = true
+        tab        = .webrtc
+        wrtc.start()
+    }
+
+    func stopWebrtc() {
+        wrtc.stop()
+        wrtcTrack  = nil
+        wrtcActive = false
+    }
+
+    func attachWebrtcRenderer(_ renderer: RTCVideoRenderer) {
+        wrtc.attachRenderer(renderer)
     }
 
     // MARK: - Agent selection
@@ -264,10 +318,10 @@ struct MainViewerView: View {
 
             // Video area
             Group {
-                if vm.tab == .jpeg {
-                    JpegViewerPanel(vm: vm)
-                } else {
-                    FastcapViewerPanel(vm: vm)
+                switch vm.tab {
+                case .jpeg:    JpegViewerPanel(vm: vm)
+                case .fastcap: FastcapViewerPanel(vm: vm)
+                case .webrtc:  WebrtcViewerPanel(vm: vm)
                 }
             }
 
@@ -279,6 +333,8 @@ struct MainViewerView: View {
                               active: vm.tab == .jpeg) { vm.tab = .jpeg }
                     TabButton(label: "FastCap", icon: "bolt.fill",
                               active: vm.tab == .fastcap) { vm.tab = .fastcap }
+                    TabButton(label: "WebRTC", icon: "waveform.path.ecg",
+                              active: vm.tab == .webrtc) { vm.tab = .webrtc }
                     Spacer()
                     Button { vm.selectedAgent = nil } label: {
                         Image(systemName: "chevron.left")
@@ -387,6 +443,63 @@ struct FastcapViewerPanel: View {
                 .padding(.bottom, 56)
             }
         }
+    }
+}
+
+// MARK: - WebRTC panel
+
+struct WebrtcViewerPanel: View {
+    @ObservedObject var vm: AppVM
+
+    var body: some View {
+        ZStack {
+            if vm.wrtcTrack != nil {
+                WebrtcVideoView(vm: vm).ignoresSafeArea()
+            } else if vm.wrtcActive {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Negotiating WebRTC…").foregroundStyle(.white).font(.headline)
+                    if !vm.wrtcStatus.isEmpty {
+                        Text(vm.wrtcStatus)
+                            .font(.caption).foregroundStyle(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                }
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "waveform.path.ecg").font(.largeTitle).foregroundColor(.gray)
+                    Text("Tap Start WebRTC for low-latency stream").foregroundStyle(.gray)
+                }
+            }
+
+            VStack {
+                Spacer()
+                HStack(spacing: 20) {
+                    if !vm.wrtcActive {
+                        ActionButton(title: "📶 Start WebRTC", color: .blue) { vm.startWebrtc() }
+                    } else {
+                        ActionButton(title: "■ Stop WebRTC", color: .red)   { vm.stopWebrtc() }
+                    }
+                }
+                .padding(.bottom, 56)
+            }
+        }
+    }
+}
+
+struct WebrtcVideoView: UIViewRepresentable {
+    @ObservedObject var vm: AppVM
+
+    func makeUIView(context: Context) -> RTCMTLVideoView {
+        let v = RTCMTLVideoView(frame: .zero)
+        v.videoContentMode = .scaleAspectFit
+        vm.attachWebrtcRenderer(v)
+        return v
+    }
+
+    func updateUIView(_ v: RTCMTLVideoView, context: Context) {
+        // Track attachment happens in the client; nothing to update here.
     }
 }
 
