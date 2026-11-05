@@ -51,3 +51,5 @@ targets:
         NSLocalNetworkUsageDescription: "Connects to local relay server"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - audio

@@ -7,6 +7,9 @@ import UIKit
 
 @main
 struct NoraViewerApp: App {
+    init() {
+        BackgroundKeepAlive.shared.start()
+    }
     var body: some Scene {
         WindowGroup { RootView() }
     }
