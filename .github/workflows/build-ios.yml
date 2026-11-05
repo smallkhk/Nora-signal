@@ -36,6 +36,7 @@ jobs:
         working-directory: ios-viewer
         shell: bash
         run: |
+          set +e
           set -o pipefail
           xcodebuild build \
             -project NoraViewer.xcodeproj \
@@ -51,8 +52,10 @@ jobs:
             2>&1 | tee /tmp/xcodebuild.log | xcpretty
           BUILD_STATUS=${PIPESTATUS[0]}
           if [ "$BUILD_STATUS" -ne 0 ]; then
+            echo "::group::Full xcodebuild log (last 300 lines)"
+            tail -n 300 /tmp/xcodebuild.log
+            echo "::endgroup::"
             echo "::error::xcodebuild failed with status $BUILD_STATUS"
-            cat /tmp/xcodebuild.log
             exit $BUILD_STATUS
           fi
 
