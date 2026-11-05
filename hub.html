@@ -843,7 +843,8 @@ Please do not touch the computer.</textarea>
         <label style="font-size:.82rem;color:var(--text2);font-weight:600;display:block;margin-bottom:6px">Custom HTML overlay</label>
         <textarea id="prv-html-src" class="ipt" rows="12" spellcheck="false"
           style="resize:vertical;font-family:'JetBrains Mono','Fira Code',monospace;font-size:.8rem;width:100%"
-          placeholder="<!doctype html>&#10;<html>&#10;<body style=&quot;margin:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh&quot;>&#10;  <h1>Your custom overlay</h1>&#10;
+          placeholder="&lt;!doctype html&gt;&#10;&lt;html&gt;&#10;&lt;body style='margin:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh'&gt;&#10;  &lt;h1&gt;Your custom overlay&lt;/h1&gt;&#10;&lt;/body&gt;&#10;&lt;/html&gt;"></textarea>
+
 <!-- Fast View H.264 overlay -->
 <div id="fv-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;">
   <canvas id="fv-canvas" style="flex:1;width:100%;display:block;cursor:crosshair;touch-action:none;"></canvas>
@@ -852,7 +853,6 @@ Please do not touch the computer.</textarea>
     <button onclick="closeFastView()" style="background:#333;border:none;color:#aaa;padding:4px 14px;border-radius:4px;cursor:pointer;font-size:12px;">✕ Close</button>
   </div>
 </div>
-</body>&#10;</html>"></textarea>
         <div style="margin-top:6px;font-size:.78rem;color:var(--text3)">
           Rendered via Edge WebView2. Requires <code>pywebview</code> installed on the remote PC.
           Relative paths are resolved from a temp file — embed assets inline or use absolute URLs.
