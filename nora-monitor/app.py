@@ -190,7 +190,7 @@ def main():
 
     mic = mic_mod.MicCapture(on_chunk=broadcast_audio)
     camera = cam.CameraCapture(on_frame=broadcast_camera, fps=8, quality=40)
-    capture = sc.ScreenCapture(broadcast_frame, fps=10, quality=60, scale=0.75)
+    capture = sc.ScreenCapture(broadcast_frame, fps=25, quality=82, scale=0.85)
     capture.attach_recorder(recorder)
     # capture starts on-demand when viewer clicks ▶ Start JPEG Stream
     server.init(controller.handle_command, recorder, camera, mic, capture)
