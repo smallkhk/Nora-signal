@@ -1017,11 +1017,9 @@ def on_fastcap_join(data):
     """Browser/iOS authenticates; relay stores token and requests first keyframe."""
     session_str = str(data.get("session", ""))
     password    = str(data.get("password", ""))
-    session_hex = session_str[:16]
-    token = hashlib.sha256(password.encode() + session_hex.encode()).digest()[:8]
 
     # PC sends UDP SID as session[:8].encode('ascii') — 8 raw ASCII bytes.
-    # bytes.fromhex(session_hex) produces a completely different byte sequence.
+    # bytes.fromhex(session[:16]) produces a completely different byte sequence.
     # Try the wire form first; fall back to hex-decode for legacy compatibility.
     wire_sid = session_str[:8].encode("ascii", "replace")
     with _fc_lock:
@@ -1031,20 +1029,24 @@ def on_fastcap_join(data):
         sid = wire_sid
     else:
         try:
-            sid = bytes.fromhex(session_hex)
+            sid = bytes.fromhex(session_str[:16])
         except Exception:
             sid = wire_sid
+
+    # Token must match what the PC's fastcap_host validates against —
+    # the UDP T_HELLO_VIEW handler already proves the formula: sha256(pw + sid_hex).
+    sid_hex = sid.hex()
+    token = hashlib.sha256(password.encode() + sid_hex.encode()).digest()[:8]
 
     s = _fc_sess(sid)
     s.token    = token
     s.wait_key = True
 
     # Populate SID->agent mapping so _fc_to_socketio can route frames to hub room
-    sid_hex_key = sid.hex()
-    if sid_hex_key not in _fc_sid_to_agent:
+    if sid_hex not in _fc_sid_to_agent:
         for ag_name, info in list(_fastcap_cache.items()):
             if info.get("session", "") == session_str:
-                _fc_sid_to_agent[sid_hex_key] = ag_name
+                _fc_sid_to_agent[sid_hex] = ag_name
                 break
 
     _fc_send_to_host(s, sid, T_KEYREQ, token)
