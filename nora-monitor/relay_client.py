@@ -140,7 +140,7 @@ def _make_client():
 
     @sio.on("registered")
     def _on_registered(_data=None):
-        _log("registered OK — starting fastcap host in background")
+        _log("registered OK - starting fastcap host in background")
         def _init_fc():
             try:
                 import fastcap_host as fch
