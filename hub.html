@@ -1024,11 +1024,11 @@ function _wrtcStart(){
   };
   _wrtcPc.oniceconnectionstatechange=()=>{
     const s=_wrtcPc&&_wrtcPc.iceConnectionState;
+    console.log("[wrtc] iceConnectionState:",s);
     if(s==="failed"||s==="closed"){
       toast("WebRTC disconnected","err");
       _wrtcStop();
     }else if(s==="disconnected"){
-      // transient — give it 12 s to recover before giving up
       setTimeout(()=>{
         if(_wrtcPc&&["disconnected","failed"].includes(_wrtcPc.iceConnectionState)){
           toast("WebRTC disconnected","err");
@@ -1036,6 +1036,12 @@ function _wrtcStart(){
         }
       },12000);
     }
+  };
+  _wrtcPc.onconnectionstatechange=()=>console.log("[wrtc] connectionState:",_wrtcPc&&_wrtcPc.connectionState);
+  _wrtcPc.onicegatheringstatechange=()=>console.log("[wrtc] iceGatheringState:",_wrtcPc&&_wrtcPc.iceGatheringState);
+  _wrtcPc.onicecandidate=e=>{
+    if(e.candidate)console.log("[wrtc] local candidate:",e.candidate.candidate);
+    else console.log("[wrtc] local ICE gathering complete");
   };
   _wrtcPc.ondatachannel=e=>{
     _dcRc=e.channel;
