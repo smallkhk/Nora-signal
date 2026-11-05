@@ -41,6 +41,13 @@ targets:
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
         DEVELOPMENT_TEAM: ""
+        # Required for the main binary to find embedded frameworks
+        # (WebRTC.framework etc.) at runtime. Must be baked into the
+        # Mach-O load commands at link time; adding it later via the
+        # signing tool often runs out of load-command header space
+        # ("Main binary has no LC_RPATH and it couldn't be added").
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: "YES"
     info:
       path: Info.plist
       properties:
