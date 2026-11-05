@@ -100,26 +100,6 @@ final class RelayClient: ObservableObject {
     func webrtcAnswer(sdp: String, type: String) {
         guard let agent = selectedAgent else { return }
         sio.emit("webrtc_answer", ["_target": agent, "sdp": sdp, "type": type])
-        onLog?("webrtc_answer → \(agent)")
-    }
-
-    func webrtcStop() {
-        guard let agent = selectedAgent else { return }
-        sio.emit("webrtc_stop", ["_target": agent])
-        onLog?("webrtc_stop → \(agent)")
-    }
-
-    // MARK: - WebRTC signaling
-
-    func webrtcRequest() {
-        guard let agent = selectedAgent else { return }
-        sio.emit("webrtc_request", ["_target": agent])
-        onLog?("webrtc_request → \(agent)")
-    }
-
-    func webrtcAnswer(sdp: String, type: String) {
-        guard let agent = selectedAgent else { return }
-        sio.emit("webrtc_answer", ["_target": agent, "sdp": sdp, "type": type])
         onLog?("webrtc_answer → \(agent) (sdp \(sdp.count) bytes)")
     }
 
