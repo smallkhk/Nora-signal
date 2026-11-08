@@ -454,15 +454,72 @@ function connect(url) {
     $("notif-count").textContent = c + " received";
   });
 
-  // ── Tap on screen canvas ──────────────────────────────────────
+  // ── Tap / swipe on screen canvas ─────────────────────────────
+  const SWIPE_THRESHOLD = 8; // px on canvas before it's a swipe
+  let _dragStart = null;
+
+  function canvasCoords(e, rect) {
+    return {
+      x: ((e.clientX - rect.left) / rect.width)  * cvs.width,
+      y: ((e.clientY - rect.top)  / rect.height) * cvs.height,
+    };
+  }
+  function touchCanvasCoords(touch, rect) {
+    return {
+      x: ((touch.clientX - rect.left) / rect.width)  * cvs.width,
+      y: ((touch.clientY - rect.top)  / rect.height) * cvs.height,
+    };
+  }
+
   cvs.addEventListener("mousedown", e => {
     if (!agent) return;
     e.preventDefault();
     const rect = cvs.getBoundingClientRect();
-    const sx = (e.clientX - rect.left) / rect.width;
-    const sy = (e.clientY - rect.top)  / rect.height;
-    emit("inject_input", { type: "tap", x: sx * cvs.width, y: sy * cvs.height });
+    _dragStart = canvasCoords(e, rect);
   });
+  cvs.addEventListener("mouseup", e => {
+    if (!agent || !_dragStart) return;
+    e.preventDefault();
+    const rect = cvs.getBoundingClientRect();
+    const end  = canvasCoords(e, rect);
+    const dx = end.x - _dragStart.x, dy = end.y - _dragStart.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < SWIPE_THRESHOLD) {
+      emit("inject_input", { type: "tap", x: _dragStart.x, y: _dragStart.y });
+    } else {
+      emit("inject_input", { type: "swipe",
+        x1: _dragStart.x, y1: _dragStart.y,
+        x2: end.x, y2: end.y, duration: 300 });
+    }
+    _dragStart = null;
+  });
+  cvs.addEventListener("mouseleave", () => { _dragStart = null; });
+
+  // Touch support (mobile / tablet viewing)
+  let _touchStart = null;
+  cvs.addEventListener("touchstart", e => {
+    if (!agent) return;
+    e.preventDefault();
+    const rect = cvs.getBoundingClientRect();
+    _touchStart = touchCanvasCoords(e.touches[0], rect);
+  }, { passive: false });
+  cvs.addEventListener("touchend", e => {
+    if (!agent || !_touchStart) return;
+    e.preventDefault();
+    const rect = cvs.getBoundingClientRect();
+    const t    = e.changedTouches[0];
+    const end  = touchCanvasCoords(t, rect);
+    const dx = end.x - _touchStart.x, dy = end.y - _touchStart.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < SWIPE_THRESHOLD) {
+      emit("inject_input", { type: "tap", x: _touchStart.x, y: _touchStart.y });
+    } else {
+      emit("inject_input", { type: "swipe",
+        x1: _touchStart.x, y1: _touchStart.y,
+        x2: end.x, y2: end.y, duration: 300 });
+    }
+    _touchStart = null;
+  }, { passive: false });
 }
 
 $("connect-btn").addEventListener("click", () => {
