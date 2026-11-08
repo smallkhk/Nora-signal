@@ -2501,22 +2501,34 @@ socket.on("socks5_status_result",d=>{
 // ── Platform detection ────────────────────────────────────────
 const _agentPlatform = {}; // name → "android"|"windows"
 
+function _applyPlatform(name) {
+  const p = _agentPlatform[name] || "windows";
+  const isAndroid = p === "android";
+  document.body.classList.toggle("android-mode", isAndroid);
+  if (isAndroid) {
+    // Auto-navigate to Android notifications panel if on a Windows panel
+    const cur = document.querySelector(".panel.on");
+    if (cur && !cur.id.startsWith("and-")) {
+      $$(".nav-btn").forEach(x => x.classList.remove("active"));
+      $$(".panel").forEach(x => x.classList.remove("on"));
+      const nb = document.querySelector('.nav-btn[data-p="and-notifs"]');
+      if (nb) nb.classList.add("active");
+      const pp = $("and-notifs");
+      if (pp) pp.classList.add("on");
+    }
+  }
+}
+
 socket.on("agent_list", list => {
   list.forEach(a => { _agentPlatform[a.name] = a.platform || "windows"; });
+  // Handle auto-selection (relay picks the only/previous agent without user click)
+  const sel = $("agent-sel");
+  if (sel.value) _applyPlatform(sel.value);
 });
 
 $("agent-sel").addEventListener("change", () => {
-  const p = _agentPlatform[$("agent-sel").value] || "windows";
-  document.body.classList.toggle("android-mode", p === "android");
-  if (p === "android") {
-    // Switch default panel to and-notifs feed so something useful shows
-    // (but only if currently on a Windows-only panel)
-    const cur = document.querySelector(".panel.on");
-    if (cur && cur.id !== "and-notifs" && !cur.id.startsWith("and-")) {
-      showPanel("and-notifs");
-    }
-  }
-}, true); // capture so it runs before the existing listener
+  _applyPlatform($("agent-sel").value);
+});
 
 // ── Helpers ───────────────────────────────────────────────────
 function andFetch(event, payload) {
