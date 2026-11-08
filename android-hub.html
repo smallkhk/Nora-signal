@@ -103,6 +103,7 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
   <div id="relay-url-row">
     <input id="relay-url" type="text" placeholder="http://VPS_IP:5000" value="">
     <button class="tb-btn" id="connect-btn">Connect</button>
+    <button class="tb-btn" id="refresh-btn" title="Refresh agent list">↻ Agents</button>
   </div>
 </div>
 
@@ -343,6 +344,8 @@ function connect(url) {
     setConn("ok");
     socket.emit("hub_join", { secret: "" });
     toast("Connected to relay", "ok");
+    // Re-request agent list after short delay in case agent_list fires before hub_join ack
+    setTimeout(() => socket.emit("hub_join", { secret: "" }), 1000);
   });
   socket.on("disconnect", () => { setConn("off"); toast("Disconnected", "err"); });
   socket.on("connect_error", e => { setConn("off"); toast("Cannot connect: " + e.message, "err"); });
@@ -435,6 +438,14 @@ function connect(url) {
 
 $("connect-btn").addEventListener("click", () => {
   connect($("relay-url").value.trim());
+});
+$("refresh-btn").addEventListener("click", () => {
+  if (socket && socket.connected) {
+    socket.emit("hub_join", { secret: "" });
+    toast("Refreshing agent list…", "info");
+  } else {
+    toast("Not connected", "err");
+  }
 });
 $("relay-url").addEventListener("keydown", e => { if (e.key === "Enter") connect($("relay-url").value.trim()); });
 // Auto-connect if URL was saved
