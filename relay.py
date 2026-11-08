@@ -64,7 +64,7 @@ def _hub_room(secret):
 def _agent_list(secret=None):
     """Return agents visible to a given secret (or all if no secret filtering)."""
     return [
-        {"name": v["name"]}
+        {"name": v["name"], "platform": v.get("platform", "windows")}
         for v in agents.values()
         if secret is None or v.get("secret", "") == secret
     ]
@@ -448,7 +448,8 @@ def on_register(data):
     sid = freq.sid
     name = str(data.get("name", "agent"))
     secret = str(data.get("secret", ""))
-    agents[sid] = {"name": name, "secret": secret}
+    platform = str(data.get("platform", "windows"))
+    agents[sid] = {"name": name, "secret": secret, "platform": platform}
     name_to_sid[name] = sid
     emit("registered", {"name": name})
     socketio.emit("agent_list", _agent_list(secret), room=_hub_room(secret))

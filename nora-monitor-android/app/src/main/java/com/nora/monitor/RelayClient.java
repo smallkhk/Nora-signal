@@ -44,8 +44,9 @@ public class RelayClient {
                 Log.d(TAG, "Connected as " + agentName);
                 try {
                     JSONObject reg = new JSONObject();
-                    reg.put("name",   agentName);
-                    reg.put("secret", agentSecret);
+                    reg.put("name",     agentName);
+                    reg.put("secret",   agentSecret);
+                    reg.put("platform", "android");
                     socket.emit("register", reg);
                 } catch (JSONException e) {
                     Log.e(TAG, "register error", e);
