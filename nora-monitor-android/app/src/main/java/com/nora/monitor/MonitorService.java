@@ -4,6 +4,8 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
@@ -69,6 +71,29 @@ public class MonitorService extends Service {
     public void stopCamera()   { if (cameraCapture != null) cameraCapture.stop();  }
     public void startMic()     { if (micCapture    != null) micCapture.start();    }
     public void stopMic()      { if (micCapture    != null) micCapture.stop();     }
+
+    public void lockScreen(String requester) {
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager)
+                getSystemService(DEVICE_POLICY_SERVICE);
+            ComponentName admin = new ComponentName(this, NoraDeviceAdmin.class);
+            if (dpm != null && dpm.isAdminActive(admin)) {
+                dpm.lockNow();
+            } else {
+                Log.w(TAG, "Device admin not active — cannot lock screen");
+            }
+            if (relay != null) {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("ok",         true);
+                    res.put("_requester", requester);
+                    relay.emitScreenOff(res);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "lockScreen error", e);
+        }
+    }
 
     public RelayClient getRelay() { return relay; }
 

