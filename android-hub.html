@@ -341,7 +341,7 @@ function connect(url) {
 
   socket.on("connect", () => {
     setConn("ok");
-    socket.emit("hub_auth", { secret: "" });
+    socket.emit("hub_join", { secret: "" });
     toast("Connected to relay", "ok");
   });
   socket.on("disconnect", () => { setConn("off"); toast("Disconnected", "err"); });
