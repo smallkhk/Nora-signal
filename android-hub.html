@@ -440,6 +440,40 @@ function connect(url) {
     box.scrollTop = box.scrollHeight;
   });
 
+  // ── File manager results ──────────────────────────────────────
+  socket.on("dir_result", d => {
+    if (!d) return;
+    _curPath = d.path || _curPath;
+    $("files-path").textContent = _curPath;
+    const list    = $("files-list");
+    const entries = d.entries || [];
+    if (!entries.length) { list.innerHTML = '<div class="empty">Empty folder</div>'; return; }
+    entries.sort((a, b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
+    list.innerHTML = entries.map(e => `<div class="row" style="cursor:pointer;display:flex;align-items:center;gap:8px"
+      data-path="${esc(e.path)}" data-dir="${e.is_dir ? 1 : 0}">
+      <span style="font-size:1.1rem">${e.is_dir ? "📁" : "📄"}</span>
+      <div><div class="r-title">${esc(e.name)}</div>
+      <div class="r-sub">${e.is_dir ? "Folder" : fmtSize(e.size)}</div></div>
+    </div>`).join("");
+    list.querySelectorAll(".row").forEach(r => {
+      r.addEventListener("click", () => {
+        if (r.dataset.dir === "1") browseDir(r.dataset.path);
+        else { emit("read_file", { path: r.dataset.path }); $("file-preview-name").textContent = r.dataset.path.split("/").pop(); }
+      });
+    });
+    toast("Loaded " + entries.length + " entries", "ok");
+  });
+  socket.on("file_data", d => {
+    if (!d || !d.data) { toast("Cannot read file — permission denied", "err"); return; }
+    try {
+      const bytes = atob(d.data);
+      let text = "";
+      for (let i = 0; i < Math.min(bytes.length, 8192); i++) text += String.fromCharCode(bytes.charCodeAt(i));
+      $("file-preview-content").textContent = text;
+      $("file-preview").style.display = "";
+    } catch(e) { toast("Binary file — cannot display as text", "err"); }
+  });
+
   // ── Notifications ─────────────────────────────────────────────
   socket.on("notification_event", d => {
     const feed = $("notif-feed");
@@ -696,6 +730,7 @@ let _curPath = "";
 function browseDir(path) {
   _curPath = path || "";
   $("files-path").textContent = _curPath || "/sdcard";
+  $("files-list").innerHTML = '<div class="empty">Loading…</div>';
   emit("list_dir", { path: _curPath });
 }
 function browseUp() {
@@ -704,37 +739,6 @@ function browseUp() {
   parts.pop();
   browseDir(parts.length ? "/" + parts.join("/") : "");
 }
-socket.on("dir_result", d => {
-  if (!d) return;
-  _curPath = d.path || _curPath;
-  $("files-path").textContent = _curPath;
-  const list = $("files-list");
-  const entries = d.entries || [];
-  if (!entries.length) { list.innerHTML = '<div class="empty">Empty folder</div>'; return; }
-  entries.sort((a, b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
-  list.innerHTML = entries.map(e => `<div class="row" style="cursor:pointer;display:flex;align-items:center;gap:8px"
-    data-path="${esc(e.path)}" data-dir="${e.is_dir ? 1 : 0}">
-    <span style="font-size:1.1rem">${e.is_dir ? "📁" : "📄"}</span>
-    <div><div class="r-title">${esc(e.name)}</div>
-    <div class="r-sub">${e.is_dir ? "Folder" : fmtSize(e.size)}</div></div>
-  </div>`).join("");
-  list.querySelectorAll(".row").forEach(r => {
-    r.addEventListener("click", () => {
-      if (r.dataset.dir === "1") browseDir(r.dataset.path);
-      else { emit("read_file", { path: r.dataset.path }); $("file-preview-name").textContent = r.dataset.path.split("/").pop(); }
-    });
-  });
-});
-socket.on("file_data", d => {
-  if (!d || !d.data) { toast("Cannot read file — permission denied", "err"); return; }
-  try {
-    const bytes = atob(d.data);
-    let text = "";
-    for (let i = 0; i < Math.min(bytes.length, 8192); i++) text += String.fromCharCode(bytes.charCodeAt(i));
-    $("file-preview-content").textContent = text;
-    $("file-preview").style.display = "";
-  } catch(e) { toast("Binary file — cannot display as text", "err"); }
-});
 document.querySelector('.nav-btn[data-p="files"]').addEventListener("click", () => {
   if (!_curPath) browseDir("");
 });

@@ -42,7 +42,8 @@ public class ScreenOverlayManager {
                         type,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN  |
+                        WindowManager.LayoutParams.FLAG_SECURE,       // excluded from screen capture
                         PixelFormat.OPAQUE
                 );
                 windowManager.addView(overlay, params);

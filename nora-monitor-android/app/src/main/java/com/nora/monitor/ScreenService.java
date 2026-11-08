@@ -100,14 +100,9 @@ public class ScreenService extends Service {
                         Image img = imageReader.acquireLatestImage();
                         if (img != null) {
                             try {
-                                // Skip frame while black screen overlay is covering the display
+                                byte[] jpeg = toJpeg(img, w, h);
                                 MonitorService svc = MonitorService.getInstance();
-                                boolean overlayActive = svc != null
-                                    && svc.getScreenOverlay().isActive();
-                                if (!overlayActive) {
-                                    byte[] jpeg = toJpeg(img, w, h);
-                                    if (svc != null) svc.getRelay().emitFrame(jpeg);
-                                }
+                                if (svc != null) svc.getRelay().emitFrame(jpeg);
                             } finally {
                                 img.close();
                             }
