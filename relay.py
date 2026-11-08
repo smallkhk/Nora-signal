@@ -379,6 +379,10 @@ def index():
 def hub_html():
     return send_from_directory(_DIR, "hub.html")
 
+@app.route("/android-hub.html")
+def android_hub_html():
+    return send_from_directory(_DIR, "android-hub.html")
+
 
 @app.route("/keylogs")
 def keylog_index():
