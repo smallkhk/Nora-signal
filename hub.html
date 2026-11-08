@@ -227,7 +227,7 @@ body.light #scr-wrap{background:#e4e4e7}
 #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column-reverse;gap:6px;z-index:9999}
 .toast{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);box-shadow:var(--shadow);max-width:300px;animation:slideIn .2s ease}
 @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
-.toast.ok{border-color:var(--green)}.toast.err{border-color:var(--red)}
+.toast.ok{border-color:var(--green)}.toast.err{border-color:var(--red)}.toast.info{border-color:var(--accent);opacity:.85}
 
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -2542,7 +2542,12 @@ $("agent-sel").addEventListener("change", () => {
 // ── Helpers ───────────────────────────────────────────────────
 function andFetch(event, payload) {
   if (!agent) { toast("No agent selected", "err"); return; }
+  toast("→ " + event + " sent to " + agent, "info");
   socket.emit(event, { ...payload, _target: agent, _requester: socket.id });
+  // Warn if no response in 7s
+  const t = setTimeout(() => toast("No response for " + event + " — check app permissions", "err"), 7000);
+  socket.once(event.replace("get_", "") + "_result", () => clearTimeout(t));
+  socket.once(event + "_result", () => clearTimeout(t));
 }
 function fmt(v, fb) { return (v === undefined || v === null || v === "") ? (fb || "--") : String(v); }
 function ts(ms) {
