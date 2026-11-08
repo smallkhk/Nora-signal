@@ -53,7 +53,7 @@ _fastcap_cache = {}  # agent_name -> last fastcap_info dict
 HUB_ROOM = "hubs"
 
 _frame_last_fwd  = {}   # agent_name -> last forwarded time (JPEG throttle)
-_FRAME_THROTTLE  = 0.1  # forward at most 10 fps per agent
+_FRAME_THROTTLE  = 0.05  # forward at most 20 fps per agent
 
 
 def _hub_room(secret):
