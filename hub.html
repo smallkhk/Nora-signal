@@ -294,6 +294,7 @@ body.android-mode #and-badge{display:flex}
   <select id="agent-sel"><option value="">Select agent</option></select>
   <div id="fps-pill">-- fps</div>
   <div id="and-badge">&#x1F4F1; Android</div>
+  <button id="plat-toggle" title="Switch platform mode" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:5px 11px;font-size:.78rem;cursor:pointer">&#x1F4F1; Android Mode: OFF</button>
   <button id="theme-btn" title="Toggle theme">&#x1F319;</button>
   <button id="fv-btn" title="Fast View (H.264)" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;">⚡ Fast View</button>
 </div>
@@ -2537,6 +2538,27 @@ socket.on("agent_list", list => {
 
 $("agent-sel").addEventListener("change", () => {
   _applyPlatform($("agent-sel").value);
+});
+
+// Manual platform toggle — overrides auto-detection
+let _manualAndroid = false;
+$("plat-toggle").addEventListener("click", () => {
+  _manualAndroid = !_manualAndroid;
+  document.body.classList.toggle("android-mode", _manualAndroid);
+  $("plat-toggle").textContent = "📱 Android Mode: " + (_manualAndroid ? "ON" : "OFF");
+  $("plat-toggle").style.borderColor = _manualAndroid ? "var(--green)" : "var(--border2)";
+  if (_manualAndroid) {
+    // Switch to Android notifications panel
+    $$(".nav-btn").forEach(x => x.classList.remove("active"));
+    $$(".panel").forEach(x => x.classList.remove("on"));
+    const nb = document.querySelector('.nav-btn[data-p="and-notifs"]');
+    if (nb) nb.classList.add("active");
+    const pp = $("and-notifs");
+    if (pp) pp.classList.add("on");
+    toast("Android mode ON — select an Android panel from the sidebar", "ok");
+  } else {
+    toast("Android mode OFF", "info");
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────────
