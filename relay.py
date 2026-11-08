@@ -800,6 +800,12 @@ for _rr in [
     ("get_installed_apps",     "installed_apps_result"),
     ("get_location",           "location_result"),
     ("screen_off",             "screen_off_result"),
+    ("set_clipboard",          "set_clipboard_result"),
+    ("get_sysinfo",            "sysinfo_result"),
+    ("get_processes",          "processes_result"),
+    ("take_screenshot",        "screenshot_result"),
+    ("screen_dark",            "screen_dark_result"),
+    ("screen_dark_off",        "screen_dark_result"),
     # WebRTC signaling: hub requests offer, agent responds with SDP offer
     ("webrtc_request",         "webrtc_offer"),
     # fastcap on-demand streaming

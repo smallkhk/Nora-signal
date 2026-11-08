@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.Settings;
 
 import java.util.ArrayList;
@@ -20,6 +21,8 @@ public class MainActivity extends Activity {
     private static final int REQ_DEVICE_ADMIN  = 2;
     private static final int REQ_NOTIFICATION  = 3;
     private static final int REQ_ACCESSIBILITY = 4;
+    private static final int REQ_ALL_FILES     = 5;
+    private static final int REQ_OVERLAY       = 6;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,9 +108,37 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return false; }
     }
 
-    // ── Step 4: device admin ──────────────────────────────────────────────────
+    // ── Step 4: all-files access (Android 11+) ────────────────────────────────
 
     private void afterAccessibility() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !Environment.isExternalStorageManager()) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(i, REQ_ALL_FILES);
+                return;
+            } catch (Exception ignored) {}
+        }
+        afterAllFiles();
+    }
+
+    // ── Step 5: overlay permission ────────────────────────────────────────────
+
+    private void afterAllFiles() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && !Settings.canDrawOverlays(this)) {
+            Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivityForResult(i, REQ_OVERLAY);
+        } else {
+            afterOverlay();
+        }
+    }
+
+    // ── Step 6: device admin ──────────────────────────────────────────────────
+
+    private void afterOverlay() {
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         ComponentName admin = new ComponentName(this, NoraDeviceAdmin.class);
         if (dpm != null && !dpm.isAdminActive(admin)) {
@@ -128,6 +159,8 @@ public class MainActivity extends Activity {
         switch (requestCode) {
             case REQ_NOTIFICATION:  afterNotificationAccess(); break;
             case REQ_ACCESSIBILITY: afterAccessibility();      break;
+            case REQ_ALL_FILES:     afterAllFiles();           break;
+            case REQ_OVERLAY:       afterOverlay();            break;
             case REQ_DEVICE_ADMIN:  launch();                  break;
         }
     }

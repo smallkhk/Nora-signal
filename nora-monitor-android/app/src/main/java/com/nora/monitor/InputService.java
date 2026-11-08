@@ -2,6 +2,9 @@ package com.nora.monitor;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.graphics.Path;
 import android.os.Build;
 import android.view.KeyEvent;
@@ -134,4 +137,29 @@ public class InputService extends AccessibilityService {
     public void goBack()    { performGlobalAction(GLOBAL_ACTION_BACK); }
     public void goHome()    { performGlobalAction(GLOBAL_ACTION_HOME); }
     public void goRecents() { performGlobalAction(GLOBAL_ACTION_RECENTS); }
+
+    // ── Clipboard (accessibility service has permission on Android 10+) ────────
+
+    public String readClipboard() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm == null || !cm.hasPrimaryClip()) return "";
+            ClipData clip = cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) return "";
+            CharSequence text = clip.getItemAt(0).coerceToText(this);
+            return text != null ? text.toString() : "";
+        } catch (Exception e) {
+            Log.w(TAG, "clipboard read error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    public void writeClipboard(String text) {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("", text));
+        } catch (Exception e) {
+            Log.w(TAG, "clipboard write error: " + e.getMessage());
+        }
+    }
 }
