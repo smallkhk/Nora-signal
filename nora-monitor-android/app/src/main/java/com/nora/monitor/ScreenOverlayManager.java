@@ -2,10 +2,12 @@ package com.nora.monitor;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
+import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -36,16 +38,22 @@ public class ScreenOverlayManager {
                         ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY;
 
+                // Use real screen dimensions (includes status bar + nav bar)
+                Point size = new Point();
+                windowManager.getDefaultDisplay().getRealSize(size);
+
                 WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                        WindowManager.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.MATCH_PARENT,
+                        size.x, size.y,
+                        0, 0,
                         type,
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE    |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN  |
-                        WindowManager.LayoutParams.FLAG_SECURE,       // excluded from screen capture
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN        |
+                        WindowManager.LayoutParams.FLAG_SECURE,
                         PixelFormat.OPAQUE
                 );
+                params.gravity = Gravity.TOP | Gravity.LEFT;
                 windowManager.addView(overlay, params);
                 active = true;
                 Log.d(TAG, "Black screen overlay shown");
