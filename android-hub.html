@@ -511,11 +511,17 @@ function connect(url) {
     const rect = cvs.getBoundingClientRect();
     _dragStart = canvasCoords(e, rect);
   });
-  cvs.addEventListener("mouseup", e => {
-    if (!agent || !_dragStart) return;
-    e.preventDefault();
+  // mouseup on document so releasing outside canvas still fires
+  document.addEventListener("mouseup", e => {
+    if (!_dragStart) return;
     const rect = cvs.getBoundingClientRect();
-    const end  = canvasCoords(e, rect);
+    // clamp end coords to canvas bounds
+    const cx = Math.min(Math.max(e.clientX, rect.left), rect.right);
+    const cy = Math.min(Math.max(e.clientY, rect.top),  rect.bottom);
+    const end = {
+      x: ((cx - rect.left) / rect.width)  * cvs.width,
+      y: ((cy - rect.top)  / rect.height) * cvs.height,
+    };
     const dx = end.x - _dragStart.x, dy = end.y - _dragStart.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < SWIPE_THRESHOLD) {
@@ -523,11 +529,10 @@ function connect(url) {
     } else {
       emit("inject_input", { type: "swipe",
         x1: _dragStart.x, y1: _dragStart.y,
-        x2: end.x, y2: end.y, duration: 300 });
+        x2: end.x, y2: end.y, duration: 400 });
     }
     _dragStart = null;
   });
-  cvs.addEventListener("mouseleave", () => { _dragStart = null; });
 
   // Touch support (mobile / tablet viewing)
   let _touchStart = null;
