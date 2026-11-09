@@ -53,10 +53,6 @@ public class ScreenOverlayManager {
                         PixelFormat.OPAQUE
                 );
                 params.gravity = Gravity.TOP | Gravity.LEFT;
-                // Force backlight off — hardware brightness is applied after the
-                // VirtualDisplay tap point, so MediaProjection still captures real content
-                params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF;
-                params.buttonBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF;
                 windowManager.addView(overlay, params);
                 active = true;
                 Log.d(TAG, "Black screen overlay shown");

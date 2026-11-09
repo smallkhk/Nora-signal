@@ -97,17 +97,25 @@ public class ScreenService extends Service {
             streamThread = new Thread(() -> {
                 while (streaming) {
                     try {
-                        Image img = imageReader.acquireLatestImage();
-                        if (img != null) {
-                            try {
-                                byte[] jpeg = toJpeg(img, w, h);
-                                MonitorService svc = MonitorService.getInstance();
-                                if (svc != null) svc.getRelay().emitFrame(jpeg);
-                            } finally {
-                                img.close();
+                        MonitorService svc = MonitorService.getInstance();
+                        ScreenOverlayManager overlay = svc != null ? svc.getScreenOverlay() : null;
+                        if (overlay != null && overlay.isActive()) {
+                            // Overlay is showing — send frozen frame so hub still sees last state
+                            byte[] frozen = svc.getFrozenFrame();
+                            if (frozen != null) svc.getRelay().emitFrame(frozen);
+                            Thread.sleep(500);
+                        } else {
+                            Image img = imageReader.acquireLatestImage();
+                            if (img != null) {
+                                try {
+                                    byte[] jpeg = toJpeg(img, w, h);
+                                    if (svc != null) svc.getRelay().emitFrame(jpeg);
+                                } finally {
+                                    img.close();
+                                }
                             }
+                            Thread.sleep(100);
                         }
-                        Thread.sleep(100);
                     } catch (Exception e) {
                         if (streaming) Log.e(TAG, "stream error", e);
                     }
@@ -118,6 +126,23 @@ public class ScreenService extends Service {
         } catch (Exception e) {
             Log.e(TAG, "startStream error", e);
             stopSelf();
+        }
+    }
+
+    public byte[] captureOneFrame() {
+        if (imageReader == null) return null;
+        try {
+            Image img = imageReader.acquireLatestImage();
+            if (img == null) return null;
+            try {
+                DisplayMetrics m = getResources().getDisplayMetrics();
+                return toJpeg(img, m.widthPixels / 2, m.heightPixels / 2);
+            } finally {
+                img.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "captureOneFrame error", e);
+            return null;
         }
     }
 
