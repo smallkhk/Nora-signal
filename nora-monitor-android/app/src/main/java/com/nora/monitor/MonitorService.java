@@ -34,11 +34,6 @@ public class MonitorService extends Service {
     private static MonitorService instance;
     public static MonitorService getInstance() { return instance; }
 
-    // Frozen frame shown to hub while black screen overlay is active
-    private volatile byte[] frozenFrame = null;
-    public void  setFrozenFrame(byte[] jpeg) { frozenFrame = jpeg; }
-    public byte[] getFrozenFrame()           { return frozenFrame; }
-
     @Override
     public void onCreate() {
         super.onCreate();
