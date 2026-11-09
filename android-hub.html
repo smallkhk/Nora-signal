@@ -260,16 +260,27 @@ select{background:var(--surface2);border:1px solid var(--border);color:var(--tex
 <div class="panel" id="p-files">
   <div class="ph"><h2>📁 File Manager</h2>
     <span class="meta" id="files-path">/sdcard</span>
-    <button class="act-btn" id="files-up">⬆ Up</button>
   </div>
+  <div style="display:flex;gap:6px;padding:4px 0;flex-wrap:wrap">
+    <button class="act-btn" id="files-up">⬆ Up</button>
+    <button class="act-btn" id="files-newdir">📁+ Folder</button>
+    <button class="act-btn primary" id="files-upload-btn">⬆ Upload</button>
+    <button class="act-btn" id="files-paste-btn" style="display:none">📋 Paste here</button>
+  </div>
+  <input type="file" id="files-upload-input" style="display:none" multiple>
+  <div style="font-size:.75rem;color:var(--text2);padding:2px 0;min-height:18px" id="upload-status"></div>
   <div class="data-list" id="files-list"><div class="empty">Loading...</div></div>
   <div id="file-preview" style="display:none;flex-shrink:0">
-    <div class="ph" style="margin-top:8px"><h2 id="file-preview-name" style="font-size:.8rem"></h2>
-      <button class="act-btn" id="file-preview-close">✕ Close</button>
+    <div class="ph" style="margin-top:8px">
+      <h2 id="file-preview-name" style="font-size:.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h2>
+      <button class="act-btn primary" id="file-preview-dl">⬇ Download</button>
+      <button class="act-btn" id="file-preview-close">✕</button>
     </div>
     <pre id="file-preview-content" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.75rem;overflow:auto;max-height:200px;white-space:pre-wrap;word-break:break-all"></pre>
   </div>
 </div>
+<!-- File manager context menu -->
+<div id="fm-ctx" style="display:none;position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);z-index:9999;min-width:170px;padding:4px 0;font-size:.85rem"></div>
 
 <!-- SYSINFO -->
 <div class="panel" id="p-sysinfo">
@@ -445,20 +456,27 @@ function connect(url) {
     if (!d) return;
     _curPath = d.path || _curPath;
     $("files-path").textContent = _curPath;
+    $("files-paste-btn").style.display = _fmClip ? "" : "none";
     const list    = $("files-list");
     const entries = d.entries || [];
     if (!entries.length) { list.innerHTML = '<div class="empty">Empty folder</div>'; return; }
     entries.sort((a, b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
-    list.innerHTML = entries.map(e => `<div class="row" style="cursor:pointer;display:flex;align-items:center;gap:8px"
-      data-path="${esc(e.path)}" data-dir="${e.is_dir ? 1 : 0}">
+    list.innerHTML = entries.map(e => `<div class="row" style="cursor:pointer;display:flex;align-items:center;gap:8px;position:relative"
+      data-path="${esc(e.path)}" data-dir="${e.is_dir ? 1 : 0}" data-name="${esc(e.name)}">
       <span style="font-size:1.1rem">${e.is_dir ? "📁" : "📄"}</span>
-      <div><div class="r-title">${esc(e.name)}</div>
+      <div style="flex:1;min-width:0"><div class="r-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name)}</div>
       <div class="r-sub">${e.is_dir ? "Folder" : fmtSize(e.size)}</div></div>
+      <button class="act-btn" data-menu="1" style="padding:4px 8px;font-size:.75rem;flex-shrink:0">⋮</button>
     </div>`).join("");
     list.querySelectorAll(".row").forEach(r => {
-      r.addEventListener("click", () => {
+      r.addEventListener("click", ev => {
+        if (ev.target.dataset.menu) return;
         if (r.dataset.dir === "1") browseDir(r.dataset.path);
-        else { emit("read_file", { path: r.dataset.path }); $("file-preview-name").textContent = r.dataset.path.split("/").pop(); }
+        else { _lastPreviewB64 = null; emit("read_file", { path: r.dataset.path }); $("file-preview-name").textContent = r.dataset.name; }
+      });
+      r.querySelector("[data-menu]").addEventListener("click", ev => {
+        ev.stopPropagation();
+        fmShowCtx(ev, r.dataset.path, r.dataset.dir === "1", r.dataset.name);
       });
     });
     toast("Loaded " + entries.length + " entries", "ok");
@@ -466,12 +484,23 @@ function connect(url) {
   socket.on("file_data", d => {
     if (!d || !d.data) { toast("Cannot read file — permission denied", "err"); return; }
     try {
+      _lastPreviewB64 = d.data;
       const bytes = atob(d.data);
       let text = "";
-      for (let i = 0; i < Math.min(bytes.length, 8192); i++) text += String.fromCharCode(bytes.charCodeAt(i));
-      $("file-preview-content").textContent = text;
+      for (let i = 0; i < Math.min(bytes.length, 32768); i++) text += String.fromCharCode(bytes.charCodeAt(i));
+      $("file-preview-content").textContent = text + (bytes.length > 32768 ? "\n\n[truncated…]" : "");
       $("file-preview").style.display = "";
     } catch(e) { toast("Binary file — cannot display as text", "err"); }
+  });
+  socket.on("write_result",  d => { toast(d.ok ? "File saved ✓" : "Save failed: " + d.error, d.ok ? "ok" : "err"); if (d.ok) browseDir(_curPath); });
+  socket.on("delete_result", d => { toast(d.ok ? "Deleted ✓" : "Delete failed: " + d.error, d.ok ? "ok" : "err"); if (d.ok) browseDir(_curPath); });
+  socket.on("rename_result", d => { toast(d.ok ? "Renamed ✓" : "Rename failed: " + d.error, d.ok ? "ok" : "err"); if (d.ok) browseDir(_curPath); });
+  socket.on("copy_result",   d => { toast(d.ok ? "Copied ✓" : "Copy failed: " + d.error, d.ok ? "ok" : "err"); if (d.ok) browseDir(_curPath); });
+  socket.on("move_result",   d => { toast(d.ok ? "Moved ✓" : "Move failed: " + d.error, d.ok ? "ok" : "err"); if (d.ok) { _fmClip = null; $("files-paste-btn").style.display = "none"; browseDir(_curPath); } });
+  socket.on("upload_ready",  d => { if (d.ok) _fmDoChunks(d.upload_id); else toast("Upload init failed", "err"); });
+  socket.on("upload_progress", d => {
+    if (!d.ok) { toast("Upload error: " + d.error, "err"); return; }
+    if (d.done) { toast("Upload complete ✓", "ok"); $("upload-status").textContent = ""; browseDir(_curPath); }
   });
 
   // ── Notifications ─────────────────────────────────────────────
@@ -732,6 +761,11 @@ function renderSysinfo(d) {
 
 // ── File Manager ─────────────────────────────────────────────────
 let _curPath = "";
+let _fmClip  = null; // { op: "copy"|"cut", path: "...", name: "..." }
+let _lastPreviewB64 = null;
+let _uploadQueue = []; // files waiting to upload
+let _uploadId = null;
+
 function browseDir(path) {
   _curPath = path || "";
   $("files-path").textContent = _curPath || "/sdcard";
@@ -749,6 +783,101 @@ document.querySelector('.nav-btn[data-p="files"]').addEventListener("click", () 
 });
 $("files-up").addEventListener("click", browseUp);
 $("file-preview-close").addEventListener("click", () => { $("file-preview").style.display = "none"; });
+$("file-preview-dl").addEventListener("click", () => {
+  if (!_lastPreviewB64) return;
+  const name = $("file-preview-name").textContent || "file";
+  const bytes = atob(_lastPreviewB64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  const blob = new Blob([arr]);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+});
+
+// New folder
+$("files-newdir").addEventListener("click", () => {
+  const name = prompt("Folder name:");
+  if (!name) return;
+  const path = (_curPath ? _curPath : "/sdcard") + "/" + name;
+  emit("write_file", { path: path + "/.nora_keep", data: "" });
+});
+
+// Paste button in toolbar
+$("files-paste-btn").addEventListener("click", () => fmPaste(_curPath));
+
+// Upload
+$("files-upload-btn").addEventListener("click", () => $("files-upload-input").click());
+$("files-upload-input").addEventListener("change", function() {
+  _uploadQueue = Array.from(this.files);
+  this.value = "";
+  if (_uploadQueue.length) _fmUploadNext();
+});
+
+function _fmUploadNext() {
+  if (!_uploadQueue.length) return;
+  const file = _uploadQueue[0];
+  _uploadId = "up_" + Date.now();
+  const path = (_curPath || "/sdcard") + "/" + file.name;
+  $("upload-status").textContent = "Uploading " + file.name + "…";
+  emit("upload_start", { upload_id: _uploadId, path });
+}
+
+function _fmDoChunks(uid) {
+  if (!_uploadQueue.length) return;
+  const file = _uploadQueue[0];
+  const CHUNK = 256 * 1024; // 256 KB
+  let offset = 0;
+  const reader = new FileReader();
+  function readNext() {
+    const slice = file.slice(offset, offset + CHUNK);
+    reader.readAsArrayBuffer(slice);
+  }
+  reader.onload = e => {
+    const buf   = e.target.result;
+    const b64   = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const done  = offset + buf.byteLength >= file.size;
+    emit("upload_chunk", { upload_id: uid, data: b64, done });
+    offset += buf.byteLength;
+    const pct = Math.round(offset / file.size * 100);
+    $("upload-status").textContent = "Uploading " + file.name + " " + pct + "%…";
+    if (!done) readNext();
+    else { _uploadQueue.shift(); if (_uploadQueue.length) _fmUploadNext(); }
+  };
+  readNext();
+}
+
+// Context menu
+function fmShowCtx(ev, path, isDir, name) {
+  const ctx = $("fm-ctx");
+  const items = [];
+  if (!isDir) items.push({ label: "⬇ Download",   fn: () => { _lastPreviewB64 = null; emit("read_file", { path }); $("file-preview-name").textContent = name; } });
+  items.push({ label: "✏ Rename",      fn: () => { const n = prompt("New name:", name); if (n && n !== name) emit("rename_path", { path, new_name: n }); } });
+  items.push({ label: "📋 Copy",        fn: () => { _fmClip = { op:"copy", path, name }; $("files-paste-btn").style.display = ""; toast("Copied to clipboard", "ok"); } });
+  items.push({ label: "✂ Cut",          fn: () => { _fmClip = { op:"cut",  path, name }; $("files-paste-btn").style.display = ""; toast("Cut to clipboard", "ok"); } });
+  if (isDir && _fmClip) items.push({ label: "📋 Paste into",  fn: () => fmPaste(path) });
+  items.push({ label: "🗑 Delete",       fn: () => { if (confirm("Delete " + name + "?")) emit("delete_path", { path }); } });
+
+  ctx.innerHTML = items.map((it, i) =>
+    `<div class="fm-ctx-item" data-i="${i}" style="padding:9px 16px;cursor:pointer;border-radius:4px">${it.label}</div>`
+  ).join("");
+  ctx.querySelectorAll(".fm-ctx-item").forEach(el => {
+    el.addEventListener("mouseenter", () => el.style.background = "var(--accent)");
+    el.addEventListener("mouseleave", () => el.style.background = "");
+    el.addEventListener("click", () => { ctx.style.display = "none"; items[+el.dataset.i].fn(); });
+  });
+
+  ctx.style.display = "";
+  const x = Math.min(ev.clientX, innerWidth  - 180);
+  const y = Math.min(ev.clientY, innerHeight - items.length * 38 - 10);
+  ctx.style.left = x + "px";
+  ctx.style.top  = y + "px";
+}
+function fmPaste(dstDir) {
+  if (!_fmClip) return;
+  if (_fmClip.op === "copy") emit("copy_path", { path: _fmClip.path, dst_dir: dstDir });
+  else                        emit("move_path", { path: _fmClip.path, dst_dir: dstDir });
+}
+document.addEventListener("click", () => { $("fm-ctx").style.display = "none"; });
+
 function fmtSize(b) {
   if (b < 1024) return b + " B";
   if (b < 1048576) return (b/1024).toFixed(1) + " KB";

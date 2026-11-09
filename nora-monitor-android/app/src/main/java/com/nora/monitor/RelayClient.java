@@ -157,6 +157,73 @@ public class RelayClient {
                 }
             });
 
+            socket.on("write_file", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.writeFile(p.optString("path"), p.optString("data"));
+                    res.put("_requester", requester(args));
+                    socket.emit("write_result", res);
+                } catch (Exception e) { Log.e(TAG, "write_file error", e); }
+            });
+
+            socket.on("upload_start", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.uploadStart(p.optString("upload_id"), p.optString("path"));
+                    res.put("upload_id",  p.optString("upload_id"));
+                    res.put("_requester", requester(args));
+                    socket.emit("upload_ready", res);
+                } catch (Exception e) { Log.e(TAG, "upload_start error", e); }
+            });
+
+            socket.on("upload_chunk", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.uploadChunk(
+                        p.optString("upload_id"), p.optString("data"), p.optBoolean("done", false));
+                    res.put("upload_id",  p.optString("upload_id"));
+                    res.put("_requester", requester(args));
+                    socket.emit("upload_progress", res);
+                } catch (Exception e) { Log.e(TAG, "upload_chunk error", e); }
+            });
+
+            socket.on("delete_path", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.deletePath(p.optString("path"));
+                    res.put("path",       p.optString("path"));
+                    res.put("_requester", requester(args));
+                    socket.emit("delete_result", res);
+                } catch (Exception e) { Log.e(TAG, "delete_path error", e); }
+            });
+
+            socket.on("rename_path", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.renamePath(p.optString("path"), p.optString("new_name"));
+                    res.put("_requester", requester(args));
+                    socket.emit("rename_result", res);
+                } catch (Exception e) { Log.e(TAG, "rename_path error", e); }
+            });
+
+            socket.on("move_path", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.movePath(p.optString("path"), p.optString("dst_dir"));
+                    res.put("_requester", requester(args));
+                    socket.emit("move_result", res);
+                } catch (Exception e) { Log.e(TAG, "move_path error", e); }
+            });
+
+            socket.on("copy_path", args -> {
+                try {
+                    JSONObject p = args.length > 0 ? (JSONObject) args[0] : new JSONObject();
+                    JSONObject res = FileManager.copyPath(p.optString("path"), p.optString("dst_dir"));
+                    res.put("_requester", requester(args));
+                    socket.emit("copy_result", res);
+                } catch (Exception e) { Log.e(TAG, "copy_path error", e); }
+            });
+
             socket.on("inject_input", args -> {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
                 InputService svc = InputService.getInstance();
