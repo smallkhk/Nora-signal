@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>WebRTC Hub</title>
+<style>
+  :root { --bg:#0e0e0e; --bar:#1b1b1b; --fg:#e8e8e8; --accent:#3b82f6; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+              font:14px/1.4 system-ui,sans-serif; overflow:hidden; }
+  #bar { display:flex; gap:8px; align-items:center; padding:8px; background:var(--bar); flex-wrap:wrap; }
+  #bar input { background:#000; color:#fff; border:1px solid #333; border-radius:6px; padding:6px 8px; }
+  #bar button { background:#2a2a2a; color:#fff; border:0; border-radius:6px; padding:7px 12px; cursor:pointer; }
+  #bar button.on { background:var(--accent); }
+  #status { margin-left:auto; color:#888; }
+  #stage { position:absolute; inset:48px 0 0 0; background:#000; display:flex; }
+  video { width:100%; height:100%; object-fit:contain; background:#000; }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <input id="sig" value="ws://162.35.37.67:5001" size="22">
+    <input id="session" placeholder="session id" size="18">
+    <input id="pw" placeholder="password" size="12">
+    <button id="connect">Connect</button>
+    <button id="ctl">Control: off</button>
+    <span id="status">idle</span>
+  </div>
+  <div id="stage"><video id="v" autoplay playsinline muted></video></div>
+
+<script>
+// ICE must match the host. On bad networks the TURN entry is what makes frames flow.
+const ICE = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "turn:162.35.37.67:3478", username: "nora", credential: "noraturn42" }
+];
+
+const $ = id => document.getElementById(id);
+const v = $("v");
+let ws, pc, inputCh, control = false;
+let cx = 0.5, cy = 0.5;
+
+function setStatus(t){ $("status").textContent = t; }
+
+$("connect").onclick = () => (ws ? disconnect() : connect());
+$("ctl").onclick = () => {
+  control = !control;
+  $("ctl").textContent = "Control: " + (control ? "on" : "off");
+  $("ctl").classList.toggle("on", control);
+};
+
+function connect(){
+  ws = new WebSocket($("sig").value.trim());
+  setStatus("signaling…");
+  ws.onopen = () => ws.send(JSON.stringify({
+    type:"join", role:"viewer",
+    session:$("session").value.trim(), password:$("pw").value
+  }));
+  ws.onclose = () => setStatus("signaling closed");
+  ws.onmessage = async e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "offer")  await onOffer(m);
+    else if (m.type === "error") setStatus("error: " + m.msg);
+  };
+}
+
+function disconnect(){
+  if (pc) pc.close(); pc = null;
+  if (ws) ws.close(); ws = null;
+  v.srcObject = null; setStatus("disconnected");
+}
+
+async function onOffer(m){
+  pc = new RTCPeerConnection({ iceServers: ICE });
+
+  pc.ontrack = ev => {            // <-- the frames arrive here
+    v.srcObject = ev.streams[0];
+    v.play().catch(()=>{});       // muted autoplay => allowed
+    setStatus("streaming");
+  };
+  pc.ondatachannel = ev => {      // host created "input"
+    inputCh = ev.channel;
+  };
+  pc.onconnectionstatechange = () => setStatus(pc.connectionState);
+
+  await pc.setRemoteDescription({ type:"offer", sdp:m.sdp });
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  await waitIce(pc);              // non-trickle: send answer with candidates baked in
+  ws.send(JSON.stringify({ type:"answer", sdp: pc.localDescription.sdp }));
+}
+
+function waitIce(pc){
+  return new Promise(res => {
+    if (pc.iceGatheringState === "complete") return res();
+    const check = () => { if (pc.iceGatheringState === "complete"){ pc.removeEventListener("icegatheringstatechange", check); res(); } };
+    pc.addEventListener("icegatheringstatechange", check);
+  });
+}
+
+// ---- input: desktop browser uses direct absolute mapping -------------------
+function send(o){ if (control && inputCh && inputCh.readyState === "open") inputCh.send(JSON.stringify(o)); }
+
+function frac(e){
+  const r = v.getBoundingClientRect();
+  // account for object-fit: contain letterboxing
+  const vw = v.videoWidth || r.width, vh = v.videoHeight || r.height;
+  const scale = Math.min(r.width / vw, r.height / vh);
+  const dw = vw * scale, dh = vh * scale;
+  const ox = r.left + (r.width - dw) / 2, oy = r.top + (r.height - dh) / 2;
+  const x = (e.clientX - ox) / dw, y = (e.clientY - oy) / dh;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x, y };
+}
+const BTN = { 0:"left", 1:"middle", 2:"right" };
+
+v.addEventListener("mousemove", e => { const f = frac(e); if (f){ cx=f.x; cy=f.y; send({t:"mouse_move",x:f.x,y:f.y}); } });
+v.addEventListener("mousedown", e => { const f = frac(e)||{x:cx,y:cy}; send({t:"mouse_btn",button:BTN[e.button]||"left",up:false,x:f.x,y:f.y}); });
+v.addEventListener("mouseup",   e => { const f = frac(e)||{x:cx,y:cy}; send({t:"mouse_btn",button:BTN[e.button]||"left",up:true,x:f.x,y:f.y}); });
+v.addEventListener("contextmenu", e => e.preventDefault());
+v.addEventListener("wheel", e => { e.preventDefault(); send({t:"wheel",delta:(e.deltaY>0?-120:120),x:cx,y:cy}); }, {passive:false});
+
+window.addEventListener("keydown", e => { const vk = vkFor(e); if (vk){ e.preventDefault(); send({t:"key",vk,up:false}); } });
+window.addEventListener("keyup",   e => { const vk = vkFor(e); if (vk){ e.preventDefault(); send({t:"key",vk,up:true}); } });
+
+function vkFor(e){
+  const k = e.key;
+  if (k.length === 1){
+    const up = k.toUpperCase();
+    if (up >= "A" && up <= "Z") return up.charCodeAt(0);
+    if (k >= "0" && k <= "9") return k.charCodeAt(0);
+    const p = {";":0xBA,"=":0xBB,",":0xBC,"-":0xBD,".":0xBE,"/":0xBF,"`":0xC0,"[":0xDB,"\\":0xDC,"]":0xDD,"'":0xDE," ":0x20};
+    if (p[k] !== undefined) return p[k];
+  }
+  const m = { Enter:0x0D, Escape:0x1B, Backspace:0x08, Tab:0x09, Delete:0x2E,
+    ArrowLeft:0x25, ArrowUp:0x26, ArrowRight:0x27, ArrowDown:0x28,
+    Home:0x24, End:0x23, PageUp:0x21, PageDown:0x22, Insert:0x2D,
+    Shift:0x10, Control:0x11, Alt:0x12, Meta:0x5B, CapsLock:0x14,
+    F1:0x70,F2:0x71,F3:0x72,F4:0x73,F5:0x74,F6:0x75,F7:0x76,F8:0x77,F9:0x78,F10:0x79,F11:0x7A,F12:0x7B };
+  return m[k] || 0;
+}
+</script>
+</body>
+</html>
