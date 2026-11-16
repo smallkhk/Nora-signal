@@ -5,8 +5,11 @@ Captures the screen -> WebRTC video track (aiortc negotiates H.264/VP8, adaptive
 bitrate + loss recovery built in), and receives mouse/keyboard over a datachannel
 -> SendInput. Works against a browser hub OR the iOS app.
 
-    pip install aiortc av mss numpy websockets
-    python webrtc_host.py --signal ws://162.35.37.67:5001 --password testpass123
+Signaling goes through the existing relay via Socket.IO (port 5000) so iOS carrier
+proxies don't block it.
+
+    pip install aiortc av mss numpy "python-socketio[client]" aiohttp
+    python webrtc_host.py --relay http://162.35.37.67:5000 --password testpass123
 
 IMPORTANT: on a bad/mobile network you MUST have a TURN server or you'll get the
 "connects but no frames" problem. Fill TURN_* below (run coturn on your VPS).
@@ -16,6 +19,7 @@ import asyncio
 import ctypes
 import fractions
 import hashlib
+import json
 import socket
 import sys
 from ctypes import wintypes as wt
@@ -23,7 +27,7 @@ from ctypes import wintypes as wt
 import numpy as np
 import mss
 import av
-import websockets
+import socketio as _sio_lib
 from aiortc import (RTCPeerConnection, RTCConfiguration, RTCIceServer,
                     RTCSessionDescription, VideoStreamTrack)
 
@@ -164,7 +168,7 @@ async def wait_ice(pc):
 PCS = set()
 
 
-async def make_pc(ws):
+async def make_pc(sio, session):
     pc = RTCPeerConnection(RTCConfiguration(iceServers=ice_servers()))
     PCS.add(pc)
     pc.addTrack(ScreenTrack())
@@ -173,7 +177,6 @@ async def make_pc(ws):
     @ch.on("message")
     def on_message(msg):
         try:
-            import json
             handle_input(json.loads(msg))
         except Exception:
             pass
@@ -188,30 +191,46 @@ async def make_pc(ws):
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     await wait_ice(pc)
-    import json
-    await ws.send(json.dumps({"type": "offer", "sdp": pc.localDescription.sdp}))
+    await sio.emit("webrtc_offer", {"session": session, "sdp": pc.localDescription.sdp})
     print("[pc] offer sent")
     return pc
 
 
-async def run(signal_url, session, password):
-    import json
-    async with websockets.connect(signal_url, max_size=4 * 1024 * 1024) as ws:
-        await ws.send(json.dumps({"type": "join", "role": "host",
-                                  "session": session, "password": password}))
-        print(f"[host] joined session={session}  pw={password}")
-        pc = None
-        async for raw in ws:
-            m = json.loads(raw)
-            t = m.get("type")
-            if t == "viewer-join":
-                print("[host] viewer joined -> offering")
-                pc = await make_pc(ws)
-            elif t == "answer" and pc:
-                await pc.setRemoteDescription(RTCSessionDescription(m["sdp"], "answer"))
-                print("[host] answer set")
-            elif t == "error":
-                print("[host] signaling error:", m.get("msg"))
+def run(relay_url, session, password):
+    sio = _sio_lib.Client(reconnection=True)
+    pc_holder = [None]
+    loop = asyncio.new_event_loop()
+
+    @sio.event
+    def connect():
+        print("[sio] connected — joining as host")
+        sio.emit("webrtc_join", {"session": session, "role": "host", "password": password})
+        print(f"[host] session={session}  pw={password}")
+
+    @sio.on("webrtc_viewer_join")
+    def on_viewer_join(data=None):
+        print("[host] viewer joined -> offering")
+        pc_holder[0] = loop.run_until_complete(make_pc(sio, session))
+
+    @sio.on("webrtc_answer")
+    def on_answer(data):
+        pc = pc_holder[0]
+        if pc:
+            async def _set():
+                await pc.setRemoteDescription(RTCSessionDescription(data["sdp"], "answer"))
+                print("[host] answer set — connected")
+            loop.run_until_complete(_set())
+
+    @sio.on("webrtc_error")
+    def on_error(data):
+        print("[host] signaling error:", data.get("msg"))
+
+    @sio.event
+    def disconnect():
+        print("[sio] disconnected")
+
+    sio.connect(relay_url, transports=["websocket", "polling"])
+    sio.wait()
 
 
 def make_session():
@@ -220,15 +239,15 @@ def make_session():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--signal", default="ws://162.35.37.67:5001")
+    ap.add_argument("--relay", default="http://162.35.37.67:5000")
     ap.add_argument("--password", required=True)
     ap.add_argument("--session", default=None)
     args = ap.parse_args()
     session = args.session or make_session()
-    print(f"[host] signal={args.signal}")
+    print(f"[host] relay={args.relay}")
     print(f"[host] session={session}  (enter this + password in the viewer)")
     try:
-        asyncio.run(run(args.signal, session, args.password))
+        run(args.relay, session, args.password)
     except KeyboardInterrupt:
         pass
 

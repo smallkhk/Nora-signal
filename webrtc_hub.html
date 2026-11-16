@@ -20,7 +20,7 @@
 </head>
 <body>
   <div id="bar">
-    <input id="sig" value="ws://162.35.37.67:5001" size="22">
+    <input id="relay" value="http://162.35.37.67:5000" size="26">
     <input id="session" placeholder="session id" size="18">
     <input id="pw" placeholder="password" size="12">
     <button id="connect">Connect</button>
@@ -29,6 +29,7 @@
   </div>
   <div id="stage"><video id="v" autoplay playsinline muted></video></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 // ICE must match the host. On bad networks the TURN entry is what makes frames flow.
 const ICE = [
@@ -38,12 +39,13 @@ const ICE = [
 
 const $ = id => document.getElementById(id);
 const v = $("v");
-let ws, pc, inputCh, control = false;
+let sio, pc, inputCh, control = false;
 let cx = 0.5, cy = 0.5;
+let _session = "";
 
 function setStatus(t){ $("status").textContent = t; }
 
-$("connect").onclick = () => (ws ? disconnect() : connect());
+$("connect").onclick = () => (sio ? disconnect() : connect());
 $("ctl").onclick = () => {
   control = !control;
   $("ctl").textContent = "Control: " + (control ? "on" : "off");
@@ -51,23 +53,22 @@ $("ctl").onclick = () => {
 };
 
 function connect(){
-  ws = new WebSocket($("sig").value.trim());
-  setStatus("signaling…");
-  ws.onopen = () => ws.send(JSON.stringify({
-    type:"join", role:"viewer",
-    session:$("session").value.trim(), password:$("pw").value
-  }));
-  ws.onclose = () => setStatus("signaling closed");
-  ws.onmessage = async e => {
-    const m = JSON.parse(e.data);
-    if (m.type === "offer")  await onOffer(m);
-    else if (m.type === "error") setStatus("error: " + m.msg);
-  };
+  _session = $("session").value.trim();
+  const relay = $("relay").value.trim();
+  setStatus("connecting…");
+  sio = io(relay, { transports: ["websocket","polling"] });
+  sio.on("connect", () => {
+    setStatus("signaling…");
+    sio.emit("webrtc_join", { session: _session, role: "viewer", password: $("pw").value });
+  });
+  sio.on("webrtc_offer",  async m => { await onOffer(m); });
+  sio.on("webrtc_error",  m => setStatus("error: " + m.msg));
+  sio.on("disconnect",    () => setStatus("signaling closed"));
 }
 
 function disconnect(){
   if (pc) pc.close(); pc = null;
-  if (ws) ws.close(); ws = null;
+  if (sio) sio.disconnect(); sio = null;
   v.srcObject = null; setStatus("disconnected");
 }
 
@@ -88,7 +89,7 @@ async function onOffer(m){
   const ans = await pc.createAnswer();
   await pc.setLocalDescription(ans);
   await waitIce(pc);              // non-trickle: send answer with candidates baked in
-  ws.send(JSON.stringify({ type:"answer", sdp: pc.localDescription.sdp }));
+  sio.emit("webrtc_answer", { session: _session, sdp: pc.localDescription.sdp });
 }
 
 function waitIce(pc){

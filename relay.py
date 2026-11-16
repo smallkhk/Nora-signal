@@ -22,6 +22,11 @@ GET /keylogs          → list all agents with saved keylogs
 
 from flask import Flask, send_from_directory, request as freq, Response, jsonify
 from flask_socketio import SocketIO, emit, join_room
+try:
+    from flask_sock import Sock as _FlaskSock
+    _have_sock = True
+except ImportError:
+    _have_sock = False
 import os
 import json
 import time
@@ -37,6 +42,7 @@ _KEYLOG_DIR = os.environ.get("NORA_KEYLOG_DIR", os.path.join(_DIR, "keylogs"))
 os.makedirs(_KEYLOG_DIR, exist_ok=True)
 
 app = Flask(__name__, static_folder=_DIR)
+_sock = _FlaskSock(app) if _have_sock else None
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -1220,6 +1226,107 @@ def on_fastcap_keyreq(data):
         return
     s = _fc_sess(sid)
     _fc_request_key(s, sid)
+
+
+# ── WebRTC signaling (via Socket.IO — avoids iOS carrier proxy on port 5001) ──
+# Rooms: session_id -> {"host": socket_sid, "viewer": socket_sid, "pw": str}
+_webrtc_rooms = {}   # session -> {"host": sid, "viewer": sid, "pw": str}
+
+
+def _new_room():
+    return {"host": None, "viewer": None, "viewer_ws": None, "pw": ""}
+
+
+@socketio.on("webrtc_join")
+def on_webrtc_join(data):
+    session = str(data.get("session", ""))[:64]
+    role    = data.get("role", "")
+    pw      = str(data.get("password", ""))
+    room    = _webrtc_rooms.setdefault(session, _new_room())
+    sio_sid = freq.sid
+    if role == "host":
+        room["host"] = sio_sid
+        room["pw"]   = pw
+        join_room(f"webrtc_host_{session}")
+        print(f"[webrtc] host joined {session}", flush=True)
+    else:
+        if pw != room["pw"]:
+            emit("webrtc_error", {"msg": "bad password"})
+            return
+        room["viewer"] = sio_sid
+        join_room(f"webrtc_viewer_{session}")
+        print(f"[webrtc] viewer joined {session}", flush=True)
+        if room["host"]:
+            emit("webrtc_viewer_join", {}, room=f"webrtc_host_{session}")
+
+
+@socketio.on("webrtc_offer")
+def on_webrtc_offer(data):
+    session = str(data.get("session", ""))[:64]
+    room    = _webrtc_rooms.get(session)
+    if room:
+        if room.get("viewer"):
+            emit("webrtc_offer", data, room=f"webrtc_viewer_{session}")
+        # also forward to raw-WebSocket iOS viewer if present
+        raw_ws = room.get("viewer_ws")
+        if raw_ws is not None:
+            try:
+                raw_ws.send(json.dumps({"type": "offer", "sdp": data.get("sdp", "")}))
+            except Exception:
+                pass
+
+
+@socketio.on("webrtc_answer")
+def on_webrtc_answer(data):
+    session = str(data.get("session", ""))[:64]
+    room    = _webrtc_rooms.get(session)
+    if room and room["host"]:
+        emit("webrtc_answer", data, room=f"webrtc_host_{session}")
+
+
+# ── /wsignal: raw WebSocket endpoint for iOS (URLSessionWebSocketTask) ────────
+# Same JSON protocol as signaling.py but on port 5000, so carrier proxies pass it.
+# Bridges into _webrtc_rooms alongside the Socket.IO host/hub.
+if _have_sock:
+    @_sock.route("/wsignal")
+    def wsignal_handler(ws):
+        session = None
+        try:
+            while True:
+                raw = ws.receive(timeout=120)
+                if raw is None:
+                    break
+                try:
+                    m = json.loads(raw)
+                except Exception:
+                    continue
+                t = m.get("type")
+                if t == "join":
+                    session = str(m.get("session", ""))[:64]
+                    pw      = str(m.get("password", ""))
+                    role    = m.get("role", "viewer")
+                    room    = _webrtc_rooms.setdefault(session, _new_room())
+                    if role == "viewer":
+                        if pw != room["pw"]:
+                            ws.send(json.dumps({"type": "error", "msg": "bad password"}))
+                            continue
+                        room["viewer_ws"] = ws
+                        print(f"[wsig] iOS viewer joined {session}", flush=True)
+                        if room["host"]:
+                            socketio.emit("webrtc_viewer_join", {},
+                                          room=f"webrtc_host_{session}")
+                elif t == "answer":
+                    room = _webrtc_rooms.get(session)
+                    if room and room["host"]:
+                        socketio.emit("webrtc_answer", m,
+                                      room=f"webrtc_host_{session}")
+        except Exception:
+            pass
+        finally:
+            if session and session in _webrtc_rooms:
+                r = _webrtc_rooms[session]
+                if r.get("viewer_ws") is ws:
+                    r["viewer_ws"] = None
 
 
 # ── Local dev entry point ─────────────────────────────────────────────────────

@@ -6,12 +6,12 @@
 //  plug straight in: set their `send` to webrtc.sendInput.
 //
 //  Dependency (Podfile):   pod 'WebRTC-SDK'      // or 'GoogleWebRTC'
-//  Signaling matches signaling.py / webrtc_host.py (non-trickle; answer carries
-//  its own ICE candidates).
+//  Signaling goes through the relay /wsignal endpoint on port 5000 — same port
+//  the existing relay uses, so iOS carrier proxies don't block it.
 //
 //  Usage:
 //     let rtc = WebRTCClient(renderer: metalVideoView)   // RTCMTLVideoView
-//     rtc.connect(signal: "ws://162.35.37.67:5001", session: "....", password: "....")
+//     rtc.connect(relay: "http://162.35.37.67:5000", session: "....", password: "....")
 //     input.send      = { rtc.sendInput($0) }
 //     keyboard.send   = { rtc.sendInput($0) }
 //
@@ -45,9 +45,15 @@ final class WebRTCClient: NSObject {
     }
 
     // MARK: signaling
-    func connect(signal: String, session: String, password: String) {
+    /// relay: "http://162.35.37.67:5000" — the /wsignal path is appended automatically.
+    func connect(relay: String, session: String, password: String) {
+        // Build ws:// URL from http:// relay base
+        let wsBase = relay
+            .replacingOccurrences(of: "https://", with: "wss://")
+            .replacingOccurrences(of: "http://",  with: "ws://")
+        let signalURL = wsBase.hasSuffix("/") ? wsBase + "wsignal" : wsBase + "/wsignal"
         let s = URLSession(configuration: .default)
-        ws = s.webSocketTask(with: URL(string: signal)!)
+        ws = s.webSocketTask(with: URL(string: signalURL)!)
         ws?.resume()
         send(json: ["type": "join", "role": "viewer", "session": session, "password": password])
         listen()
