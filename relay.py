@@ -1134,10 +1134,9 @@ def on_fastcap_join(data):
             print(f"[fc]   WARN: no agent in cache has session='{session_str}'", flush=True)
 
     host_alive = _fc_host_alive(s)
-    _fc_send_to_host(s, sid, T_KEYREQ, token)
 
-    # Also notify the agent over Socket.IO so it can call Host.viewer_connected()
-    # on the PC — the fastcap Host stays idle (ping-only) until that's invoked.
+    # Notify the agent over Socket.IO so it calls Host.viewer_connected() on the
+    # PC — the fastcap Host stays idle (ping-only) until that's invoked.
     ag_name = _fc_sid_to_agent.get(sid_hex)
     if ag_name:
         target_sid = name_to_sid.get(ag_name)
@@ -1145,7 +1144,19 @@ def on_fastcap_join(data):
             socketio.emit("fastcap_viewer_join", {"session": session_str}, room=target_sid)
             print(f"[fc]   fastcap_viewer_join emitted to agent {ag_name}", flush=True)
 
-    print(f"[fc]   T_KEYREQ sent to host, replying fastcap_ready host={host_alive}", flush=True)
+    # Send T_KEYREQ immediately, then again after 600 ms / 1.4 s / 2.8 s to
+    # cover the viewer_connected() round-trip latency and UDP loss on the IDR.
+    _fc_send_to_host(s, sid, T_KEYREQ, token)
+    def _delayed_keyreq(sid=sid, s=s, token=token):
+        prev = 0
+        for delay in (0.6, 1.4, 2.8):
+            time.sleep(delay - prev)
+            prev = delay
+            if s.wait_key:
+                _fc_send_to_host(s, sid, T_KEYREQ, token)
+    threading.Thread(target=_delayed_keyreq, daemon=True).start()
+
+    print(f"[fc]   T_KEYREQ sent (+retries scheduled), replying fastcap_ready host={host_alive}", flush=True)
     emit("fastcap_ready", {"host": host_alive})
 
 

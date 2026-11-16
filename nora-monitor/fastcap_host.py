@@ -68,14 +68,12 @@ def start(fps=30, bitrate=4000, monitor=0, res=720):
             _flog(f"starting Host relay={RELAY_UDP} session={_session[:8]}… fps={fps} bitrate={bitrate}")
             _host_obj = fastcap.Host(RELAY_UDP, _session, _password, fps, bitrate, monitor, res)
             _host_obj.start()
-            # Kick the Host into streaming mode. Without viewer_connected() the
-            # Host only sends HELLO_HOST pings — it won't actually encode and
-            # send T_VIDEO packets until a viewer is registered.
-            try:
-                _host_obj.viewer_connected()
-                _flog("Host started OK + viewer_connected() called")
-            except Exception as ve:
-                _flog(f"Host started OK (viewer_connected unavailable: {ve})")
+            # Do NOT call viewer_connected() here. The Host stays in ping-only
+            # mode until a real hub viewer joins. That way the first IDR+SPS/PPS
+            # the wheel emits is delivered to an actual waiting decoder instead
+            # of wasted before anyone is connected. notify_viewer() is called
+            # when fastcap_viewer_join arrives from the relay.
+            _flog("Host started OK — waiting for viewer_join before encoding")
         except Exception as e:
             _host_obj = None
             _flog(f"FAIL: {e}")
