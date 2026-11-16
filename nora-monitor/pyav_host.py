@@ -24,6 +24,8 @@ import time
 from ctypes import wintypes as wt
 from urllib.parse import urlparse
 
+from fractions import Fraction
+
 import av
 import mss
 import numpy as np
@@ -134,8 +136,8 @@ def _build_ctx(name, w, h):
     cc = av.CodecContext.create(name, "w")
     cc.width, cc.height = w, h
     cc.pix_fmt = HW_PIXFMT[name]
-    cc.framerate = av.Rational(FPS, 1)
-    cc.time_base = av.Rational(1, FPS)
+    cc.framerate = Fraction(FPS, 1)
+    cc.time_base = Fraction(1, FPS)
     cc.bit_rate  = BITRATE
     cc.gop_size  = KEYINT
     if name == "libx264":
