@@ -390,6 +390,11 @@ def android_hub_html():
     return send_from_directory(_DIR, "android-hub.html")
 
 
+@app.route("/webrtc_hub.html")
+def webrtc_hub_html():
+    return send_from_directory(_DIR, "webrtc_hub.html")
+
+
 @app.route("/keylogs")
 def keylog_index():
     agents_with_logs = []
