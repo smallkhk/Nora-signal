@@ -286,13 +286,34 @@ class PyAvHost:
         period   = 1.0 / FPS
         frame_id = 0
 
+        # Try dxcam (faster DXGI capture, avoids BitBlt issues on RDP/Server)
+        _dxcam = None
+        try:
+            import dxcam
+            _dxcam = dxcam.create(output_color="BGR")
+            _dxcam.start(target_fps=FPS, video_mode=True)
+            print("[cap] using dxcam")
+        except Exception:
+            _dxcam = None
+
         with mss.MSS() as sct:
             mon   = sct.monitors[0]
             mon_r = {"top": mon["top"], "left": mon["left"], "width": w, "height": h}
             while self._running:
-                t0   = time.time()
-                shot = sct.grab(mon_r)
-                img  = np.frombuffer(shot.bgra, dtype=np.uint8).reshape(h, w, 4)[:, :, :3]
+                t0 = time.time()
+                if _dxcam is not None:
+                    img = _dxcam.get_latest_frame()
+                    if img is None:
+                        time.sleep(0.01)
+                        continue
+                    img = img[:h, :w]
+                else:
+                    try:
+                        shot = sct.grab(mon_r)
+                        img  = np.frombuffer(shot.bgra, dtype=np.uint8).reshape(h, w, 4)[:, :, :3]
+                    except Exception:
+                        time.sleep(0.05)
+                        continue
                 vf   = av.VideoFrame.from_ndarray(np.ascontiguousarray(img), format="bgr24")
                 vf   = vf.reformat(format=pixfmt)
                 vf.pts = self._pts
