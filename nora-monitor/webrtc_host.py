@@ -191,7 +191,7 @@ async def make_pc(sio, session):
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     await wait_ice(pc)
-    await sio.emit("webrtc_offer", {"session": session, "sdp": pc.localDescription.sdp})
+    sio.emit("webrtc_offer", {"session": session, "sdp": pc.localDescription.sdp})
     print("[pc] offer sent")
     return pc
 
