@@ -892,9 +892,10 @@ class _FcSession:
         self.frames      = {}
         self.next_id     = None
         self.last_keyreq = 0.0
-        self.token       = None   # viewer auth token
-        self.wait_key    = True
+        self.token        = None   # viewer auth token
+        self.wait_key     = True
         self.viewer_addrs = {}    # addr -> last_seen_time (UDP desktop viewers)
+        self.viewer_join_sent = False  # emit fastcap_viewer_join only once per session
 
 
 def _fc_sess(sid):
@@ -1069,9 +1070,8 @@ def _fc_udp_thread():
                     except Exception:
                         pass
                     # Notify the PC agent so it calls viewer_connected() and
-                    # starts encoding. Without this, the host stays in ping-only
-                    # mode and never sends T_VIDEO packets to UDP viewers.
-                    if ag_name:
+                    # starts encoding. Only on first auth — keepalive HELLOs skip this.
+                    if ag_name and not s.viewer_join_sent:
                         fc_info = _fastcap_cache.get(ag_name, {})
                         session_str = fc_info.get("session", sid_hex)
                         target_sid  = name_to_sid.get(ag_name)
@@ -1079,6 +1079,7 @@ def _fc_udp_thread():
                             socketio.emit("fastcap_viewer_join",
                                           {"session": session_str},
                                           room=target_sid)
+                            s.viewer_join_sent = True
                     _fc_request_key(s, sid)
                     # Retry T_KEYREQ after viewer_connected() round-trip
                     _sid, _s, _tok = sid, s, token
