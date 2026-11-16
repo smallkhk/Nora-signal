@@ -1049,11 +1049,16 @@ def _fc_udp_thread():
                     pw = fc_info.get("password", "")
                     expected = hashlib.sha256(pw.encode() + sid_hex.encode()).digest()[:8]
                     token_ok = (token == expected)
+                    if not token_ok:
+                        print(f"[udp_rx] HELLO_VIEW token FAIL ag={ag_name} got={token.hex()} want={expected.hex()} pw_len={len(pw)}", flush=True)
                 elif _fc_host_alive(s):
                     # No SyncHost cache entry but host is live (direct-test mode).
                     # Accept viewer; host will validate T_KEYREQ with its own password.
                     token_ok = True
+                else:
+                    print(f"[udp_rx] HELLO_VIEW no agent for sid={sid_hex} cache_keys={list(_fastcap_cache.keys())}", flush=True)
                 if token_ok:
+                    print(f"[udp_rx] HELLO_VIEW auth OK ag={ag_name} sid={sid_hex}", flush=True)
                     with _fc_lock:
                         s.viewer_addrs[addr] = now
                         if s.token is None:
