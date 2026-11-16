@@ -33,7 +33,8 @@ from aiortc import (RTCPeerConnection, RTCConfiguration, RTCIceServer,
 
 # --- ICE: STUN is enough on good networks; TURN is REQUIRED on NAT/mobile -------
 STUN_URL = "stun:stun.l.google.com:19302"
-TURN_URL = "turn:162.35.37.67:3478"     # <-- your coturn; set to None to disable
+TURN_URL = "turn:162.35.37.67:3478"       # UDP TURN
+TURN_URL_TCP = "turn:162.35.37.67:3478?transport=tcp"  # TCP fallback
 TURN_USER = "nora"
 TURN_PASS = "noraturn42"
 FPS = 20
@@ -125,7 +126,7 @@ def handle_input(m):
 class ScreenTrack(VideoStreamTrack):
     def __init__(self):
         super().__init__()
-        self._sct = mss.mss()
+        self._sct = mss.MSS()
         self._mon = self._sct.monitors[0]
 
     def _grab(self):
@@ -147,7 +148,7 @@ class ScreenTrack(VideoStreamTrack):
 def ice_servers():
     servers = [RTCIceServer(urls=[STUN_URL])]
     if TURN_URL:
-        servers.append(RTCIceServer(urls=[TURN_URL], username=TURN_USER, credential=TURN_PASS))
+        servers.append(RTCIceServer(urls=[TURN_URL, TURN_URL_TCP], username=TURN_USER, credential=TURN_PASS))
     return servers
 
 
