@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WebRTC Hub</title>
 <style>
   :root { --bg:#0e0e0e; --bar:#1b1b1b; --fg:#e8e8e8; --accent:#3b82f6; }
@@ -20,9 +20,11 @@
 </head>
 <body>
   <div id="bar">
-    <input id="relay" value="http://162.35.37.67:5000" size="26">
-    <input id="session" placeholder="session id" size="18">
-    <input id="pw" placeholder="password" size="12">
+    <input id="relay" value="http://162.35.37.67:5000" size="26"
+           autocorrect="off" autocapitalize="none" spellcheck="false">
+    <input id="session" placeholder="session id" size="18"
+           autocorrect="off" autocapitalize="none" spellcheck="false">
+    <input id="pw" placeholder="password" size="12" type="password">
     <button id="connect">Connect</button>
     <button id="ctl">Control: off</button>
     <span id="status">idle</span>
