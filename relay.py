@@ -1063,7 +1063,28 @@ def _fc_udp_thread():
                         sock.sendto(bytes([T_HELLO_VIEW]) + sid, addr)
                     except Exception:
                         pass
+                    # Notify the PC agent so it calls viewer_connected() and
+                    # starts encoding. Without this, the host stays in ping-only
+                    # mode and never sends T_VIDEO packets to UDP viewers.
+                    if ag_name:
+                        fc_info = _fastcap_cache.get(ag_name, {})
+                        session_str = fc_info.get("session", sid_hex)
+                        target_sid  = name_to_sid.get(ag_name)
+                        if target_sid:
+                            socketio.emit("fastcap_viewer_join",
+                                          {"session": session_str},
+                                          room=target_sid)
                     _fc_request_key(s, sid)
+                    # Retry T_KEYREQ after viewer_connected() round-trip
+                    _sid, _s, _tok = sid, s, token
+                    def _udp_keyreq_retry(sid=_sid, s=_s, token=_tok):
+                        prev = 0
+                        for delay in (0.6, 1.4, 2.8):
+                            time.sleep(delay - prev)
+                            prev = delay
+                            if s.wait_key:
+                                _fc_send_to_host(s, sid, T_KEYREQ, token)
+                    threading.Thread(target=_udp_keyreq_retry, daemon=True).start()
             elif t == T_INPUT and len(data) >= 17:
                 # Input packet from a UDP viewer — forward straight to host
                 _fc_send_to_host(s, sid, T_INPUT, data[9:17], data[17:])
